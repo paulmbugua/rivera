@@ -1,0 +1,64 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+
+enum UserRole { BUSINESS CREATOR ADMIN }
+enum CampaignStatus { DRAFT OPEN CLOSED COMPLETED }
+enum ApplicationStatus { DRAFT PENDING_PAYMENT SUBMITTED SHORTLISTED ACCEPTED REJECTED }
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  role UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business BusinessProfile?
+  creator CreatorProfile?
+}
+model BusinessProfile {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id])
+  name String
+  country String
+  description String
+  campaigns Campaign[]
+}
+model CreatorProfile {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id])
+  displayName String
+  country String
+  bio String
+  applications Application[]
+}
+model Campaign {
+  id String @id @default(cuid())
+  businessId String
+  business BusinessProfile @relation(fields: [businessId], references: [id])
+  title String
+  summary String
+  brief String
+  country String
+  budget Decimal @db.Decimal(12, 2)
+  currency String @default("USD")
+  deadline DateTime
+  status CampaignStatus @default(DRAFT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  applications Application[]
+}
+model Application {
+  id String @id @default(cuid())
+  campaignId String
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  creatorId String
+  creator CreatorProfile @relation(fields: [creatorId], references: [id])
+  proposal String
+  proposedAmount Decimal @db.Decimal(12, 2)
+  status ApplicationStatus @default(DRAFT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([campaignId, creatorId])
+}

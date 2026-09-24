@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rivera
+      POSTGRES_PASSWORD: rivera_dev
+      POSTGRES_DB: rivera
+    ports: ['5432:5432']
+    volumes: [rivera_pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rivera']
+      interval: 5s
+      retries: 10
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://rivera:rivera_dev@postgres:5432/rivera?schema=public
+      PORT: 4000
+      WEB_ORIGIN: http://localhost:3000
+    ports: ['4000:4000']
+    depends_on: { postgres: { condition: service_healthy } }
+  web:
+    build: { context: ., dockerfile: Dockerfile.web }
+    ports: ['3000:3000']
+    depends_on: [api]
+volumes:
+  rivera_pg:
