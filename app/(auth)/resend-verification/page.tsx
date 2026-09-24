@@ -1,0 +1,5 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import { api } from '@/lib/api';
+export default function ResendVerification() { const [email,setEmail]=useState('');const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);return <main className="auth-shell"><div className="auth-card"><Link href="/login">← Log in</Link><h1>Send a new verification link</h1><form onSubmit={async e=>{e.preventDefault();setBusy(true);try{const data=await api<{message:string}>('/auth/resend-verification',{method:'POST',body:JSON.stringify({email})},false);setMessage(data.message)}catch(err){setMessage(err instanceof Error?err.message:'Please try again.')}finally{setBusy(false)}}}><label className="field"><span>Email address</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><button className="button primary form-submit" disabled={busy}>{busy?'Sending…':'Send link'}</button></form>{message&&<p role="status">{message}</p>}</div></main> }

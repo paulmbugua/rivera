@@ -1,1 +1,49 @@
-{"name":"@rivera/api","version":"0.1.0","private":true,"scripts":{"dev":"nest start --watch","build":"nest build","start":"node dist/main.js","lint":"eslint src --ext .ts","typecheck":"tsc --noEmit","prisma:generate":"prisma generate","prisma:migrate":"prisma migrate dev","prisma:seed":"tsx prisma/seed.ts"},"dependencies":{"@nestjs/common":"^11.0.0","@nestjs/core":"^11.0.0","@nestjs/platform-express":"^11.0.0","@nestjs/config":"^4.0.0","@nestjs/swagger":"^11.0.0","@prisma/client":"^6.0.0","class-transformer":"^0.5.1","class-validator":"^0.14.1","reflect-metadata":"^0.2.2","rxjs":"^7.8.0","zod":"^3.25.76"},"devDependencies":{"@nestjs/cli":"^11.0.0","@types/node":"^22.0.0","prisma":"^6.0.0","typescript":"^5.9.0","tsx":"^4.0.0"}}
+{
+  "name": "@rivera/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "node --env-file-if-exists=../../.env --import tsx prisma/seed.ts",
+    "prisma:deploy": "prisma migrate deploy",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/swagger": "^11.0.0",
+    "@nestjs/throttler": "^6.7.0",
+    "@prisma/client": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.0.10",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^8.0.2",
+    "prisma": "^6.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0"
+  }
+}

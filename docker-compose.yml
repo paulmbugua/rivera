@@ -3,25 +3,31 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: rivera
-      POSTGRES_PASSWORD: rivera_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: rivera
-    ports: ['5432:5432']
+    ports: ['127.0.0.1:5432:5432']
     volumes: [rivera_pg:/var/lib/postgresql/data]
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U rivera']
+      test: ['CMD-SHELL', 'pg_isready -U rivera -d rivera']
       interval: 5s
       retries: 10
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     environment:
-      DATABASE_URL: postgresql://rivera:rivera_dev@postgres:5432/rivera?schema=public
+      DATABASE_URL: postgresql://rivera:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/rivera?schema=public
       PORT: 4000
-      WEB_ORIGIN: http://localhost:3000
-    ports: ['4000:4000']
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      NODE_ENV: development
+    ports: ['127.0.0.1:4000:4000']
     depends_on: { postgres: { condition: service_healthy } }
   web:
     build: { context: ., dockerfile: Dockerfile.web }
-    ports: ['3000:3000']
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+    ports: ['127.0.0.1:3000:3000']
     depends_on: [api]
 volumes:
   rivera_pg:

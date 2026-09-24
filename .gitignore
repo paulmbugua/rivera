@@ -46,3 +46,8 @@ next-env.d.ts
 /work/
 
 !.env.example
+
+# Generated package outputs
+**/node_modules/
+**/dist/
+*.tsbuildinfo
