@@ -1,9 +1,10 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -11,18 +12,75 @@ enum UserRole {
   CREATOR
   ADMIN
 }
+
 enum UserStatus {
   PENDING_VERIFICATION
   ACTIVE
   SUSPENDED
   DEACTIVATED
 }
+
 enum CampaignStatus {
   DRAFT
+  PENDING_REVIEW
   OPEN
+  PAUSED
   CLOSED
+  IN_PROGRESS
   COMPLETED
+  CANCELLED
 }
+
+enum CampaignVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum CampaignLocationType {
+  LOCAL
+  NATIONAL
+  GLOBAL
+  REMOTE
+}
+
+enum CampaignObjective {
+  BRAND_AWARENESS
+  PRODUCT_LAUNCH
+  SALES
+  LEAD_GENERATION
+  APP_DOWNLOADS
+  WEBSITE_TRAFFIC
+  STORE_VISITS
+  EVENT_PROMOTION
+  SOCIAL_ENGAGEMENT
+  CONTENT_CREATION
+  UGC_CREATION
+  PRODUCT_REVIEWS
+  COMMUNITY_GROWTH
+  OTHER
+}
+
+enum BudgetVisibility {
+  PUBLIC
+  HIDDEN
+}
+
+enum UsageRights {
+  ORGANIC_ONLY
+  PAID_ADS
+  BUSINESS_WEBSITE
+  SOCIAL_MEDIA
+  FULL_COMMERCIAL
+  TO_BE_DISCUSSED
+}
+
+enum CampaignAttachmentVisibility {
+  PUBLIC
+  LOCKED
+  OWNER_ONLY
+}
+
 enum ApplicationStatus {
   DRAFT
   PENDING_PAYMENT
@@ -31,17 +89,20 @@ enum ApplicationStatus {
   ACCEPTED
   REJECTED
 }
+
 enum ProfileVisibility {
   PUBLIC
   UNLISTED
   PRIVATE
 }
+
 enum VerificationStatus {
   UNVERIFIED
   PENDING
   VERIFIED
   REJECTED
 }
+
 enum SocialPlatform {
   INSTAGRAM
   TIKTOK
@@ -56,6 +117,7 @@ enum SocialPlatform {
   PODCAST
   OTHER
 }
+
 enum PortfolioMediaType {
   IMAGE
   VIDEO
@@ -63,12 +125,14 @@ enum PortfolioMediaType {
   ARTICLE
   SOCIAL_POST
 }
+
 enum LanguageProficiency {
   BASIC
   CONVERSATIONAL
   PROFESSIONAL
   NATIVE
 }
+
 enum EmployeeSize {
   SOLO
   TWO_TO_TEN
@@ -77,10 +141,12 @@ enum EmployeeSize {
   TWO_HUNDRED_ONE_TO_FIVE_HUNDRED
   FIVE_HUNDRED_PLUS
 }
+
 enum VerificationProfileType {
   CREATOR
   BUSINESS
 }
+
 enum VerificationRequestStatus {
   PENDING
   APPROVED
@@ -89,301 +155,468 @@ enum VerificationRequestStatus {
 }
 
 model User {
-  id String @id @default(cuid())
-  email String @unique
-  passwordHash String
-  firstName String
-  lastName String
-  phone String?
-  countryCode String?
-  city String?
-  profileImageUrl String?
-  status UserStatus @default(PENDING_VERIFICATION)
-  emailVerifiedAt DateTime?
-  lastLoginAt DateTime?
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  roles UserRoleAssignment[]
-  sessions RefreshSession[]
-  verificationTokens EmailVerificationToken[]
-  resetTokens PasswordResetToken[]
-  business BusinessProfile?
-  creator CreatorProfile?
-  verificationRequests VerificationRequest[] @relation("VerificationOwner")
-  verificationReviews VerificationRequest[] @relation("VerificationReviewer")
+  id                   String                   @id @default(cuid())
+  email                String                   @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  phone                String?
+  countryCode          String?
+  city                 String?
+  profileImageUrl      String?
+  status               UserStatus               @default(PENDING_VERIFICATION)
+  emailVerifiedAt      DateTime?
+  lastLoginAt          DateTime?
+  deletedAt            DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  roles                UserRoleAssignment[]
+  sessions             RefreshSession[]
+  verificationTokens   EmailVerificationToken[]
+  resetTokens          PasswordResetToken[]
+  business             BusinessProfile?
+  creator              CreatorProfile?
+  verificationRequests VerificationRequest[]    @relation("VerificationOwner")
+  verificationReviews  VerificationRequest[]    @relation("VerificationReviewer")
 }
+
 model UserRoleAssignment {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role UserRole
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      UserRole
   createdAt DateTime @default(now())
+
   @@unique([userId, role])
 }
+
 model RefreshSession {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String @unique
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   userAgent String?
   ipAddress String?
+
   @@index([userId])
 }
+
 model EmailVerificationToken {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String @unique
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
   expiresAt DateTime
-  usedAt DateTime?
-  createdAt DateTime @default(now())
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
   @@index([userId])
 }
+
 model PasswordResetToken {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String @unique
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
   expiresAt DateTime
-  usedAt DateTime?
-  createdAt DateTime @default(now())
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
   @@index([userId])
 }
+
 model BusinessProfile {
-  id String @id @default(cuid())
-  userId String @unique
-  user User @relation(fields: [userId], references: [id])
-  name String
-  slug String @unique
-  country String
-  city String @default("")
-  industry String @default("")
-  industryId String?
-  industryRef Industry? @relation(fields: [industryId], references: [id])
-  description String @db.VarChar(3000)
-  shortDescription String? @db.VarChar(240)
-  website String?
-  businessEmail String?
-  businessPhone String?
-  address String?
-  logoUrl String?
-  coverImageUrl String?
-  yearEstablished Int?
-  employeeSize EmployeeSize?
-  profileVisibility ProfileVisibility @default(PRIVATE)
-  verificationStatus VerificationStatus @default(UNVERIFIED)
-  profileCompletion Int @default(0)
-  averageRating Decimal @default(0) @db.Decimal(3, 2)
-  ratingCount Int @default(0)
-  isFeatured Boolean @default(false)
-  publishedAt DateTime?
-  onboardingCompleted Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  campaigns Campaign[]
+  id                   String                @id @default(cuid())
+  userId               String                @unique
+  user                 User                  @relation(fields: [userId], references: [id])
+  name                 String
+  slug                 String                @unique
+  country              String
+  city                 String                @default("")
+  industry             String                @default("")
+  industryId           String?
+  industryRef          Industry?             @relation(fields: [industryId], references: [id])
+  description          String                @db.VarChar(3000)
+  shortDescription     String?               @db.VarChar(240)
+  website              String?
+  businessEmail        String?
+  businessPhone        String?
+  address              String?
+  logoUrl              String?
+  coverImageUrl        String?
+  yearEstablished      Int?
+  employeeSize         EmployeeSize?
+  profileVisibility    ProfileVisibility     @default(PRIVATE)
+  verificationStatus   VerificationStatus    @default(UNVERIFIED)
+  profileCompletion    Int                   @default(0)
+  averageRating        Decimal               @default(0) @db.Decimal(3, 2)
+  ratingCount          Int                   @default(0)
+  isFeatured           Boolean               @default(false)
+  publishedAt          DateTime?
+  onboardingCompleted  Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  campaigns            Campaign[]
   verificationRequests VerificationRequest[]
+
   @@index([country])
   @@index([industryId])
   @@index([profileVisibility, verificationStatus])
 }
+
 model CreatorProfile {
-  id String @id @default(cuid())
-  userId String @unique
-  user User @relation(fields: [userId], references: [id])
-  displayName String
-  slug String @unique
-  headline String @default("") @db.VarChar(120)
-  country String
-  city String @default("")
-  bio String @db.VarChar(2000)
-  primaryCategory String @default("")
-  primaryPlatform String @default("")
-  profileImageUrl String?
-  coverImageUrl String?
-  websiteUrl String?
-  yearsExperience Int?
-  travelAvailable Boolean @default(false)
-  remoteCampaignsAllowed Boolean @default(true)
-  minimumRateMinor Int?
-  minimumRateCurrency String? @db.VarChar(3)
-  profileVisibility ProfileVisibility @default(PRIVATE)
-  verificationStatus VerificationStatus @default(UNVERIFIED)
-  profileCompletion Int @default(0)
-  averageRating Decimal @default(0) @db.Decimal(3, 2)
-  ratingCount Int @default(0)
-  completedCampaigns Int @default(0)
-  isFeatured Boolean @default(false)
-  publishedAt DateTime?
-  onboardingCompleted Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  applications Application[]
-  categories CreatorCategory[]
-  contentTypes CreatorContentType[]
-  languages CreatorLanguage[]
-  socialAccounts CreatorSocialAccount[]
-  portfolio PortfolioItem[]
-  verificationRequests VerificationRequest[]
+  id                     String                 @id @default(cuid())
+  userId                 String                 @unique
+  user                   User                   @relation(fields: [userId], references: [id])
+  displayName            String
+  slug                   String                 @unique
+  headline               String                 @default("") @db.VarChar(120)
+  country                String
+  city                   String                 @default("")
+  bio                    String                 @db.VarChar(2000)
+  primaryCategory        String                 @default("")
+  primaryPlatform        String                 @default("")
+  profileImageUrl        String?
+  coverImageUrl          String?
+  websiteUrl             String?
+  yearsExperience        Int?
+  travelAvailable        Boolean                @default(false)
+  remoteCampaignsAllowed Boolean                @default(true)
+  minimumRateMinor       Int?
+  minimumRateCurrency    String?                @db.VarChar(3)
+  profileVisibility      ProfileVisibility      @default(PRIVATE)
+  verificationStatus     VerificationStatus     @default(UNVERIFIED)
+  profileCompletion      Int                    @default(0)
+  averageRating          Decimal                @default(0) @db.Decimal(3, 2)
+  ratingCount            Int                    @default(0)
+  completedCampaigns     Int                    @default(0)
+  isFeatured             Boolean                @default(false)
+  publishedAt            DateTime?
+  onboardingCompleted    Boolean                @default(false)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  applications           Application[]
+  categories             CreatorCategory[]
+  contentTypes           CreatorContentType[]
+  languages              CreatorLanguage[]
+  socialAccounts         CreatorSocialAccount[]
+  portfolio              PortfolioItem[]
+  verificationRequests   VerificationRequest[]
+  savedCampaigns         SavedCampaign[]
+
   @@index([country])
   @@index([profileVisibility, verificationStatus])
 }
 
 model Category {
-  id String @id @default(cuid())
-  name String @unique
-  slug String @unique
+  id          String             @id @default(cuid())
+  name        String             @unique
+  slug        String             @unique
   description String?
-  icon String?
-  active Boolean @default(true)
-  sortOrder Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  creators CreatorCategory[]
+  icon        String?
+  active      Boolean            @default(true)
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  creators    CreatorCategory[]
+  campaigns   CampaignCategory[]
+
   @@index([active, sortOrder])
 }
 
 model Industry {
-  id String @id @default(cuid())
-  name String @unique
-  slug String @unique
-  active Boolean @default(true)
-  sortOrder Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String            @id @default(cuid())
+  name       String            @unique
+  slug       String            @unique
+  active     Boolean           @default(true)
+  sortOrder  Int               @default(0)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
   businesses BusinessProfile[]
+
   @@index([active, sortOrder])
 }
 
 model ContentType {
-  id String @id @default(cuid())
-  name String @unique
-  slug String @unique
-  active Boolean @default(true)
-  sortOrder Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  creators CreatorContentType[]
+  id                   String                @id @default(cuid())
+  name                 String                @unique
+  slug                 String                @unique
+  active               Boolean               @default(true)
+  sortOrder            Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  creators             CreatorContentType[]
+  campaignDeliverables CampaignDeliverable[]
+
   @@index([active, sortOrder])
 }
 
 model CreatorCategory {
-  creatorId String
+  creatorId  String
   categoryId String
-  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  isPrimary Boolean @default(false)
-  createdAt DateTime @default(now())
+  creator    CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  category   Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  isPrimary  Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+
   @@id([creatorId, categoryId])
   @@index([categoryId])
 }
 
 model CreatorContentType {
-  creatorId String
+  creatorId     String
   contentTypeId String
-  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  contentType ContentType @relation(fields: [contentTypeId], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now())
+  creator       CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  contentType   ContentType    @relation(fields: [contentTypeId], references: [id], onDelete: Restrict)
+  createdAt     DateTime       @default(now())
+
   @@id([creatorId, contentTypeId])
   @@index([contentTypeId])
 }
 
 model CreatorLanguage {
-  id String @id @default(cuid())
-  creatorId String
-  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  languageCode String @db.VarChar(8)
-  proficiency LanguageProficiency?
+  id           String               @id @default(cuid())
+  creatorId    String
+  creator      CreatorProfile       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  languageCode String               @db.VarChar(8)
+  proficiency  LanguageProficiency?
+
   @@unique([creatorId, languageCode])
 }
 
 model CreatorSocialAccount {
-  id String @id @default(cuid())
-  creatorId String
-  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  platform SocialPlatform
-  username String?
-  profileUrl String?
-  followers Int @default(0)
-  averageViews Int?
-  engagementRate Decimal? @db.Decimal(5, 2)
-  verifiedByRivera Boolean @default(false)
-  isPrimary Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String         @id @default(cuid())
+  creatorId        String
+  creator          CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  platform         SocialPlatform
+  username         String?
+  profileUrl       String?
+  followers        Int            @default(0)
+  averageViews     Int?
+  engagementRate   Decimal?       @db.Decimal(5, 2)
+  verifiedByRivera Boolean        @default(false)
+  isPrimary        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
   @@index([creatorId])
   @@index([platform])
 }
 
 model PortfolioItem {
-  id String @id @default(cuid())
-  creatorId String
-  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  title String @db.VarChar(140)
-  description String? @db.VarChar(1000)
-  mediaType PortfolioMediaType
-  mediaUrl String?
+  id           String             @id @default(cuid())
+  creatorId    String
+  creator      CreatorProfile     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title        String             @db.VarChar(140)
+  description  String?            @db.VarChar(1000)
+  mediaType    PortfolioMediaType
+  mediaUrl     String?
   thumbnailUrl String?
-  externalUrl String?
-  platform SocialPlatform?
-  brandName String? @db.VarChar(120)
-  sortOrder Int @default(0)
-  published Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  externalUrl  String?
+  platform     SocialPlatform?
+  brandName    String?            @db.VarChar(120)
+  sortOrder    Int                @default(0)
+  published    Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
   @@index([creatorId, sortOrder])
 }
 
 model VerificationRequest {
-  id String @id @default(cuid())
-  userId String
-  user User @relation("VerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
-  profileType VerificationProfileType
-  creatorProfileId String?
-  creatorProfile CreatorProfile? @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
+  id                String                    @id @default(cuid())
+  userId            String
+  user              User                      @relation("VerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  profileType       VerificationProfileType
+  creatorProfileId  String?
+  creatorProfile    CreatorProfile?           @relation(fields: [creatorProfileId], references: [id], onDelete: Cascade)
   businessProfileId String?
-  businessProfile BusinessProfile? @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
-  status VerificationRequestStatus @default(PENDING)
-  noteFromUser String? @db.VarChar(1000)
-  reviewNote String? @db.VarChar(1000)
-  reviewedById String?
-  reviewedBy User? @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  businessProfile   BusinessProfile?          @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  status            VerificationRequestStatus @default(PENDING)
+  noteFromUser      String?                   @db.VarChar(1000)
+  reviewNote        String?                   @db.VarChar(1000)
+  reviewedById      String?
+  reviewedBy        User?                     @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
   @@index([status, createdAt])
   @@index([userId])
 }
+
 model Campaign {
-  id String @id @default(cuid())
-  businessId String
-  business BusinessProfile @relation(fields: [businessId], references: [id])
-  title String
-  summary String
-  brief String
-  country String
-  budget Decimal @db.Decimal(12, 2)
-  currency String @default("USD")
-  deadline DateTime
-  status CampaignStatus @default(DRAFT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  applications Application[]
+  id                          String                    @id @default(cuid())
+  businessId                  String
+  business                    BusinessProfile           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title                       String                    @db.VarChar(160)
+  slug                        String                    @unique
+  shortDescription            String                    @default("") @db.VarChar(350)
+  fullDescription             String                    @default("") @db.VarChar(5000)
+  productOrServiceName        String?                   @db.VarChar(160)
+  productOrServiceDescription String?                   @db.VarChar(2000)
+  productUrl                  String?
+  campaignObjective           CampaignObjective?
+  otherObjective              String?                   @db.VarChar(160)
+  targetAudience              String?                   @db.VarChar(2000)
+  expectedOutcomes            String?                   @db.VarChar(2000)
+  budgetMinMinor              Int?
+  budgetMaxMinor              Int?
+  currencyCode                String                    @default("USD") @db.VarChar(3)
+  budgetVisibility            BudgetVisibility          @default(PUBLIC)
+  creatorSlots                Int                       @default(1)
+  applicationDeadline         DateTime?
+  campaignStartDate           DateTime?
+  campaignEndDate             DateTime?
+  locationType                CampaignLocationType?
+  campaignCountryCode         String?                   @db.VarChar(2)
+  campaignCity                String?
+  campaignRegion              String?
+  physicalLocationDescription String?                   @db.VarChar(500)
+  verifiedCreatorsOnly        Boolean                   @default(false)
+  usageRights                 UsageRights?
+  usageRightsNotes            String?                   @db.VarChar(1000)
+  productProvided             Boolean?
+  travelExpensesCovered       Boolean?
+  specialInstructions         String?                   @db.VarChar(2000)
+  status                      CampaignStatus            @default(DRAFT)
+  visibility                  CampaignVisibility        @default(PRIVATE)
+  isFeatured                  Boolean                   @default(false)
+  viewCount                   Int                       @default(0)
+  publishedAt                 DateTime?
+  pausedAt                    DateTime?
+  closedAt                    DateTime?
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  deletedAt                   DateTime?
+  applications                Application[]
+  categories                  CampaignCategory[]
+  creatorLocations            CampaignCreatorLocation[]
+  platforms                   CampaignPlatform[]
+  languages                   CampaignLanguage[]
+  deliverables                CampaignDeliverable[]
+  attachments                 CampaignAttachment[]
+  savedBy                     SavedCampaign[]
+
+  @@index([status])
+  @@index([visibility])
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@index([applicationDeadline])
+  @@index([campaignCountryCode])
+  @@index([businessId])
+  @@index([campaignObjective])
 }
-model Application {
-  id String @id @default(cuid())
+
+model CampaignCategory {
   campaignId String
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  creatorId String
-  creator CreatorProfile @relation(fields: [creatorId], references: [id])
-  proposal String
-  proposedAmount Decimal @db.Decimal(12, 2)
-  status ApplicationStatus @default(DRAFT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  categoryId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@id([campaignId, categoryId])
+  @@index([categoryId])
+}
+
+model CampaignCreatorLocation {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  countryCode String   @db.VarChar(2)
+  city        String?
+  region      String?
+  createdAt   DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([countryCode, city])
+}
+
+model CampaignPlatform {
+  id                 String         @id @default(cuid())
+  campaignId         String
+  campaign           Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platform           SocialPlatform
+  required           Boolean        @default(true)
+  minimumFollowers   Int?
+  preferredFollowers Int?
+  createdAt          DateTime       @default(now())
+
+  @@unique([campaignId, platform])
+  @@index([platform])
+}
+
+model CampaignLanguage {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  languageCode String   @db.VarChar(8)
+  required     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@unique([campaignId, languageCode])
+}
+
+model CampaignDeliverable {
+  id            String          @id @default(cuid())
+  campaignId    String
+  campaign      Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  title         String          @db.VarChar(160)
+  description   String?         @db.VarChar(1000)
+  quantity      Int             @default(1)
+  platform      SocialPlatform?
+  contentTypeId String?
+  contentType   ContentType?    @relation(fields: [contentTypeId], references: [id], onDelete: SetNull)
+  dueDate       DateTime?
+  sortOrder     Int             @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([campaignId, sortOrder])
+}
+
+model CampaignAttachment {
+  id         String                       @id @default(cuid())
+  campaignId String
+  campaign   Campaign                     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String
+  fileUrl    String
+  mimeType   String
+  fileSize   Int
+  visibility CampaignAttachmentVisibility @default(LOCKED)
+  createdAt  DateTime                     @default(now())
+
+  @@index([campaignId])
+}
+
+model SavedCampaign {
+  creatorId  String
+  campaignId String
+  creator    CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  campaign   Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+
+  @@id([creatorId, campaignId])
+  @@index([creatorId])
+  @@index([campaignId])
+}
+
+model Application {
+  id             String            @id @default(cuid())
+  campaignId     String
+  campaign       Campaign          @relation(fields: [campaignId], references: [id])
+  creatorId      String
+  creator        CreatorProfile    @relation(fields: [creatorId], references: [id])
+  proposal       String
+  proposedAmount Decimal           @db.Decimal(12, 2)
+  status         ApplicationStatus @default(DRAFT)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
   @@unique([campaignId, creatorId])
 }

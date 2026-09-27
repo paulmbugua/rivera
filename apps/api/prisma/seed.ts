@@ -72,13 +72,44 @@ async function seedBusinesses() {
   }
 }
 
+async function seedCampaigns() {
+  const businesses = new Map((await db.businessProfile.findMany()).map(item => [item.slug, item]));
+  const businessSlugs = ['rivera-demo-studio','juniper-foods','northstar-stays'];
+  const categories = new Map((await db.category.findMany()).map(item => [item.name, item.id]));
+  const contentTypes = new Map((await db.contentType.findMany()).map(item => [item.name, item.id]));
+  const future = (days: number) => new Date(Date.now() + days * 86_400_000);
+  const fixtures = [
+    { business: 0, title: 'Qatar Technology Product Launch', objective: 'PRODUCT_LAUNCH', locationType: 'NATIONAL', locations: [['QA']], categories: ['Technology','Business'], platforms: [['TIKTOK',5000],['INSTAGRAM',5000]], languages: [['en',true],['ar',false]], budget: [100000,200000,'QAR'], deliverables: [['TikTok Product Video',2,'TIKTOK','TikTok Videos'],['Instagram Stories',3,'INSTAGRAM','Stories']], featured: true },
+    { business: 1, title: 'Cape Town Summer Food Stories', objective: 'BRAND_AWARENESS', locationType: 'LOCAL', locations: [['ZA','Cape Town']], categories: ['Food','Lifestyle'], platforms: [['INSTAGRAM',3000]], languages: [['en',true]], budget: [500000,900000,'ZAR'], deliverables: [['Restaurant Reel',2,'INSTAGRAM','Instagram Reels']], featured: true },
+    { business: 2, title: 'Worldwide Sustainable Travel UGC', objective: 'UGC_CREATION', locationType: 'GLOBAL', locations: [], categories: ['Travel','Hospitality'], platforms: [['TIKTOK',0],['YOUTUBE',0]], languages: [['en',true]], budget: [60000,120000,'USD'], deliverables: [['Travel Experience Video',2,'TIKTOK','Short-form video']], featured: true },
+    { business: 0, title: 'Remote Productivity App Reviews', objective: 'APP_DOWNLOADS', locationType: 'REMOTE', locations: [], categories: ['Technology','Education'], platforms: [['YOUTUBE',10000],['BLOG',0]], languages: [['en',true]], budget: [80000,150000,'USD'], deliverables: [['Product Review',1,'YOUTUBE','Product Reviews']] },
+    { business: 1, title: 'Kenya Healthy Cooking Creators', objective: 'CONTENT_CREATION', locationType: 'NATIONAL', locations: [['KE']], categories: ['Food','Health & Wellness'], platforms: [['INSTAGRAM',5000]], languages: [['en',true],['sw',false]], budget: [6000000,10000000,'KES'], deliverables: [['Recipe Reel',3,'INSTAGRAM','Instagram Reels']] },
+    { business: 2, title: 'Dubai Hotel Event Coverage', objective: 'EVENT_PROMOTION', locationType: 'LOCAL', locations: [['AE','Dubai']], categories: ['Travel','Hospitality'], platforms: [['INSTAGRAM',15000]], languages: [['en',true],['ar',false]], budget: [300000,500000,'AED'], deliverables: [['Event Coverage',1,'INSTAGRAM','Event Coverage']] },
+    { business: 0, title: 'Finance Community Growth Campaign', objective: 'COMMUNITY_GROWTH', locationType: 'GLOBAL', locations: [], categories: ['Finance','Business'], platforms: [['LINKEDIN',2000],['PODCAST',0]], languages: [['en',true]], budget: [100000,180000,'USD'], deliverables: [['Founder Interview',1,'PODCAST','Podcasts']] },
+    { business: 1, title: 'New Product Concept Draft', objective: 'PRODUCT_LAUNCH', locationType: 'REMOTE', locations: [], categories: ['Lifestyle'], platforms: [['TIKTOK',0]], languages: [['en',true]], budget: [25000,50000,'USD'], deliverables: [['Concept Video',1,'TIKTOK','Short-form video']], status: 'DRAFT' },
+  ] as const;
+  for (const fixture of fixtures) {
+    const business = businesses.get(businessSlugs[fixture.business]); if (!business) continue;
+    const campaignSlug = slug(fixture.title);
+    const campaign = await db.campaign.upsert({ where: { slug: campaignSlug }, create: { businessId: business.id, title: fixture.title, slug: campaignSlug, shortDescription: `A fictional Rivera opportunity for ${fixture.title.toLowerCase()}. Review the location, platform and audience requirements before saving it.`, fullDescription: `This synthetic development campaign gives Rivera businesses and creators a realistic Phase 4 workflow without representing a real commercial offer. The complete brief is intentionally visible only to the owner and administrators.`, productOrServiceName: fixture.title.replace(/ Campaign| Creators| Stories| Coverage/g,''), campaignObjective: fixture.objective, targetAudience: 'Creators whose audience aligns with this campaign category and location.', expectedOutcomes: 'Build authentic awareness and create useful campaign content. Outcomes are not guaranteed.', budgetMinMinor: fixture.budget[0], budgetMaxMinor: fixture.budget[1], currencyCode: fixture.budget[2], creatorSlots: 2, applicationDeadline: future(21), campaignStartDate: future(30), campaignEndDate: future(60), locationType: fixture.locationType, campaignCountryCode: fixture.locations[0]?.[0], campaignCity: fixture.locations[0]?.[1], verifiedCreatorsOnly: false, usageRights: 'SOCIAL_MEDIA', productProvided: true, travelExpensesCovered: fixture.locationType === 'LOCAL', status: fixture.status ?? 'OPEN', visibility: fixture.status === 'DRAFT' ? 'PRIVATE' : 'PUBLIC', isFeatured: fixture.featured ?? false, publishedAt: fixture.status === 'DRAFT' ? null : new Date() }, update: { businessId: business.id, title: fixture.title, shortDescription: `A fictional Rivera opportunity for ${fixture.title.toLowerCase()}. Review the location, platform and audience requirements before saving it.`, applicationDeadline: future(21), campaignStartDate: future(30), campaignEndDate: future(60), status: fixture.status ?? 'OPEN', visibility: fixture.status === 'DRAFT' ? 'PRIVATE' : 'PUBLIC', isFeatured: fixture.featured ?? false } });
+    await db.$transaction([db.campaignCategory.deleteMany({ where: { campaignId: campaign.id } }), db.campaignCreatorLocation.deleteMany({ where: { campaignId: campaign.id } }), db.campaignPlatform.deleteMany({ where: { campaignId: campaign.id } }), db.campaignLanguage.deleteMany({ where: { campaignId: campaign.id } }), db.campaignDeliverable.deleteMany({ where: { campaignId: campaign.id } })]);
+    await db.campaignCategory.createMany({ data: fixture.categories.map((name,index)=>({campaignId:campaign.id,categoryId:categories.get(name)!,isPrimary:index===0})) });
+    if (fixture.locations.length) await db.campaignCreatorLocation.createMany({ data: fixture.locations.map(location=>({campaignId:campaign.id,countryCode:location[0],city:location[1]})) });
+    await db.campaignPlatform.createMany({ data: fixture.platforms.map(platform=>({campaignId:campaign.id,platform:platform[0],minimumFollowers:platform[1],required:true})) });
+    await db.campaignLanguage.createMany({ data: fixture.languages.map(language=>({campaignId:campaign.id,languageCode:language[0],required:language[1]})) });
+    await db.campaignDeliverable.createMany({ data: fixture.deliverables.map((item,index)=>({campaignId:campaign.id,title:item[0],quantity:item[1],platform:item[2],contentTypeId:contentTypes.get(item[3]),description:'Synthetic Rivera development deliverable.',sortOrder:index})) });
+  }
+  const creator = await db.creatorProfile.findFirst({ where: { slug: 'amina-noor' } }); const saved = await db.campaign.findFirst({ where: { slug: 'qatar-technology-product-launch' } });
+  if (creator && saved) await db.savedCampaign.upsert({ where: { creatorId_campaignId: { creatorId: creator.id, campaignId: saved.id } }, create: { creatorId: creator.id, campaignId: saved.id }, update: {} });
+}
+
 async function main() {
   if (!demoPassword) throw new Error('Seed passwords are required outside development.');
   await seedTaxonomy();
   const admin = await seedUser({ email: process.env.ADMIN_SEED_EMAIL ?? (development ? 'admin@rivera.local' : undefined), password: process.env.ADMIN_SEED_PASSWORD ?? demoPassword, firstName: 'Rivera', lastName: 'Admin', role: 'ADMIN' });
-  await seedBusinesses(); await seedCreators();
+  await seedBusinesses(); await seedCreators(); await seedCampaigns();
   const pendingCreator = await db.creatorProfile.findFirst({ where: { verificationStatus: 'UNVERIFIED', profileVisibility: 'PUBLIC' } });
   if (pendingCreator && !await db.verificationRequest.findFirst({ where: { creatorProfileId: pendingCreator.id, status: 'PENDING' } })) await db.$transaction([db.creatorProfile.update({ where: { id: pendingCreator.id }, data: { verificationStatus: 'PENDING' } }), db.verificationRequest.create({ data: { userId: pendingCreator.userId, profileType: 'CREATOR', creatorProfileId: pendingCreator.id, noteFromUser: 'Synthetic development verification request.' } })]);
-  console.log(`Phase 3 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}.`);
+  console.log(`Phase 4 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=8.`);
 }
 main().finally(() => db.$disconnect());

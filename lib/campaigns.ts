@@ -1,0 +1,20 @@
+export type Campaign = {
+  id:string;slug:string;title:string;shortDescription:string;fullDescription?:string;productOrServiceName?:string;productOrServiceDescription?:string;productUrl?:string;
+  campaignObjective?:string;targetAudience?:string;expectedOutcomes?:string;budgetMinMinor?:number|null;budgetMaxMinor?:number|null;budgetVisibility:string;currencyCode:string;
+  creatorSlots:number;applicationDeadline?:string;campaignStartDate?:string;campaignEndDate?:string;locationType?:string;campaignCountryCode?:string;campaignCity?:string;campaignRegion?:string;
+  verifiedCreatorsOnly:boolean;usageRights?:string;usageRightsNotes?:string;productProvided?:boolean;travelExpensesCovered?:boolean;specialInstructions?:string;
+  status:string;visibility:string;isFeatured:boolean;acceptingApplications:boolean;publishedAt?:string;updatedAt?:string;viewCount?:number;matchScore?:number;reasons?:string[];
+  business:{id:string;name:string;slug:string;logoUrl?:string;shortDescription?:string;verificationStatus:string};
+  categories:{id:string;name:string;slug:string;isPrimary:boolean;categoryId?:string;category?:{id:string;name:string;slug:string}}[];
+  creatorLocations:{id?:string;countryCode:string;city?:string;region?:string}[];
+  platforms:{platform:string;required:boolean;minimumFollowers?:number;preferredFollowers?:number}[];
+  languages:{languageCode:string;required:boolean}[];
+  deliverables:{id?:string;title:string;description?:string;quantity:number;platform?:string;contentTypeId?:string;dueDate?:string;contentType?:{name:string;slug:string}}[];
+};
+export type CampaignResult={items:Campaign[];pagination:{page:number;limit:number;total:number;pages:number}};
+export const objectives=['BRAND_AWARENESS','PRODUCT_LAUNCH','SALES','LEAD_GENERATION','APP_DOWNLOADS','WEBSITE_TRAFFIC','STORE_VISITS','EVENT_PROMOTION','SOCIAL_ENGAGEMENT','CONTENT_CREATION','UGC_CREATION','PRODUCT_REVIEWS','COMMUNITY_GROWTH','OTHER'];
+export const platforms=['INSTAGRAM','TIKTOK','YOUTUBE','FACEBOOK','X','LINKEDIN','SNAPCHAT','TWITCH','PINTEREST','BLOG','PODCAST','OTHER'];
+export const label=(value?:string)=>value?value.toLowerCase().replaceAll('_',' ').replace(/\b\w/g,character=>character.toUpperCase()):'Not specified';
+export const location=(campaign:Campaign)=>campaign.locationType==='GLOBAL'?'Worldwide':campaign.locationType==='REMOTE'?'Remote':campaign.creatorLocations.length?campaign.creatorLocations.map(item=>[item.city,item.countryCode].filter(Boolean).join(', ')).join(' · '):[campaign.campaignCity,campaign.campaignCountryCode].filter(Boolean).join(', ')||'Flexible location';
+export const budget=(campaign:Campaign)=>campaign.budgetVisibility==='HIDDEN'||campaign.budgetMinMinor==null?'Budget to be discussed':new Intl.NumberFormat('en',{style:'currency',currency:campaign.currencyCode,maximumFractionDigits:0}).format(campaign.budgetMinMinor/100)+(campaign.budgetMaxMinor!=null&&campaign.budgetMaxMinor!==campaign.budgetMinMinor?` – ${new Intl.NumberFormat('en',{style:'currency',currency:campaign.currencyCode,maximumFractionDigits:0}).format(campaign.budgetMaxMinor/100)}`:'');
+export const deadline=(value?:string)=>value?new Intl.DateTimeFormat('en',{dateStyle:'medium'}).format(new Date(value)):'Flexible deadline';

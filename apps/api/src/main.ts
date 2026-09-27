@@ -25,8 +25,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, exceptionFactory: errors => new ApiException(HttpStatus.BAD_REQUEST, 'VALIDATION_ERROR', errors.flatMap(error => Object.values(error.constraints ?? {})).join('. ')) }));
   const document = SwaggerModule.createDocument(app, new DocumentBuilder()
     .setTitle('Rivera API')
-    .setDescription('Rivera authentication and professional marketplace profiles. Public responses exclude login email, phone, moderation notes and security data. Errors use { statusCode, code, message }.')
-    .setVersion('0.3')
+    .setDescription('Rivera authentication, professional profiles and campaign opportunity marketplace. Public campaign responses are intentionally limited to the safe summary and exclude the locked brief, contacts, moderation and security data. Errors use { statusCode, code, message }.')
+    .setVersion('0.4')
     .addCookieAuth('rivera_access', { type: 'apiKey', in: 'cookie' }, 'access-cookie')
     .build());
   if (process.env.NODE_ENV !== 'production') SwaggerModule.setup('api/docs', app, document);

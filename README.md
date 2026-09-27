@@ -1,6 +1,6 @@
 # Rivera
 
-Rivera is a global business and creator marketplace. Phase 2 adds email/password accounts, verification, role authorization, onboarding and dashboard shells. Campaigns, bidding, payment, messaging and reviews remain future phases.
+Rivera is a global business and creator marketplace. Phases 1–4 provide authentication, professional profiles and a campaign opportunity marketplace. Proposals, application fees, payments, shortlisting, hiring and messaging remain future phases.
 
 ## Project layout
 
@@ -82,6 +82,22 @@ Development uploads use the `LocalStorageService` abstraction and the persistent
 
 The idempotent development seed creates 25 categories, 21 industries, 16 content types, three primary demo businesses and 12 synthetic creators with categories, social accounts and portfolios. It includes public/private, verified and pending-verification states. No real influencer imagery or scraped social data is used.
 
+## Phase 4 campaign marketplace
+
+Businesses create campaigns at `/dashboard/business/campaigns/new` using five stages: campaign basics, Creator requirements, deliverables, budget and dates, then review. Drafts accept incomplete information; publication applies the complete campaign, profile, budget, location and date rules. Owners can edit, duplicate, publish, pause, resume, close, cancel and delete drafts from `/dashboard/business/campaigns`.
+
+Campaign status supports `DRAFT`, optional `PENDING_REVIEW`, `OPEN`, `PAUSED`, `CLOSED`, future-compatible `IN_PROGRESS` and `COMPLETED`, and `CANCELLED`. Only active, unexpired `OPEN` and `PUBLIC` campaigns appear in `/campaigns`. `UNLISTED` campaigns support direct links, while `PRIVATE` campaigns remain owner/Admin only. `LOCAL`, `NATIONAL`, `GLOBAL` and `REMOTE` targeting are distinct; global campaigns require no country list, while remote campaigns can optionally retain country eligibility.
+
+Money is stored as integer minor units with its original three-letter currency. Campaigns can expose their range or show “Budget to be discussed.” Requirements reuse Phase 3 categories, content types and social platforms. A campaign can specify target countries/cities, platform-specific follower levels, languages, verification, Creator slots, deliverables, usage rights, supplied products and travel coverage.
+
+Public campaign responses are explicit allowlists containing the summary, Business public identity, requirements, budget visibility, basic deliverables and dates. The full description, target audience, expected outcomes, special instructions, locked/owner attachments and private Business contacts are available only through protected owner and Admin APIs. This separation is the Phase 5 unlock boundary.
+
+Creators browse and filter `/campaigns` or use `/dashboard/creator/opportunities`; filters include text, country, city, category, platform, objective, location type, budget and closing date. Saved opportunities are unique per Creator/campaign. Recommendations use deterministic category, platform, location, language and verification signals—no AI, embeddings or external map service.
+
+Admins inspect full campaign briefs and moderate status, visibility and featured state at `/admin/campaigns`. `CAMPAIGN_REVIEW_REQUIRED` optionally sends publication through review. Limits are controlled with `MAX_CAMPAIGN_CATEGORIES`, `MAX_CAMPAIGN_DELIVERABLES`, `MAX_CAMPAIGN_ATTACHMENTS` and `MAX_CAMPAIGN_ATTACHMENT_MB`.
+
+The development seed additionally creates eight synthetic campaigns covering local, national, global, remote, open and draft states and one saved Creator opportunity.
+
 ## Checks
 
 ```sh
@@ -100,4 +116,4 @@ Run `docker compose config` and the complete creator, business and password rese
 
 ## Next phase
 
-The normalized marketplace identities are ready to support Phase 4 campaigns and applications. Campaign, payment, messaging, reviews and automated social integrations remain intentionally unimplemented.
+The campaign domain now provides the ownership, safe public summary, locked brief, requirements, money, deliverables and lifecycle foundation needed for Phase 5 Creator proposals and payment-verified application submission. No functional application, proposal, payment, shortlisting, hiring or messaging workflow exists yet.
