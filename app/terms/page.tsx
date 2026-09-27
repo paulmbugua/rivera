@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function Terms(){return <main className="legal-page"><Link href="/" className="brand"><span className="brand-mark">R.</span>rivera</Link><h1>Terms of Service</h1><p>Rivera accounts are provided for lawful business and creator collaboration. Users are responsible for accurate account information, protecting their credentials, and following applicable laws.</p><p>Campaign, payment, messaging, and marketplace transaction terms will be added before those features launch.</p></main>}

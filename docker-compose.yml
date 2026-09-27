@@ -19,6 +19,23 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       APP_URL: ${APP_URL:-http://localhost:3000}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      EMAIL_VERIFICATION_EXPIRES_IN: ${EMAIL_VERIFICATION_EXPIRES_IN:-24h}
+      PASSWORD_RESET_EXPIRES_IN: ${PASSWORD_RESET_EXPIRES_IN:-1h}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-console}
+      MAIL_FROM: ${MAIL_FROM:-noreply@rivera.local}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-admin@rivera.local}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-RiveraDemo123}
+      BUSINESS_SEED_EMAIL: ${BUSINESS_SEED_EMAIL:-business.demo@example.com}
+      BUSINESS_SEED_PASSWORD: ${BUSINESS_SEED_PASSWORD:-RiveraDemo123}
+      CREATOR_SEED_EMAIL: ${CREATOR_SEED_EMAIL:-creator.demo@example.com}
+      CREATOR_SEED_PASSWORD: ${CREATOR_SEED_PASSWORD:-RiveraDemo123}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       NODE_ENV: development
     ports: ['127.0.0.1:4000:4000']
@@ -27,6 +44,8 @@ services:
     build: { context: ., dockerfile: Dockerfile.web }
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      API_INTERNAL_URL: http://api:4000/api/v1
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
     ports: ['127.0.0.1:3000:3000']
     depends_on: [api]
 volumes:

@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function Privacy(){return <main className="legal-page"><Link href="/" className="brand"><span className="brand-mark">R.</span>rivera</Link><h1>Privacy Policy</h1><p>Rivera uses account and profile information to authenticate users, secure sessions, and provide role-specific onboarding. Passwords and security tokens are stored only as cryptographic hashes.</p><p>Production retention, support, and data-processing details will be finalized before the marketplace launches publicly.</p></main>}

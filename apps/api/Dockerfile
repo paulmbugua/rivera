@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 WORKDIR /app
-RUN corepack enable
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/* && corepack enable
 ENV SITES_PNPM_SHARED_STORE=/pnpm/store \
     PNPM_CONFIG_FETCH_RETRIES=5 \
     PNPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \

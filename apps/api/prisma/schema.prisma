@@ -38,6 +38,10 @@ model User {
   passwordHash String
   firstName String
   lastName String
+  phone String?
+  countryCode String?
+  city String?
+  profileImageUrl String?
   status UserStatus @default(PENDING_VERIFICATION)
   emailVerifiedAt DateTime?
   lastLoginAt DateTime?
