@@ -501,6 +501,7 @@ model Campaign {
   deliverables                CampaignDeliverable[]
   attachments                 CampaignAttachment[]
   savedBy                     SavedCampaign[]
+  auditLogs                   CampaignAuditLog[]
 
   @@index([status])
   @@index([visibility])
@@ -510,6 +511,19 @@ model Campaign {
   @@index([campaignCountryCode])
   @@index([businessId])
   @@index([campaignObjective])
+}
+
+model CampaignAuditLog {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  actorUserId String
+  action      String   @db.VarChar(80)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([campaignId, createdAt])
+  @@index([actorUserId])
 }
 
 model CampaignCategory {

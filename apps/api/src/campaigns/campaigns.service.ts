@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { CampaignStatus, Prisma } from '@prisma/client';
 import { ApiException } from '../common/api-error';
 import { PrismaService } from '../common/prisma.service';
@@ -88,6 +89,7 @@ export class CampaignsService {
     };
   }
   private ownerDto(campaign: any) { return { ...campaign, acceptingApplications: campaign.status === 'OPEN' && (!campaign.applicationDeadline || new Date(campaign.applicationDeadline) > new Date()) }; }
+  private audit(campaignId:string,actorUserId:string,action:string,metadata?:Prisma.InputJsonValue){return this.prisma.campaignAuditLog.create({data:{campaignId,actorUserId,action,metadata}});}
 
   async create(userId: string, dto: CampaignDto) {
     const business = await this.businessFor(userId); this.validateDates(dto);
@@ -126,7 +128,8 @@ export class CampaignsService {
     this.validateDates({ ...campaign, applicationDeadline: campaign.applicationDeadline?.toISOString(), campaignStartDate: campaign.campaignStartDate?.toISOString(), campaignEndDate: campaign.campaignEndDate?.toISOString() } as unknown as CampaignDto, true);
     const errors = this.publishErrors(campaign); if (errors.length) this.fail(HttpStatus.BAD_REQUEST, 'CAMPAIGN_INCOMPLETE', `Complete these fields before publishing: ${errors.join(', ')}.`);
     const review = process.env.CAMPAIGN_REVIEW_REQUIRED === 'true';
-    return this.prisma.campaign.update({ where: { id }, data: { status: review ? 'PENDING_REVIEW' : 'OPEN', visibility: campaign.visibility === 'PRIVATE' ? 'PUBLIC' : campaign.visibility, publishedAt: review ? null : new Date(), pausedAt: null, closedAt: null }, include: campaignInclude }).then(item => this.ownerDto(item));
+    const updated=await this.prisma.campaign.update({ where: { id }, data: { status: review ? 'PENDING_REVIEW' : 'OPEN', visibility: campaign.visibility === 'PRIVATE' ? 'PUBLIC' : campaign.visibility, publishedAt: review ? null : new Date(), pausedAt: null, closedAt: null }, include: campaignInclude });
+    await this.audit(id,userId,'CAMPAIGN_PUBLISHED',{status:updated.status}); return this.ownerDto(updated);
   }
   async lifecycle(userId: string, id: string, action: 'pause'|'resume'|'close'|'cancel') {
     const campaign = await this.owned(userId, id); let data: Prisma.CampaignUpdateInput;
@@ -134,13 +137,15 @@ export class CampaignsService {
     else if (action === 'resume') { if (campaign.status !== 'PAUSED') this.fail(HttpStatus.CONFLICT, 'INVALID_CAMPAIGN_STATE', 'Only paused campaigns can be resumed.'); data = { status: 'OPEN', pausedAt: null }; }
     else if (action === 'close') { if (!['OPEN','PAUSED'].includes(campaign.status)) this.fail(HttpStatus.CONFLICT, 'INVALID_CAMPAIGN_STATE', 'Only open or paused campaigns can be closed.'); data = { status: 'CLOSED', closedAt: new Date() }; }
     else { if (['COMPLETED','CANCELLED'].includes(campaign.status)) this.fail(HttpStatus.CONFLICT, 'INVALID_CAMPAIGN_STATE', 'This campaign cannot be cancelled.'); data = { status: 'CANCELLED', closedAt: new Date() }; }
-    return this.prisma.campaign.update({ where: { id }, data, include: campaignInclude }).then(item => this.ownerDto(item));
+    const updated=await this.prisma.campaign.update({ where: { id }, data, include: campaignInclude }); const auditAction={pause:'CAMPAIGN_PAUSED',resume:'CAMPAIGN_RESUMED',close:'CAMPAIGN_CLOSED',cancel:'CAMPAIGN_CANCELLED'}[action]; await this.audit(id,userId,auditAction); return this.ownerDto(updated);
   }
   async duplicate(userId: string, id: string) {
     const source = await this.owned(userId, id); const title = `${source.title} (Copy)`; const slug = await this.uniqueSlug(title);
     return this.prisma.campaign.create({ data: { businessId: source.businessId, title, slug, shortDescription: source.shortDescription, fullDescription: source.fullDescription, productOrServiceName: source.productOrServiceName, productOrServiceDescription: source.productOrServiceDescription, productUrl: source.productUrl, campaignObjective: source.campaignObjective, otherObjective: source.otherObjective, targetAudience: source.targetAudience, expectedOutcomes: source.expectedOutcomes, budgetMinMinor: source.budgetMinMinor, budgetMaxMinor: source.budgetMaxMinor, currencyCode: source.currencyCode, budgetVisibility: source.budgetVisibility, creatorSlots: source.creatorSlots, locationType: source.locationType, campaignCountryCode: source.campaignCountryCode, campaignCity: source.campaignCity, campaignRegion: source.campaignRegion, physicalLocationDescription: source.physicalLocationDescription, verifiedCreatorsOnly: source.verifiedCreatorsOnly, usageRights: source.usageRights, usageRightsNotes: source.usageRightsNotes, productProvided: source.productProvided, travelExpensesCovered: source.travelExpensesCovered, specialInstructions: source.specialInstructions, status: 'DRAFT', visibility: 'PRIVATE', categories: { create: source.categories.map(item => ({ categoryId: item.categoryId, isPrimary: item.isPrimary })) }, creatorLocations: { create: source.creatorLocations.map(({countryCode,city,region}) => ({countryCode,city,region})) }, platforms: { create: source.platforms.map(({platform,required,minimumFollowers,preferredFollowers}) => ({platform,required,minimumFollowers,preferredFollowers})) }, languages: { create: source.languages.map(({languageCode,required}) => ({languageCode,required})) }, deliverables: { create: source.deliverables.map(({title,description,quantity,platform,contentTypeId,dueDate,sortOrder}) => ({title,description,quantity,platform,contentTypeId,dueDate,sortOrder})) } }, include: campaignInclude }).then(item => this.ownerDto(item));
   }
   async removeDraft(userId: string, id: string) { const c = await this.owned(userId,id); if (c.status !== 'DRAFT') this.fail(HttpStatus.CONFLICT,'DRAFT_ONLY','Only draft campaigns can be deleted.'); await this.prisma.campaign.delete({where:{id}}); return { deleted: true }; }
+  async businessSummary(userId:string){const business=await this.businessFor(userId);const [active,drafts,closed,views]=await this.prisma.$transaction([this.prisma.campaign.count({where:{businessId:business.id,status:'OPEN',deletedAt:null}}),this.prisma.campaign.count({where:{businessId:business.id,status:'DRAFT',deletedAt:null}}),this.prisma.campaign.count({where:{businessId:business.id,status:{in:['CLOSED','CANCELLED','COMPLETED']},deletedAt:null}}),this.prisma.campaign.aggregate({where:{businessId:business.id,deletedAt:null},_sum:{viewCount:true}})]);return{activeCampaigns:active,draftCampaigns:drafts,closedCampaigns:closed,campaignViews:views._sum.viewCount??0};}
+  async creatorSummary(userId:string){const creator=await this.creatorFor(userId);const [saved,newest,recommended]=await Promise.all([this.prisma.savedCampaign.count({where:{creatorId:creator.id,campaign:{status:'OPEN',visibility:'PUBLIC',deletedAt:null}}}),this.prisma.campaign.count({where:{status:'OPEN',visibility:'PUBLIC',deletedAt:null,OR:[{applicationDeadline:null},{applicationDeadline:{gt:new Date()}}]}}),this.recommended(userId)]);return{savedOpportunities:saved,newestOpportunities:newest,recommendedOpportunities:recommended.length};}
 
   async discovery(query: CampaignQueryDto) {
     const now = new Date(); const where: Prisma.CampaignWhereInput = { status: 'OPEN', visibility: 'PUBLIC', deletedAt: null, OR: [{ applicationDeadline: null }, { applicationDeadline: { gt: now } }] };
@@ -179,5 +184,5 @@ export class CampaignsService {
   async deleteAttachment(userId:string,campaignId:string,attachmentId:string){await this.owned(userId,campaignId);await this.prisma.campaignAttachment.deleteMany({where:{id:attachmentId,campaignId}});return{deleted:true};}
   async adminList(query:CampaignQueryDto){const where:Prisma.CampaignWhereInput={deletedAt:null,...(query.q?{OR:[{title:{contains:query.q,mode:'insensitive'}},{business:{name:{contains:query.q,mode:'insensitive'}}}]}:{})};const [items,total]=await this.prisma.$transaction([this.prisma.campaign.findMany({where,include:campaignInclude,orderBy:{updatedAt:'desc'},skip:(query.page-1)*query.limit,take:query.limit}),this.prisma.campaign.count({where})]);return{items:items.map(x=>this.ownerDto(x)),pagination:{page:query.page,limit:query.limit,total,pages:Math.ceil(total/query.limit)}};}
   async adminDetail(id:string){const c=await this.prisma.campaign.findUnique({where:{id},include:campaignInclude});if(!c)this.fail(HttpStatus.NOT_FOUND,'CAMPAIGN_NOT_FOUND','Campaign not found.');return this.ownerDto(c);}
-  async adminUpdate(id:string,dto:CampaignAdminDto){await this.adminDetail(id);return this.prisma.campaign.update({where:{id},data:dto,include:campaignInclude}).then(x=>this.ownerDto(x));}
+  async adminUpdate(adminUserId:string,id:string,dto:CampaignAdminDto){await this.adminDetail(id);const updated=await this.prisma.campaign.update({where:{id},data:dto,include:campaignInclude});if(dto.status||dto.visibility!==undefined)await this.audit(id,adminUserId,dto.status==='CANCELLED'?'CAMPAIGN_REMOVED_BY_ADMIN':'CAMPAIGN_MODERATED',{status:dto.status??null,visibility:dto.visibility??null});return this.ownerDto(updated);}
 }

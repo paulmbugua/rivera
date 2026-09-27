@@ -1,5 +1,5 @@
 import { Type, Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsEnum, IsISO31661Alpha2, IsInt, IsOptional, IsString, IsUrl, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsEnum, IsISO31661Alpha2, IsInt, IsOptional, IsString, IsUrl, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { BudgetVisibility, CampaignAttachmentVisibility, CampaignLocationType, CampaignObjective, CampaignStatus, CampaignVisibility, SocialPlatform, UsageRights } from '@prisma/client';
 
 const safeUrl = { protocols: ['http', 'https'], require_protocol: true };

@@ -86,6 +86,8 @@ The idempotent development seed creates 25 categories, 21 industries, 16 content
 
 Businesses create campaigns at `/dashboard/business/campaigns/new` using five stages: campaign basics, Creator requirements, deliverables, budget and dates, then review. Drafts accept incomplete information; publication applies the complete campaign, profile, budget, location and date rules. Owners can edit, duplicate, publish, pause, resume, close, cancel and delete drafts from `/dashboard/business/campaigns`.
 
+Business and Creator dashboards include live campaign and opportunity summaries. Campaign publication, lifecycle changes and admin moderation are recorded in `CampaignAuditLog` for operational traceability.
+
 Campaign status supports `DRAFT`, optional `PENDING_REVIEW`, `OPEN`, `PAUSED`, `CLOSED`, future-compatible `IN_PROGRESS` and `COMPLETED`, and `CANCELLED`. Only active, unexpired `OPEN` and `PUBLIC` campaigns appear in `/campaigns`. `UNLISTED` campaigns support direct links, while `PRIVATE` campaigns remain owner/Admin only. `LOCAL`, `NATIONAL`, `GLOBAL` and `REMOTE` targeting are distinct; global campaigns require no country list, while remote campaigns can optionally retain country eligibility.
 
 Money is stored as integer minor units with its original three-letter currency. Campaigns can expose their range or show “Budget to be discussed.” Requirements reuse Phase 3 categories, content types and social platforms. A campaign can specify target countries/cities, platform-specific follower levels, languages, verification, Creator slots, deliverables, usage rights, supplied products and travel coverage.

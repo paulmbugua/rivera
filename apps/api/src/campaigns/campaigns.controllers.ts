@@ -22,6 +22,7 @@ export class CampaignPublicController {
 export class BusinessCampaignController {
   constructor(private service: CampaignsService) {}
   @Post() @ApiOperation({ summary: 'Create an incomplete draft campaign', description: 'Draft saves use relaxed validation. Nested requirements are created transactionally.' }) create(@CurrentUser() user: AuthUser,@Body() dto:CampaignDto){return this.service.create(user.id,dto);}
+  @Get('summary/dashboard') summary(@CurrentUser() user:AuthUser){return this.service.businessSummary(user.id);}
   @Get() @ApiOperation({ summary: 'List the authenticated Business campaigns' }) list(@CurrentUser() user:AuthUser,@Query() query:OwnerCampaignQueryDto){return this.service.ownerList(user.id,query);}
   @Get(':id') @ApiOperation({ summary: 'Read the full owner campaign brief' }) detail(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.service.ownerDetail(user.id,id);}
   @Patch(':id') @ApiOperation({ summary: 'Update a draft or published campaign' }) update(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() dto:CampaignDto){return this.service.update(user.id,id,dto);}
@@ -41,6 +42,7 @@ export class BusinessCampaignController {
 @Controller('creator/campaigns')
 export class CreatorCampaignController {
   constructor(private service:CampaignsService){}
+  @Get('summary/dashboard') summary(@CurrentUser() user:AuthUser){return this.service.creatorSummary(user.id);}
   @Post(':id/save') save(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.service.save(user.id,id);}
   @Delete(':id/save') unsave(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.service.unsave(user.id,id);}
   @Get('saved/list') saved(@CurrentUser() user:AuthUser,@Query() query:CampaignQueryDto){return this.service.saved(user.id,query);}
@@ -54,5 +56,5 @@ export class CampaignAdminController {
   constructor(private service:CampaignsService){}
   @Get() list(@Query() query:CampaignQueryDto){return this.service.adminList(query);}
   @Get(':id') detail(@Param('id') id:string){return this.service.adminDetail(id);}
-  @Patch(':id') update(@Param('id') id:string,@Body() dto:CampaignAdminDto){return this.service.adminUpdate(id,dto);}
+  @Patch(':id') update(@CurrentUser() admin:AuthUser,@Param('id') id:string,@Body() dto:CampaignAdminDto){return this.service.adminUpdate(admin.id,id,dto);}
 }
