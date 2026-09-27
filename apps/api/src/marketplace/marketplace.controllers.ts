@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthGuard, Roles } from '../auth/guard';
-import { BusinessProfileDto, CreatorProfileDto, DirectoryQueryDto, PortfolioDto, ReorderPortfolioDto, SocialAccountDto, TaxonomyDto, VerificationRequestDto, VerificationReviewDto } from './dto';
+import { AdminModerationDto, BusinessProfileDto, CreatorProfileDto, DirectoryQueryDto, PortfolioDto, ReorderPortfolioDto, SocialAccountDto, SocialVerificationDto, TaxonomyDto, VerificationRequestDto, VerificationReviewDto } from './dto';
 import { MarketplaceService } from './marketplace.service';
 
 @ApiTags('Marketplace taxonomy')
@@ -67,15 +67,22 @@ export class VerificationController {
 export class MarketplaceAdminController {
   constructor(private service: MarketplaceService) {}
   @Get('creators') creators(@Query('q') q?: string) { return this.service.adminCreators(q); }
+  @Get('creators/:id') creator(@Param('id') id: string) { return this.service.adminCreator(id); }
+  @Patch('creators/:id/moderation') moderateCreator(@Param('id') id: string, @Body() dto: AdminModerationDto) { return this.service.moderateProfile('creator', id, dto); }
   @Get('businesses') businesses(@Query('q') q?: string) { return this.service.adminBusinesses(q); }
+  @Get('businesses/:id') business(@Param('id') id: string) { return this.service.adminBusiness(id); }
+  @Patch('businesses/:id/moderation') moderateBusiness(@Param('id') id: string, @Body() dto: AdminModerationDto) { return this.service.moderateProfile('business', id, dto); }
   @Get('verifications') verifications() { return this.service.adminVerifications(); }
   @Post('verifications/:id/approve') approve(@CurrentUser() admin: { id: string }, @Param('id') id: string, @Body() dto: VerificationReviewDto) { return this.service.reviewVerification(admin.id, id, true, dto); }
   @Post('verifications/:id/reject') reject(@CurrentUser() admin: { id: string }, @Param('id') id: string, @Body() dto: VerificationReviewDto) { return this.service.reviewVerification(admin.id, id, false, dto); }
   @Post('categories') createCategory(@Body() dto: TaxonomyDto) { return this.service.taxonomy('category', dto); }
+  @Get('categories') categories() { return this.service.adminTaxonomy('category'); }
   @Patch('categories/:id') updateCategory(@Param('id') id: string, @Body() dto: TaxonomyDto) { return this.service.taxonomy('category', dto, id); }
   @Post('industries') createIndustry(@Body() dto: TaxonomyDto) { return this.service.taxonomy('industry', dto); }
+  @Get('industries') industries() { return this.service.adminTaxonomy('industry'); }
   @Patch('industries/:id') updateIndustry(@Param('id') id: string, @Body() dto: TaxonomyDto) { return this.service.taxonomy('industry', dto, id); }
   @Post('content-types') createContentType(@Body() dto: TaxonomyDto) { return this.service.taxonomy('contentType', dto); }
+  @Get('content-types') contentTypes() { return this.service.adminTaxonomy('contentType'); }
   @Patch('content-types/:id') updateContentType(@Param('id') id: string, @Body() dto: TaxonomyDto) { return this.service.taxonomy('contentType', dto, id); }
+  @Patch('social-accounts/:id/verification') verifySocial(@Param('id') id: string, @Body() dto: SocialVerificationDto) { return this.service.verifySocial(id, dto.verified); }
 }
-

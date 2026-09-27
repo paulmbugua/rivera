@@ -97,3 +97,10 @@ export class TaxonomyDto {
   @IsOptional() @IsBoolean() active?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) sortOrder?: number;
 }
+
+export class AdminModerationDto {
+  @IsOptional() @IsEnum(ProfileVisibility) profileVisibility?: ProfileVisibility;
+  @IsOptional() @IsBoolean() isFeatured?: boolean;
+}
+
+export class SocialVerificationDto { @IsBoolean() verified!: boolean; }
