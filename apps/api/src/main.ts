@@ -6,13 +6,16 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './module';
 import { ApiException } from './common/api-error';
+import express from 'express';
+import { resolve } from 'node:path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api/v1');
   const origin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
   app.enableCors({ origin, credentials: true });
-  app.use(helmet());
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cookieParser());
+  app.use('/media', express.static(resolve(process.env.LOCAL_UPLOAD_DIR ?? './uploads'), { dotfiles: 'deny', fallthrough: false, index: false, maxAge: '1d' }));
   app.use((req: { method: string; headers: { origin?: string; referer?: string }; cookies?: Record<string, string> }, _res: unknown, next: (error?: Error) => void) => {
     if (['POST','PUT','PATCH','DELETE'].includes(req.method) && req.headers.origin && req.headers.origin !== origin) return next(new BadRequestException('Request origin is not allowed'));
     if (['POST','PUT','PATCH','DELETE'].includes(req.method) && !req.headers.origin && req.headers.referer && !req.headers.referer.startsWith(origin + '/')) return next(new BadRequestException('Request origin is not allowed'));
@@ -22,8 +25,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, exceptionFactory: errors => new ApiException(HttpStatus.BAD_REQUEST, 'VALIDATION_ERROR', errors.flatMap(error => Object.values(error.constraints ?? {})).join('. ')) }));
   const document = SwaggerModule.createDocument(app, new DocumentBuilder()
     .setTitle('Rivera API')
-    .setDescription('Authentication, role authorization, onboarding, profile settings and administration endpoints for Rivera. Errors use { statusCode, code, message }.')
-    .setVersion('0.2')
+    .setDescription('Rivera authentication and professional marketplace profiles. Public responses exclude login email, phone, moderation notes and security data. Errors use { statusCode, code, message }.')
+    .setVersion('0.3')
     .addCookieAuth('rivera_access', { type: 'apiKey', in: 'cookie' }, 'access-cookie')
     .build());
   if (process.env.NODE_ENV !== 'production') SwaggerModule.setup('api/docs', app, document);

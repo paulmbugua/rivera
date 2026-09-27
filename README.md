@@ -70,6 +70,18 @@ NestJS guards authorize role-specific onboarding and `/api/v1/admin/summary`. Ne
 
 All expected API failures return a stable `code` such as `INVALID_CREDENTIALS`, `FORBIDDEN_ROLE`, `EMAIL_NOT_VERIFIED`, or `VALIDATION_ERROR`, alongside the HTTP status and human-readable message. Development Swagger at `/api/docs` documents request bodies, success examples, and common authentication errors.
 
+## Phase 3 marketplace profiles
+
+Creators edit their professional identity at `/dashboard/creator/profile`: headline, bio, ISO location, categories, content types, languages, availability, profile and cover images, manually supplied social metrics, and up to 20 portfolio entries. Businesses use `/dashboard/business/profile` for their public identity, industry, location, company details, logo and cover. Profile completion is calculated by the API; ratings, verification and featured state remain system-controlled.
+
+Visibility has three levels: `PUBLIC` profiles are shareable and included in discovery, `UNLISTED` profiles are available by direct URL only, and `PRIVATE` profiles are owner/admin only. Publishing enforces minimum profile requirements. Public creator and business serializers deliberately exclude account email, phone, admin review notes and internal authentication data.
+
+Public URLs are `/creators/[slug]` and `/businesses/[slug]`; `/creators` provides server-backed search, country/platform/category filters, sorting and bounded pagination. Admins manage categories, industries, content types and manual verification requests under `/admin/*`. Profile verification is distinct from per-social-account metric verification.
+
+Development uploads use the `LocalStorageService` abstraction and the persistent `rivera_uploads` Docker volume. Only JPEG, PNG and WEBP images with matching magic bytes are accepted; size limits are configured with `MAX_PROFILE_IMAGE_MB`, `MAX_COVER_IMAGE_MB` and `MAX_PORTFOLIO_IMAGE_MB`. Files receive generated object names and only the dedicated media directory is served. A future S3/R2 provider can implement the same storage interface; local storage is not intended as a production CDN.
+
+The idempotent development seed creates 25 categories, 21 industries, 16 content types, three primary demo businesses and 12 synthetic creators with categories, social accounts and portfolios. It includes public/private, verified and pending-verification states. No real influencer imagery or scraped social data is used.
+
 ## Checks
 
 ```sh
@@ -88,4 +100,4 @@ Run `docker compose config` and the complete creator, business and password rese
 
 ## Next phase
 
-Phase 3 can expand the business and creator profiles. The Phase 2 user, role and onboarding models provide the starting point. Campaign and application tables from the initial scaffold are not exposed as working features.
+The normalized marketplace identities are ready to support Phase 4 campaigns and applications. Campaign, payment, messaging, reviews and automated social integrations remain intentionally unimplemented.
