@@ -10,19 +10,39 @@ Rivera is a global business and creator marketplace. Phase 2 adds email/password
 - `packages/shared/`: shared TypeScript types
 - `docker-compose.yml`: **development** Compose services, not a production deployment configuration
 
-## Local startup
+## Local startup with Docker
 
-Requirements: Node 22, pnpm, Docker and Docker Compose. Copy `.env.example` to `.env`; replace the development JWT secret with a random 32+ character value and set your own database password. Choose an alphanumeric password for the Compose URL or URL-encode special characters.
+The simplest path only requires Docker Desktop with Docker Compose. Copy the example environment file, replace the development JWT secret with a random 32+ character value, and set your own database password. Choose an alphanumeric database password because Compose places it in a connection URL.
+
+macOS or Linux:
+
+```sh
+cp .env.example .env
+docker compose up --build
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+The API container applies the committed migration before starting. Open `http://localhost:3000` for the site, `http://localhost:4000/api/v1/health` for health, and `http://localhost:4000/api/docs` for development API docs. PostgreSQL is bound to localhost only. If port 5432 is already occupied, change `POSTGRES_PORT` in `.env`, for example to `55432`; containers continue to communicate on their internal port automatically. If startup fails, inspect `docker compose logs web api postgres`.
+
+Stop the app with `docker compose down`. Add `--volumes` only when you intentionally want to erase the local database.
+
+## Local startup without Docker for Node services
+
+This option requires Node 22 and pnpm. Keep PostgreSQL in Docker or use an existing PostgreSQL 16 server, then install dependencies and generate the Prisma client:
 
 ```sh
 pnpm install
 pnpm --dir apps/api prisma:generate
-docker compose up --build
+docker compose up -d postgres
 ```
 
-The API container applies the committed migration before starting. Open `http://localhost:3000` for the site, `http://localhost:4000/api/v1/health` for health, and `http://localhost:4000/api/docs` for development API docs. PostgreSQL is bound to localhost only. If the migration fails, check `docker compose logs api postgres`.
-
-To run outside Compose, start PostgreSQL, export `DATABASE_URL`, `JWT_ACCESS_SECRET`, `WEB_ORIGIN`, and `APP_URL` from your local environment, run `pnpm --dir apps/api prisma:deploy`, then start `pnpm --dir apps/api dev` and `pnpm dev` in separate terminals. Set `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1` for the browser.
+Export `DATABASE_URL`, `JWT_ACCESS_SECRET`, `WEB_ORIGIN`, and `APP_URL` from `.env`, run `pnpm --dir apps/api prisma:deploy`, then start `pnpm --dir apps/api dev` and `pnpm dev` in separate terminals. Set `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1` for the browser. The Vinext development server uses `http://localhost:5173` outside Compose, so set `WEB_ORIGIN` and `APP_URL` to that origin when using this mode.
 
 For an initial admin in **development**, set `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` (12+ characters) in the environment and run `pnpm --dir apps/api prisma:seed`. The seed does not reset an existing admin password. Never commit credentials.
 
