@@ -28,6 +28,8 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
+The first build downloads the workspace dependencies and can take several minutes on a slow connection. Its pnpm package and policy-metadata cache persists across BuildKit retries, so if the npm registry times out, run `docker compose up --build` again and it will reuse completed downloads.
+
 The API container applies the committed migration before starting. Open `http://localhost:3000` for the site, `http://localhost:4000/api/v1/health` for health, and `http://localhost:4000/api/docs` for development API docs. PostgreSQL is bound to localhost only. If port 5432 is already occupied, change `POSTGRES_PORT` in `.env`, for example to `55432`; containers continue to communicate on their internal port automatically. If startup fails, inspect `docker compose logs web api postgres`.
 
 Stop the app with `docker compose down`. Add `--volumes` only when you intentionally want to erase the local database.
