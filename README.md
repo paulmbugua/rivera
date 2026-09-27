@@ -60,6 +60,8 @@ Register at `/register` as Business or Creator. The API writes a bcrypt hash, cr
 
 Forgot password at `/forgot-password` uses a development link printed in API logs. Reset invalidates all prior sessions. `/resend-verification` issues another verification link with throttling. `/settings` changes the password or deactivates the account. The login response includes only public user details.
 
+To send real transactional email, set `MAIL_PROVIDER=smtp` and configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, and either `SMTP_PASS` or the legacy `SMTP_PASSWORD`. Sender identity can be supplied as `MAIL_FROM`, or as `MAIL_FROM_NAME` plus `MAIL_FROM_ADDRESS`; `MAIL_REPLY_TO` is optional. Keep credentials in the ignored `.env` file or a deployment secret store, never in source control. Port 465 normally uses `SMTP_SECURE=true`, while port 587 normally uses `false`.
+
 ## Session design
 
 Access JWTs default to 15 minutes and live in an HttpOnly cookie scoped to `/` so Next.js server layouts can authorize protected pages. Opaque refresh tokens default to 30 days and live in a separate HttpOnly cookie scoped to `/api/v1/auth`; only their SHA-256 hashes are stored. Both lifetimes and verification/reset lifetimes are environment-configurable. Refresh rotates tokens. Reuse of a revoked token revokes the user's active sessions. The backend checks the session and user status on protected requests. Logout, reset and password changes revoke sessions. Cookies use `SameSite=Lax` and become `Secure` with `COOKIE_SECURE=true` in production. Exact-origin CORS and unsafe-request Origin checks defend cookie-authenticated requests. The website retries an expired access token once via refresh.

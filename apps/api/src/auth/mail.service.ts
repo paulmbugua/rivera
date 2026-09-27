@@ -14,15 +14,18 @@ export class ConsoleMailProvider implements MailProvider {
 
 export class SmtpMailProvider implements MailProvider {
   async send(message: MailMessage) {
-    const from=process.env.SMTP_FROM ?? process.env.MAIL_FROM;
+    const from = process.env.SMTP_FROM ?? process.env.MAIL_FROM ?? (process.env.MAIL_FROM_ADDRESS
+      ? { name: process.env.MAIL_FROM_NAME ?? 'Rivera', address: process.env.MAIL_FROM_ADDRESS }
+      : undefined);
     if (!process.env.SMTP_HOST || !from) throw new ServiceUnavailableException('Email service is unavailable');
+    const port = Number(process.env.SMTP_PORT ?? 587);
     const transport = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT ?? 587),
-      secure: process.env.SMTP_PORT === '465',
-      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } : undefined,
+      port,
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465,
+      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS ?? process.env.SMTP_PASSWORD } : undefined,
     });
-    await transport.sendMail({ from, to: message.to, subject: message.subject, text: message.text, html: message.html });
+    await transport.sendMail({ from, replyTo: process.env.MAIL_REPLY_TO, to: message.to, subject: message.subject, text: message.text, html: message.html });
   }
 }
 
