@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const source=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
+const service=()=>source('src/collaborations/workspace.service.ts');
+
+test('accepted offers materialize Campaign deliverables as participant work items',()=>{const value=source('src/collaborations/collaborations.service.ts');assert.match(value,/campaignDeliverable\.findMany/);assert.match(value,/campaignWorkItem\.createMany/)});
+test('workspace reads require the assigned Creator or Business',()=>{assert.match(service(),/OR:\s*\[\{creator:\{userId\}\},\{business:\{userId\}\}\]/);assert.match(service(),/WORKSPACE_ACCESS_DENIED/)});
+test('submission versions are serialized and database unique',()=>{assert.match(service(),/pg_advisory_xact_lock/);assert.match(service(),/version=\(current\.submissions\[0\]\?\.version\?\?0\)\+1/);assert.match(source('prisma/schema.prisma'),/@@unique\(\[workItemId, version\]\)/)});
+test('only the latest submitted version can be reviewed',()=>{assert.match(service(),/workItem\.submissions\[0\]\?\.id!==row\.id\|\|row\.status!==['"]SUBMITTED['"]/);assert.match(service(),/SUBMISSION_NOT_REVIEWABLE/)});
+test('revision requests require a meaningful note',()=>{const dto=source('src/collaborations/workspace.dto.ts');assert.match(dto,/class RevisionRequestDto/);assert.match(dto,/@MinLength\(10\)/)});
+test('private deliverables are outside public media and authorization checked',()=>{const storage=source('src/storage/storage.service.ts');assert.match(storage,/PRIVATE_UPLOAD_DIR/);assert.match(storage,/safePrivate/);assert.match(service(),/submissionAsset\.findFirst[\s\S]*campaignParticipant:[\s\S]*OR:/)});
+test('only approved required work permits participant completion',()=>{assert.match(service(),/required\.some\(x=>x\.status!==['"]APPROVED['"]\)/);assert.match(service(),/REQUIRED_WORK_INCOMPLETE/)});
+test('Campaign completion waits for every participant',()=>{assert.match(service(),/participants\.some\(p=>p\.status!==['"]COMPLETED['"]\)/);assert.match(service(),/PARTICIPANTS_INCOMPLETE/)});
+test('reviews are completion-gated mutual and unique',()=>{const value=service();assert.match(value,/COLLABORATION_NOT_COMPLETED/);assert.match(value,/revieweeId=p\.creator\.userId===userId/);assert.match(source('prisma/schema.prisma'),/@@unique\(\[campaignParticipantId, reviewerId\]\)/)});
+test('published review aggregates exclude moderation-hidden reviews',()=>{const value=service();assert.match(value,/status:['"]PUBLISHED['"]/);assert.match(value,/recalculateRating/);assert.match(value,/averageRating/)});
+test('public review responses expose safe reviewer display fields',()=>{const value=service();assert.match(value,/reviewer:\{select:\{firstName:true,lastName:true/);assert.doesNotMatch(value.slice(value.indexOf("async publicReviews"),value.indexOf("async adminReviews")),/email:true/)});
+test('review reporting and moderation are auditable',()=>{const value=service();assert.match(value,/reviewReport\.create/);assert.match(value,/REVIEW_\$\{action\}/);assert.match(value,/applicationAuditLog\.create/)});
+test('Phase 7 Docker configuration persists private uploads',()=>{const compose=source('../../docker-compose.yml');assert.match(compose,/PRIVATE_UPLOAD_DIR: \/app\/private-uploads/);assert.match(compose,/rivera_private_uploads/)});

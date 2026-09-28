@@ -736,6 +736,29 @@ export class CollaborationsService {
             application: { include: { conversation: true } },
           },
         });
+        const deliverables = await tx.campaignDeliverable.findMany({
+          where: { campaignId: offer.campaignId },
+          orderBy: { sortOrder: "asc" },
+        });
+        const work = deliverables.length
+          ? deliverables
+          : [{ title: "Agreed deliverables", description: offer.deliverablesSummary, quantity: 1, platform: null, contentTypeId: null, dueDate: offer.deliveryDeadline, sortOrder: 0 }];
+        await tx.campaignWorkItem.createMany({
+          data: work.map((item) => ({
+            campaignParticipantId: created.id,
+            campaignId: offer.campaignId,
+            creatorId: offer.creatorId,
+            businessId: offer.campaign.businessId,
+            title: item.title,
+            description: item.description,
+            quantity: item.quantity,
+            platform: item.platform,
+            contentTypeId: item.contentTypeId,
+            dueDate: item.dueDate,
+            sortOrder: item.sortOrder,
+            required: true,
+          })),
+        });
         if (hired + 1 >= offer.campaign.creatorSlots)
           await tx.campaign.update({
             where: { id: offer.campaignId },
@@ -912,7 +935,7 @@ export class CollaborationsService {
     const item = await this.db.campaignParticipant.findFirst({
       where: {
         id,
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "COMPLETED"] },
         OR: [{ creator: { userId } }, { business: { userId } }],
       },
       include: { creator: true, business: true },
@@ -921,7 +944,7 @@ export class CollaborationsService {
       this.fail(
         HttpStatus.FORBIDDEN,
         "COLLABORATION_CONTACT_LOCKED",
-        "Professional contact details unlock only for active collaboration participants.",
+        "Professional contact details unlock only for active or completed collaboration participants.",
       );
     return {
       creator: {

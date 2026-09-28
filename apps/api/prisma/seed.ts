@@ -167,13 +167,47 @@ async function seedCollaborations() {
   }
 }
 
+async function seedPhase7() {
+  const active = await db.campaignParticipant.findFirst({ where: { creator: { slug: 'amina-noor' } }, include: { campaign: { include: { deliverables: true } }, application: true } });
+  if (active) {
+    await db.deliverableSubmission.deleteMany({ where: { campaignParticipantId: active.id } });
+    await db.campaignWorkItem.deleteMany({ where: { campaignParticipantId: active.id } });
+    const source = active.campaign.deliverables.slice(0,4);
+    const states = ['PENDING','SUBMITTED','REVISION_REQUESTED','APPROVED'] as const;
+    for (let index=0; index<4; index++) {
+      const deliverable = source[index] ?? source[0]; if (!deliverable) break;
+      const status=states[index];
+      const work=await db.campaignWorkItem.create({data:{campaignParticipantId:active.id,campaignId:active.campaignId,creatorId:active.creatorId,businessId:active.businessId,title:index?`${deliverable.title} — example ${index+1}`:deliverable.title,description:'Synthetic Phase 7 work item for local workflow testing.',contentTypeId:deliverable.contentTypeId,platform:deliverable.platform,quantity:deliverable.quantity,dueDate:deliverable.dueDate,sortOrder:index,required:true,status,approvedAt:status==='APPROVED'?new Date():null}});
+      if(status==='REVISION_REQUESTED') await db.deliverableSubmission.create({data:{workItemId:work.id,campaignParticipantId:active.id,campaignId:active.campaignId,creatorId:active.creatorId,version:1,status:'SUPERSEDED',message:'First synthetic version retained in history.',reviewedAt:new Date(),revisionNote:'Please show the product earlier in the content.',assets:{create:{type:'LINK',name:'Version 1 deliverable',url:'https://example.com/rivera/deliverable-version-1'}}}});
+      if(status!=='PENDING') await db.deliverableSubmission.create({data:{workItemId:work.id,campaignParticipantId:active.id,campaignId:active.campaignId,creatorId:active.creatorId,version:status==='REVISION_REQUESTED'?2:1,status:status==='REVISION_REQUESTED'?'REVISION_REQUESTED':status==='APPROVED'?'APPROVED':'SUBMITTED',message:'Synthetic Phase 7 link submission.',reviewedAt:status==='SUBMITTED'?null:new Date(),revisionNote:status==='REVISION_REQUESTED'?'Please add the agreed product close-up and updated caption.':null,assets:{create:{type:'LINK',name:`Version ${status==='REVISION_REQUESTED'?2:1} deliverable`,url:`https://example.com/rivera/deliverable-${index+1}`}}}});
+    }
+  }
+  const creator=await db.creatorProfile.findUnique({where:{slug:'leo-mensah'},include:{user:true}});
+  const campaign=await db.campaign.findUnique({where:{slug:'qatar-technology-product-launch'},include:{business:{include:{user:true}},deliverables:true}});
+  if(!creator||!campaign)return;
+  const application=await db.campaignApplication.upsert({where:{campaignId_creatorId:{campaignId:campaign.id,creatorId:creator.id}},create:{campaignId:campaign.id,creatorId:creator.id,proposedAmountMinor:campaign.budgetMinMinor??100000,proposedCurrencyCode:campaign.currencyCode,pitch:'Synthetic completed Phase 7 collaboration.',status:'ACCEPTED',paymentStatus:'NOT_REQUIRED',submittedAt:new Date(),viewedAt:new Date(),shortlistedAt:new Date(),acceptedAt:new Date()},update:{status:'ACCEPTED',acceptedAt:new Date()}});
+  const conversation=await db.conversation.upsert({where:{applicationId:application.id},create:{applicationId:application.id,campaignId:campaign.id},update:{campaignId:campaign.id}});
+  await db.conversationParticipant.createMany({data:[{conversationId:conversation.id,userId:creator.userId},{conversationId:conversation.id,userId:campaign.business.userId}],skipDuplicates:true});
+  const offer=await db.collaborationOffer.upsert({where:{applicationId_version:{applicationId:application.id,version:99}},create:{applicationId:application.id,campaignId:campaign.id,businessId:campaign.businessId,creatorId:creator.id,version:99,status:'ACCEPTED',compensationMinor:campaign.budgetMinMinor??100000,currencyCode:campaign.currencyCode,deliverablesSummary:'One approved product launch package.',sentAt:new Date(),acceptedAt:new Date()},update:{status:'ACCEPTED',acceptedAt:new Date()}});
+  const participant=await db.campaignParticipant.upsert({where:{applicationId:application.id},create:{campaignId:campaign.id,creatorId:creator.id,businessId:campaign.businessId,applicationId:application.id,offerId:offer.id,status:'COMPLETED',agreedCompensationMinor:offer.compensationMinor,currencyCode:offer.currencyCode,completedAt:new Date(),endedAt:new Date()},update:{offerId:offer.id,status:'COMPLETED',completedAt:new Date(),endedAt:new Date()}});
+  await db.review.deleteMany({where:{campaignParticipantId:participant.id}});
+  await db.deliverableSubmission.deleteMany({where:{campaignParticipantId:participant.id}});
+  await db.campaignWorkItem.deleteMany({where:{campaignParticipantId:participant.id}});
+  const source=campaign.deliverables[0];
+  const work=await db.campaignWorkItem.create({data:{campaignParticipantId:participant.id,campaignId:campaign.id,creatorId:creator.id,businessId:campaign.businessId,title:source?.title??'Completed campaign package',description:'Approved Phase 7 completion example.',contentTypeId:source?.contentTypeId,platform:source?.platform,quantity:source?.quantity??1,sortOrder:0,required:true,status:'APPROVED',approvedAt:new Date()}});
+  await db.deliverableSubmission.create({data:{workItemId:work.id,campaignParticipantId:participant.id,campaignId:campaign.id,creatorId:creator.id,version:1,status:'APPROVED',message:'Final approved campaign package.',submittedAt:new Date(),reviewedAt:new Date(),reviewedByUserId:campaign.business.userId,assets:{create:{type:'LINK',name:'Approved development deliverable',url:'https://example.com/rivera/approved-deliverable'}}}});
+  await db.review.createMany({data:[{campaignParticipantId:participant.id,campaignId:campaign.id,reviewerId:campaign.business.user.id,revieweeId:creator.userId,rating:5,comment:'Clear communication and thoughtful, on-brief creative work.'},{campaignParticipantId:participant.id,campaignId:campaign.id,reviewerId:creator.userId,revieweeId:campaign.business.user.id,rating:4,comment:'A well-organized brief and responsive collaboration team.'}]});
+  await db.creatorProfile.update({where:{id:creator.id},data:{averageRating:5,ratingCount:1,completedCampaigns:1}});
+  await db.businessProfile.update({where:{id:campaign.businessId},data:{averageRating:4,ratingCount:1}});
+}
+
 async function main() {
   if (!demoPassword) throw new Error('Seed passwords are required outside development.');
   await seedTaxonomy();
   const admin = await seedUser({ email: process.env.ADMIN_SEED_EMAIL ?? (development ? 'admin@rivera.local' : undefined), password: process.env.ADMIN_SEED_PASSWORD ?? demoPassword, firstName: 'Rivera', lastName: 'Admin', role: 'ADMIN' });
-  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications(); await seedCollaborations();
+  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications(); await seedCollaborations(); await seedPhase7();
   const pendingCreator = await db.creatorProfile.findFirst({ where: { verificationStatus: 'UNVERIFIED', profileVisibility: 'PUBLIC' } });
   if (pendingCreator && !await db.verificationRequest.findFirst({ where: { creatorProfileId: pendingCreator.id, status: 'PENDING' } })) await db.$transaction([db.creatorProfile.update({ where: { id: pendingCreator.id }, data: { verificationStatus: 'PENDING' } }), db.verificationRequest.create({ data: { userId: pendingCreator.userId, profileType: 'CREATOR', creatorProfileId: pendingCreator.id, noteFromUser: 'Synthetic development verification request.' } })]);
-  console.log(`Phase 6 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, application and collaboration states ready.`);
+  console.log(`Phase 7 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, workspaces, submissions, completion, and mutual reviews ready.`);
 }
 main().finally(() => db.$disconnect());

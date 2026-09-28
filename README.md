@@ -1,5 +1,17 @@
 # Rivera
 
+## Phase 7 — campaign workspaces, deliverables, completion and reviews
+
+An accepted Offer now creates an operational workspace rooted in its `CampaignParticipant`. Structured Campaign deliverables become required Work Items without changing the accepted compensation or Offer snapshot. The hired Creator can submit HTTPS links or private JPEG, PNG, WEBP, PDF and MP4 files; every resubmission creates an immutable numbered version. The Campaign-owning Business can approve only the latest submitted version or request a revision with a useful note.
+
+Progress is the objective ratio of approved required Work Items. All required items must be approved before the Business can explicitly complete a collaboration. Multi-Creator Campaigns remain open until every participant is complete and the Business explicitly completes the Campaign. Rivera continues to display agreed compensation as “Not managed by Rivera” and does not imply that payment occurred.
+
+Completed participants can review each other once. Published reviews update the Creator or Business aggregate and public profile; hidden and removed reviews do not. Reports and Admin hide/restore/remove actions are retained and audited. Workspace, submission, file, approval, completion and review operations all enforce ownership in the NestJS API.
+
+Private submission files use `PRIVATE_UPLOAD_DIR` and the persistent `rivera_private_uploads` Docker volume, separate from public portfolio media. Files are returned only through an authenticated participant endpoint and use `private, no-store` response caching. Configure `MAX_DELIVERABLE_FILE_MB` (25 MB by default). External HTTPS links remain the preferred path for large video.
+
+The Phase 7 seed includes active Work Items in pending, submitted, revision-requested and approved states, preserved submission versions, a completed collaboration and mutual reviews. Review moderation is available at `/admin/reviews`.
+
 ## Phase 6 — shortlist, messaging, Offers and hiring
 
 Rivera now carries a paid Creator Application through Business review to an active collaboration:
@@ -171,4 +183,4 @@ Run `docker compose config` and the complete creator, business and password rese
 
 ## Next phase
 
-Phase 6 now provides an active `CampaignParticipant` and accepted Offer snapshot. Phase 7 can build deliverable submission, revision requests, approval, Campaign completion and bilateral ratings on that durable collaboration relationship.
+Phase 7 completes Rivera’s non-payment collaboration lifecycle. The durable approved Work Items, completed participants, Offer snapshots and bilateral reviews are a safe foundation for a future explicitly requested phase covering Business-to-Creator payments, Stripe Connect, escrow or milestones, Creator payouts, formal disputes and advanced Campaign analytics.

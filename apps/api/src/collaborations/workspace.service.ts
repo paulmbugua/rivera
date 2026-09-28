@@ -1,0 +1,96 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { Prisma, ReviewStatus } from '@prisma/client';
+import { ApiException } from '../common/api-error';
+import { PrismaService } from '../common/prisma.service';
+import { LocalStorageService } from '../storage/storage.service';
+import { CreateReviewDto, CreateSubmissionDto, ReportReviewDto, RevisionRequestDto, ReviewModerationAction } from './workspace.dto';
+
+@Injectable()
+export class WorkspaceService {
+  constructor(private db: PrismaService, private storage: LocalStorageService) {}
+  private fail(status: HttpStatus, code: string, message: string): never { throw new ApiException(status, code, message); }
+  private include = {
+    campaign: { select: { id:true,title:true,slug:true,status:true,campaignStartDate:true,campaignEndDate:true } },
+    creator: { select: { id:true,userId:true,displayName:true,slug:true,profileImageUrl:true } },
+    business: { select: { id:true,userId:true,name:true,slug:true,logoUrl:true } },
+    offer: true,
+    application: { include: { conversation:true } },
+    workItems: { include: { contentType:true, submissions:{ include:{assets:true}, orderBy:{version:'desc' as const} } }, orderBy:{sortOrder:'asc' as const} },
+    reviews: { orderBy:{createdAt:'desc' as const} },
+  } as const;
+
+  private async participantFor(userId:string,id:string) {
+    const participant = await this.db.campaignParticipant.findFirst({ where:{ id, OR:[{creator:{userId}},{business:{userId}}] }, include:this.include });
+    if (!participant) this.fail(HttpStatus.FORBIDDEN,'WORKSPACE_ACCESS_DENIED','Only this collaboration’s Creator and Business can access its workspace.');
+    return participant;
+  }
+  private async ensureWorkItems(participantId:string) {
+    await this.db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${participantId}))`;
+      if (await tx.campaignWorkItem.count({where:{campaignParticipantId:participantId}})) return;
+      const participant = await tx.campaignParticipant.findUniqueOrThrow({where:{id:participantId},include:{campaign:{include:{deliverables:true}},offer:true}});
+      const source = participant.campaign.deliverables.length ? participant.campaign.deliverables : [{title:'Agreed deliverables',description:participant.offer.deliverablesSummary,contentTypeId:null,platform:null,quantity:1,dueDate:participant.offer.deliveryDeadline,sortOrder:0}];
+      await tx.campaignWorkItem.createMany({data:source.map((item:any,index:number)=>({campaignParticipantId:participant.id,campaignId:participant.campaignId,creatorId:participant.creatorId,businessId:participant.businessId,title:item.title,description:item.description,contentTypeId:item.contentTypeId,platform:item.platform,quantity:item.quantity,dueDate:item.dueDate,sortOrder:item.sortOrder??index,required:true}))});
+    });
+  }
+  private dto(p:any,userId:string) {
+    const required=p.workItems.filter((x:any)=>x.required); const approved=required.filter((x:any)=>x.status==='APPROVED').length;
+    return {...p,application:undefined,conversationId:p.application?.conversation?.id??null,progress:{required:required.length,approved,percent:required.length?Math.round(approved/required.length*100):0,readyForCompletion:required.length>0&&approved===required.length},myReview:p.reviews.find((x:any)=>x.reviewerId===userId)??null,paymentNotice:'Payment status: Not managed by Rivera'};
+  }
+  async workspace(userId:string,id:string) { await this.ensureWorkItems(id); return this.dto(await this.participantFor(userId,id),userId); }
+  async history(userId:string,id:string) { const item=await this.db.campaignWorkItem.findFirst({where:{id,campaignParticipant:{OR:[{creator:{userId}},{business:{userId}}]}},include:{submissions:{include:{assets:true},orderBy:{version:'desc'}}}});if(!item)this.fail(HttpStatus.FORBIDDEN,'WORK_ITEM_ACCESS_DENIED','Only collaboration participants can view submission history.');return item.submissions; }
+
+  private async creatorWorkItem(userId:string,id:string) {
+    const item=await this.db.campaignWorkItem.findFirst({where:{id,creator:{userId}},include:{campaignParticipant:{include:{application:{include:{conversation:true}},business:{include:{user:true}},creator:true}},submissions:{include:{assets:true},orderBy:{version:'desc'}}}});
+    if(!item) this.fail(HttpStatus.FORBIDDEN,'WORK_ITEM_ACCESS_DENIED','Only the assigned Creator can submit this work item.');
+    if(item.campaignParticipant.status!=='ACTIVE') this.fail(HttpStatus.CONFLICT,'COLLABORATION_NOT_ACTIVE','This collaboration is no longer accepting deliverables.');
+    if(item.status==='APPROVED'||item.status==='CANCELLED'||item.status==='SUBMITTED') this.fail(HttpStatus.CONFLICT,'WORK_ITEM_NOT_SUBMITTABLE','This work item cannot accept a new version right now.');
+    return item;
+  }
+  async submitLinks(userId:string,id:string,dto:CreateSubmissionDto) {
+    if(!dto.links?.length) this.fail(HttpStatus.BAD_REQUEST,'SUBMISSION_ASSET_REQUIRED','Add at least one HTTPS link or upload a file.');
+    const item=await this.creatorWorkItem(userId,id);
+    return this.createSubmission(userId,item,dto.message,dto.links.map(x=>({type:'LINK' as const,name:x.name.trim(),url:x.url.trim()})));
+  }
+  async submitFile(userId:string,id:string,message:string|undefined,file?:{buffer:Buffer;mimetype:string;size:number;originalname:string}) {
+    if(!file) this.fail(HttpStatus.BAD_REQUEST,'SUBMISSION_FILE_REQUIRED','Choose a deliverable file.');
+    const item=await this.creatorWorkItem(userId,id);
+    const saved=await this.storage.uploadPrivate(userId,'deliverables',file);
+    try { return await this.createSubmission(userId,item,message,[{type:'FILE' as const,name:file.originalname.slice(0,240),storageKey:saved.key,mimeType:file.mimetype,fileSize:file.size}]); }
+    catch(error){ await this.storage.deletePrivate(saved.key); throw error; }
+  }
+  private async createSubmission(userId:string,item:any,message:string|undefined,assets:any[]) {
+    const result=await this.db.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${item.id}))`;
+      const current=await tx.campaignWorkItem.findUniqueOrThrow({where:{id:item.id},include:{submissions:{orderBy:{version:'desc'},take:1}}});
+      if(!['PENDING','IN_PROGRESS','REVISION_REQUESTED'].includes(current.status)) this.fail(HttpStatus.CONFLICT,'WORK_ITEM_NOT_SUBMITTABLE','This work item cannot accept a new version right now.');
+      const version=(current.submissions[0]?.version??0)+1;
+      if(current.submissions[0]) await tx.deliverableSubmission.updateMany({where:{workItemId:item.id,status:'SUBMITTED'},data:{status:'SUPERSEDED'}});
+      const submission=await tx.deliverableSubmission.create({data:{workItemId:item.id,campaignParticipantId:item.campaignParticipantId,campaignId:item.campaignId,creatorId:item.creatorId,version,message:message?.trim()||null,assets:{create:assets}},include:{assets:true}});
+      await tx.campaignWorkItem.update({where:{id:item.id},data:{status:'SUBMITTED'}});
+      await tx.applicationAuditLog.create({data:{applicationId:item.campaignParticipant.applicationId,actorUserId:userId,action:'DELIVERABLE_SUBMITTED',metadata:{workItemId:item.id,submissionId:submission.id,version}}});
+      if(item.campaignParticipant.application.conversation){await tx.message.create({data:{conversationId:item.campaignParticipant.application.conversation.id,type:'SYSTEM',content:`${item.title} version ${version} was submitted for review.`}});await tx.conversation.update({where:{id:item.campaignParticipant.application.conversation.id},data:{lastMessageAt:new Date()}});}
+      await tx.notification.create({data:{userId:item.campaignParticipant.business.userId,businessId:item.businessId,applicationId:item.campaignParticipant.applicationId,type:'DELIVERABLE_SUBMITTED',title:'Deliverable ready for review',body:`${item.title} version ${version} is ready for review.`}});
+      return submission;
+    },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
+    return result;
+  }
+
+  private async businessSubmission(userId:string,id:string){const row=await this.db.deliverableSubmission.findFirst({where:{id,workItem:{business:{userId}}},include:{assets:true,workItem:{include:{submissions:{orderBy:{version:'desc'},take:1},campaignParticipant:{include:{application:{include:{conversation:true}},creator:{include:{user:true}}}}}}}});if(!row)this.fail(HttpStatus.FORBIDDEN,'SUBMISSION_ACCESS_DENIED','Only the owning Business can review this submission.');if(row.workItem.submissions[0]?.id!==row.id||row.status!=='SUBMITTED')this.fail(HttpStatus.CONFLICT,'SUBMISSION_NOT_REVIEWABLE','Only the latest submitted version can be reviewed.');return row;}
+  async approve(userId:string,id:string){const row=await this.businessSubmission(userId,id);return this.db.$transaction(async tx=>{const now=new Date();const updated=await tx.deliverableSubmission.update({where:{id},data:{status:'APPROVED',reviewedAt:now,reviewedByUserId:userId,revisionNote:null}});await tx.campaignWorkItem.update({where:{id:row.workItemId},data:{status:'APPROVED',approvedAt:now}});await this.reviewSideEffects(tx,row,userId,'DELIVERABLE_APPROVED',`${row.workItem.title} was approved.`);const remaining=await tx.campaignWorkItem.count({where:{campaignParticipantId:row.campaignParticipantId,required:true,status:{not:'APPROVED'}}});if(!remaining)await tx.notification.create({data:{userId:row.workItem.campaignParticipant.creator.userId,creatorId:row.creatorId,applicationId:row.workItem.campaignParticipant.applicationId,type:'ALL_DELIVERABLES_APPROVED',title:'All deliverables approved',body:'All required work is approved. The Business can now complete the collaboration.'}});return updated;});}
+  async requestRevision(userId:string,id:string,dto:RevisionRequestDto){const row=await this.businessSubmission(userId,id);return this.db.$transaction(async tx=>{const updated=await tx.deliverableSubmission.update({where:{id},data:{status:'REVISION_REQUESTED',reviewedAt:new Date(),reviewedByUserId:userId,revisionNote:dto.note.trim()}});await tx.campaignWorkItem.update({where:{id:row.workItemId},data:{status:'REVISION_REQUESTED',approvedAt:null}});await this.reviewSideEffects(tx,row,userId,'REVISION_REQUESTED',`${row.workItem.title} needs revisions: ${dto.note.trim()}`);return updated;});}
+  private async reviewSideEffects(tx:Prisma.TransactionClient,row:any,userId:string,action:string,body:string){const p=row.workItem.campaignParticipant;await tx.applicationAuditLog.create({data:{applicationId:p.applicationId,actorUserId:userId,action,metadata:{workItemId:row.workItemId,submissionId:row.id,version:row.version}}});if(p.application.conversation){await tx.message.create({data:{conversationId:p.application.conversation.id,type:'SYSTEM',content:body}});await tx.conversation.update({where:{id:p.application.conversation.id},data:{lastMessageAt:new Date()}});}await tx.notification.create({data:{userId:p.creator.userId,creatorId:p.creatorId,applicationId:p.applicationId,type:action,title:action==='DELIVERABLE_APPROVED'?'Deliverable approved':'Revision requested',body:body.slice(0,500)}});}
+
+  async completeParticipant(userId:string,id:string){await this.ensureWorkItems(id);const p=await this.db.campaignParticipant.findFirst({where:{id,business:{userId}},include:{workItems:true,application:{include:{conversation:true}},creator:{include:{user:true}}}});if(!p)this.fail(HttpStatus.FORBIDDEN,'PARTICIPANT_COMPLETION_DENIED','Only the owning Business can complete this collaboration.');if(p.status==='COMPLETED')return p;const required=p.workItems.filter(x=>x.required);if(!required.length||required.some(x=>x.status!=='APPROVED'))this.fail(HttpStatus.CONFLICT,'REQUIRED_WORK_INCOMPLETE','Approve every required work item before completing the collaboration.');return this.db.$transaction(async tx=>{const updated=await tx.campaignParticipant.update({where:{id},data:{status:'COMPLETED',completedAt:new Date(),endedAt:new Date()}});await tx.creatorProfile.update({where:{id:p.creatorId},data:{completedCampaigns:{increment:1}}});await tx.applicationAuditLog.create({data:{applicationId:p.applicationId,actorUserId:userId,action:'COLLABORATION_COMPLETED',metadata:{participantId:id}}});if(p.application.conversation)await tx.message.create({data:{conversationId:p.application.conversation.id,type:'SYSTEM',content:'The collaboration was completed. Both participants can now leave a review.'}});await tx.notification.create({data:{userId:p.creator.userId,creatorId:p.creatorId,applicationId:p.applicationId,type:'COLLABORATION_COMPLETED',title:'Collaboration completed',body:'All required deliverables were approved. You can now leave a review.'}});return updated;});}
+  async completeCampaign(userId:string,id:string){const campaign=await this.db.campaign.findFirst({where:{id,business:{userId}},include:{participants:true}});if(!campaign)this.fail(HttpStatus.FORBIDDEN,'CAMPAIGN_OWNERSHIP_REQUIRED','Only the Campaign owner can complete it.');const participants=campaign.participants.filter(p=>p.status!=='CANCELLED');if(!participants.length||participants.some(p=>p.status!=='COMPLETED'))this.fail(HttpStatus.CONFLICT,'PARTICIPANTS_INCOMPLETE','Complete every non-cancelled Campaign participant before completing the Campaign.');if(campaign.status==='COMPLETED')return campaign;return this.db.campaign.update({where:{id},data:{status:'COMPLETED',closedAt:new Date()}});}
+
+  async createReview(userId:string,dto:CreateReviewDto){const p=await this.db.campaignParticipant.findFirst({where:{id:dto.participantId,OR:[{creator:{userId}},{business:{userId}}]},include:{creator:true,business:true}});if(!p)this.fail(HttpStatus.FORBIDDEN,'REVIEW_ACCESS_DENIED','Only collaboration participants can review each other.');if(p.status!=='COMPLETED')this.fail(HttpStatus.CONFLICT,'COLLABORATION_NOT_COMPLETED','Reviews unlock after collaboration completion.');const revieweeId=p.creator.userId===userId?p.business.userId:p.creator.userId;if(revieweeId===userId)this.fail(HttpStatus.BAD_REQUEST,'SELF_REVIEW_NOT_ALLOWED','You cannot review yourself.');try{const review=await this.db.$transaction(async tx=>{const created=await tx.review.create({data:{campaignParticipantId:p.id,campaignId:p.campaignId,reviewerId:userId,revieweeId,rating:dto.rating,comment:dto.comment?.trim()||null}});await tx.applicationAuditLog.create({data:{applicationId:p.applicationId,actorUserId:userId,action:'REVIEW_CREATED',metadata:{reviewId:created.id,rating:dto.rating}}});await tx.notification.create({data:{userId:revieweeId,creatorId:revieweeId===p.creator.userId?p.creatorId:null,businessId:revieweeId===p.business.userId?p.businessId:null,applicationId:p.applicationId,type:'REVIEW_RECEIVED',title:'New collaboration review',body:`You received a ${dto.rating}-star review.`}});return created;});await this.recalculateRating(revieweeId);return review;}catch(error){if(error instanceof Prisma.PrismaClientKnownRequestError&&error.code==='P2002')this.fail(HttpStatus.CONFLICT,'DUPLICATE_REVIEW','You already reviewed this collaboration.');throw error;}}
+  async report(userId:string,id:string,dto:ReportReviewDto){const exists=await this.db.review.findUnique({where:{id}});if(!exists)this.fail(HttpStatus.NOT_FOUND,'REVIEW_NOT_FOUND','Review not found.');try{return await this.db.reviewReport.create({data:{reviewId:id,reporterId:userId,reason:dto.reason.trim()}});}catch(error){if(error instanceof Prisma.PrismaClientKnownRequestError&&error.code==='P2002')this.fail(HttpStatus.CONFLICT,'REVIEW_ALREADY_REPORTED','You already reported this review.');throw error;}}
+  async publicReviews(kind:'creator'|'business',slug:string){const profile=kind==='creator'?await this.db.creatorProfile.findFirst({where:{slug,profileVisibility:'PUBLIC'},select:{userId:true,averageRating:true,ratingCount:true}}):await this.db.businessProfile.findFirst({where:{slug,profileVisibility:'PUBLIC'},select:{userId:true,averageRating:true,ratingCount:true}});if(!profile)this.fail(HttpStatus.NOT_FOUND,'PROFILE_NOT_FOUND','Public profile not found.');const items=await this.db.review.findMany({where:{revieweeId:profile.userId,status:'PUBLISHED'},include:{reviewer:{select:{firstName:true,lastName:true,creator:{select:{displayName:true,slug:true}},business:{select:{name:true,slug:true}}}},campaign:{select:{title:true,slug:true}}},orderBy:{createdAt:'desc'},take:50});return{averageRating:profile.averageRating,ratingCount:profile.ratingCount,items:items.map(x=>({rating:x.rating,comment:x.comment,createdAt:x.createdAt,campaign:x.campaign,reviewer:{name:x.reviewer.creator?.displayName??x.reviewer.business?.name??`${x.reviewer.firstName} ${x.reviewer.lastName.charAt(0)}.`,slug:x.reviewer.creator?.slug??x.reviewer.business?.slug??null}}))};}
+  async adminReviews(){return this.db.review.findMany({include:{reports:true,campaign:{select:{title:true}},reviewer:{select:{email:true}},reviewee:{select:{email:true}}},orderBy:{createdAt:'desc'},take:200});}
+  async moderate(adminUserId:string,id:string,action:ReviewModerationAction){const status:ReviewStatus=action==='HIDE'?'HIDDEN':action==='REMOVE'?'REMOVED':'PUBLISHED';const review=await this.db.review.update({where:{id},data:{status},include:{campaignParticipant:true}});await this.db.reviewReport.updateMany({where:{reviewId:id,status:'OPEN'},data:{status:action==='RESTORE'?'DISMISSED':'RESOLVED',resolvedAt:new Date()}});await this.db.applicationAuditLog.create({data:{applicationId:review.campaignParticipant.applicationId,actorUserId:adminUserId,action:`REVIEW_${action}`,metadata:{reviewId:id}}});await this.recalculateRating(review.revieweeId);return review;}
+  private async recalculateRating(userId:string){const value=await this.db.review.aggregate({where:{revieweeId:userId,status:'PUBLISHED'},_avg:{rating:true},_count:{rating:true}});const data={averageRating:new Prisma.Decimal(value._avg.rating??0),ratingCount:value._count.rating};await Promise.all([this.db.creatorProfile.updateMany({where:{userId},data}),this.db.businessProfile.updateMany({where:{userId},data})]);}
+  async asset(userId:string,id:string){const asset=await this.db.submissionAsset.findFirst({where:{id,submission:{campaignParticipant:{OR:[{creator:{userId}},{business:{userId}}]}}}});if(!asset||asset.type!=='FILE'||!asset.storageKey)this.fail(HttpStatus.NOT_FOUND,'SUBMISSION_FILE_NOT_FOUND','Private submission file not found.');return{asset,buffer:await this.storage.read(asset.storageKey)};}
+  async summary(userId:string,role:'CREATOR'|'BUSINESS'){const side=role==='CREATOR'?{creator:{userId}}:{business:{userId}};const [active,completed,awaitingReview,revisions,reviewsPending]=await Promise.all([this.db.campaignParticipant.count({where:{...side,status:'ACTIVE'}}),this.db.campaignParticipant.count({where:{...side,status:'COMPLETED'}}),this.db.campaignWorkItem.count({where:{...side,status:'SUBMITTED'}}),this.db.campaignWorkItem.count({where:{...side,status:'REVISION_REQUESTED'}}),this.db.campaignParticipant.count({where:{...side,status:'COMPLETED',reviews:{none:{reviewerId:userId}}}})]);return{activeCollaborations:active,completedCollaborations:completed,awaitingReview,revisionsRequested:revisions,reviewsPending};}
+}

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, API_URL } from "@/lib/api";
 import { money, statusLabel } from "@/lib/applications";
 
 const errorText = (e: unknown) =>
@@ -62,7 +62,15 @@ type Collaboration = {
   offer: Offer;
   conversationId?: string | null;
   paymentNotice: string;
+  completedAt?: string;
+  progress?: { required: number; approved: number; percent: number; readyForCompletion: boolean };
+  myReview?: { id: string; rating: number } | null;
+  workItems?: WorkItem[];
 };
+type Asset = { id:string; type:"FILE"|"LINK"; name:string; url?:string; mimeType?:string; fileSize?:number };
+type Submission = { id:string; version:number; status:string; message?:string; revisionNote?:string; submittedAt:string; assets:Asset[] };
+type WorkItem = { id:string; title:string; description?:string; quantity:number; dueDate?:string; required:boolean; status:string; submissions:Submission[] };
+type CollaborationContact={creator:{professionalContactEmail?:string;professionalPhone?:string;preferredContactMethod:string};business:{businessEmail?:string;businessPhone?:string;preferredContactMethod:string}};
 const safety =
   "Rivera does not currently process Creator campaign payments. Never share passwords or verification codes, and be cautious with requests for unusual upfront payments.";
 
@@ -518,8 +526,13 @@ function CollaborationView({
   item: Collaboration;
   role: "creator" | "business";
 }) {
-  const [contact, setContact] = useState<any>(),
-    [error, setError] = useState("");
+  const [contact, setContact] = useState<CollaborationContact>(), [workspace,setWorkspace]=useState<Collaboration>(item),
+    [error, setError] = useState(""), [busy,setBusy]=useState(""), [message,setMessage]=useState<Record<string,string>>({}), [link,setLink]=useState<Record<string,string>>({}), [files,setFiles]=useState<Record<string,File|undefined>>({}), [rating,setRating]=useState(5), [comment,setComment]=useState("");
+  const load=()=>api<Collaboration>(role==="creator"?`/creators/me/collaborations/${item.id}/work-items`:`/business/campaign-participants/${item.id}/work-items`).then(setWorkspace).catch(e=>setError(errorText(e)));
+  useEffect(()=>{void load()},[item.id,role]);
+  async function submit(workItemId:string){setBusy(workItemId);setError("");try{const file=files[workItemId];if(file){const data=new FormData();data.append("file",file);data.append("message",message[workItemId]??"");await api(`/creators/me/work-items/${workItemId}/submissions/file`,{method:"POST",body:data});}else{await api(`/creators/me/work-items/${workItemId}/submissions`,{method:"POST",body:JSON.stringify({message:message[workItemId]||undefined,links:link[workItemId]?.trim()?[{name:"Deliverable link",url:link[workItemId].trim()}]:[]})});}setMessage({...message,[workItemId]:""});setLink({...link,[workItemId]:""});await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
+  async function act(path:string,body?:unknown){setBusy(path);setError("");try{await api(path,{method:"POST",body:body?JSON.stringify(body):undefined});await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
+  async function review(){await act("/reviews",{participantId:item.id,rating,comment:comment||undefined});}
   return (
     <main className="application-shell">
       <header>
@@ -532,12 +545,18 @@ function CollaborationView({
         >
           ← Collaborations
         </Link>
-        <p className="eyebrow">ACTIVE COLLABORATION</p>
+        <p className="eyebrow">{workspace.status} COLLABORATION</p>
         <h1>{item.campaign.title}</h1>
         <p>
           {role === "creator" ? item.business.name : item.creator.displayName}
         </p>
       </header>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <section className="application-panel" aria-label="Deliverable progress">
+        <p className="eyebrow">WORKSPACE PROGRESS</p>
+        <h2>{workspace.progress?.approved??0} of {workspace.progress?.required??0} required items approved</h2>
+        <progress max={100} value={workspace.progress?.percent??0} style={{width:"100%"}}>{workspace.progress?.percent??0}%</progress>
+      </section>
       <div className="application-detail-grid">
         <section className="application-panel">
           <h2>Accepted Offer</h2>
@@ -549,8 +568,7 @@ function CollaborationView({
             <dt>Payment status</dt>
             <dd>Not managed by Rivera</dd>
           </dl>
-          <h3>Deliverables</h3>
-          <p>{item.offer.deliverablesSummary}</p>
+          <h3>Agreed deliverables</h3><p>{item.offer.deliverablesSummary}</p>
           <h3>Additional terms</h3>
           <p>{item.offer.additionalTerms || "None"}</p>
           {item.conversationId && (
@@ -568,7 +586,7 @@ function CollaborationView({
             <button
               className="button secondary"
               onClick={() =>
-                api(`/campaign-participants/${item.id}/contact`)
+                api<CollaborationContact>(`/campaign-participants/${item.id}/contact`)
                   .then(setContact)
                   .catch((e) => setError(errorText(e)))
               }
@@ -603,6 +621,21 @@ function CollaborationView({
           <p className="privacy-note">{safety}</p>
         </section>
       </div>
+      <section className="application-panel">
+        <p className="eyebrow">DELIVERABLE WORKFLOW</p><h2>Work items and submission history</h2>
+        <div className="application-list">
+          {workspace.workItems?.map(work=><article className="application-card" key={work.id} style={{display:"block"}}>
+            <div><p className="eyebrow">{statusLabel(work.status)} · {work.required?"REQUIRED":"OPTIONAL"}</p><h3>{work.title}{work.quantity>1?` × ${work.quantity}`:""}</h3><p>{work.description}</p>{work.dueDate&&<p>Due {new Date(work.dueDate).toLocaleDateString()}</p>}</div>
+            {work.submissions.map(sub=><div key={sub.id} className="privacy-note"><strong>Version {sub.version} · {statusLabel(sub.status)}</strong>{sub.message&&<p>{sub.message}</p>}{sub.revisionNote&&<p><strong>Revision note:</strong> {sub.revisionNote}</p>}<div className="dashboard-actions">{sub.assets.map(asset=>asset.type==="LINK"?<a className="button secondary" key={asset.id} href={asset.url} target="_blank" rel="noreferrer">Open {asset.name}</a>:<a className="button secondary" key={asset.id} href={`${API_URL}/submission-assets/${asset.id}/file`}>Download {asset.name}</a>)}</div>
+              {role==="business"&&sub===work.submissions[0]&&sub.status==="SUBMITTED"&&<div className="dashboard-actions"><button className="button primary" disabled={!!busy} onClick={()=>void act(`/business/submissions/${sub.id}/approve`)}>Approve</button><button className="button secondary" disabled={!!busy} onClick={()=>{const note=window.prompt("Describe the required revision (at least 10 characters)");if(note)void act(`/business/submissions/${sub.id}/request-revision`,{note});}}>Request revision</button></div>}
+            </div>)}
+            {role==="creator"&&["PENDING","IN_PROGRESS","REVISION_REQUESTED"].includes(work.status)&&<div className="settings-grid"><label className="field">Submission note<textarea rows={3} value={message[work.id]??""} onChange={e=>setMessage({...message,[work.id]:e.target.value})}/></label><label className="field">HTTPS deliverable link<input type="url" placeholder="https://…" value={link[work.id]??""} onChange={e=>setLink({...link,[work.id]:e.target.value})}/></label><label className="field">Or private file (JPG, PNG, WEBP, PDF, MP4)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4" onChange={e=>setFiles({...files,[work.id]:e.target.files?.[0]})}/></label><button className="button primary" disabled={busy===work.id||(!link[work.id]?.trim()&&!files[work.id])} onClick={()=>void submit(work.id)}>Submit new version</button></div>}
+          </article>)}
+        </div>
+        {role==="business"&&workspace.status==="ACTIVE"&&<button className="button primary" disabled={!workspace.progress?.readyForCompletion||!!busy} onClick={()=>void act(`/business/campaign-participants/${item.id}/complete`)}>Complete collaboration</button>}
+      </section>
+      {workspace.status==="COMPLETED"&&!workspace.myReview&&<section className="application-panel"><p className="eyebrow">MUTUAL REVIEW</p><h2>Share your experience</h2><label className="field">Rating<select value={rating} onChange={e=>setRating(Number(e.target.value))}>{[5,4,3,2,1].map(x=><option value={x} key={x}>{x} star{x===1?"":"s"}</option>)}</select></label><label className="field">Comment<textarea rows={4} maxLength={2000} value={comment} onChange={e=>setComment(e.target.value)}/></label><button className="button primary" disabled={!!busy} onClick={()=>void review()}>Publish review</button></section>}
+      {workspace.myReview&&<p className="privacy-note">Your {workspace.myReview.rating}-star review has been published.</p>}
     </main>
   );
 }
