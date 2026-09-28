@@ -7,3 +7,7 @@
 .application-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:end;background:#f6f3ed;border:1px solid #ded8cc;padding:18px;margin-bottom:24px}.application-filters .check-line{margin:0;min-height:44px;align-items:center}
 @media(max-width:800px){.application-detail-grid,.application-card,.admin-fee-form,.application-filters{grid-template-columns:1fr}.application-card{align-items:start}.application-panel dl{grid-template-columns:1fr}.application-panel dd{margin-bottom:8px}}
 @media(max-width:520px){.application-shell{padding:28px 16px 60px}.application-panel,.application-card{padding:18px}.application-shell>header h1{font-size:2.3rem}}
+
+/* Phase 6 collaboration workspace */
+.message-shell{max-width:880px}.message-thread{display:flex;flex-direction:column;gap:.8rem;min-height:22rem;max-height:58vh;overflow:auto;padding:1rem;border:1px solid #deded8;border-radius:18px;background:#f7f7f4}.message{max-width:78%;padding:.8rem 1rem;border-radius:14px;background:#fff;border:1px solid #e2e2dc}.message p{margin:.35rem 0;white-space:pre-wrap;overflow-wrap:anywhere}.message time{font-size:.75rem;color:#6d6d66}.system-message{align-self:center;max-width:92%;background:#eef8f6;text-align:center;color:#315d55}.message-composer{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:end;margin-top:1rem}.message-composer .field{margin:0}.privacy-note{white-space:normal}
+@media(max-width:700px){.message-composer{grid-template-columns:1fr}.message{max-width:94%}}

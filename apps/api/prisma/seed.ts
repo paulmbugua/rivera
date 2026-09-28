@@ -117,7 +117,7 @@ async function seedApplications() {
   const creators = await db.creatorProfile.findMany({ orderBy: { createdAt: 'asc' } });
   const campaigns = await db.campaign.findMany({ where: { status: 'OPEN', visibility: 'PUBLIC' }, orderBy: { createdAt: 'asc' } });
   if (creators.length < 7 || campaigns.length < 6) return;
-  await db.applicationPayment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_phase5_' } } });
+  await db.applicationPayment.deleteMany({ where: { OR: [{ providerPaymentId: { startsWith: 'test_phase5_' } }, { providerCheckoutSessionId: { startsWith: 'test_phase5_' } }] } });
   const fixtures = [
     { creator: 1, campaign: 0, status: 'SUBMITTED', paymentStatus: 'PAID', amount: 150000, fee: 1000, feeCurrency: 'QAR', submitted: true, paid: true },
     { creator: 2, campaign: 1, status: 'SUBMITTED', paymentStatus: 'NOT_REQUIRED', amount: 650000, fee: 300, feeCurrency: 'USD', submitted: true, credit: true },
@@ -137,13 +137,43 @@ async function seedApplications() {
   if (zero) await db.creatorProfile.update({ where: { id: zero.id }, data: { freeApplicationCredits: 0 } });
 }
 
+async function seedCollaborations() {
+  const creator = await db.creatorProfile.findUnique({ where: { slug: 'amina-noor' }, include: { user: true } });
+  const campaigns = await db.campaign.findMany({ where: { status: { in: ['OPEN','IN_PROGRESS'] }, visibility: 'PUBLIC' }, include: { business: true }, orderBy: { createdAt: 'asc' } });
+  if (!creator || campaigns.length < 6) return;
+  await db.creatorProfile.update({ where: { id: creator.id }, data: { professionalContactEmail: 'amina.collabs@rivera.example', professionalPhone: '+254700000001', preferredContactMethod: 'RIVERA' } });
+  const examples = [
+    { campaign: campaigns[1], status: 'SHORTLISTED' as const, key: 'shortlisted' },
+    { campaign: campaigns[2], status: 'REJECTED' as const, key: 'rejected' },
+    { campaign: campaigns[3], status: 'OFFERED' as const, key: 'sent' },
+    { campaign: campaigns[4], status: 'SHORTLISTED' as const, key: 'declined' },
+    { campaign: campaigns[5], status: 'ACCEPTED' as const, key: 'accepted' },
+  ];
+  for (const example of examples) {
+    const app = await db.campaignApplication.upsert({ where: { campaignId_creatorId: { campaignId: example.campaign.id, creatorId: creator.id } }, create: { campaignId: example.campaign.id, creatorId: creator.id, proposedAmountMinor: example.campaign.budgetMinMinor ?? 100000, proposedCurrencyCode: example.campaign.currencyCode, pitch: `Synthetic Phase 6 ${example.key} Application for local collaboration testing.`, proposedDeliverables: 'One campaign-aligned content package and performance summary.', estimatedDeliveryDays: 10, status: example.status, paymentStatus: 'NOT_REQUIRED', usedFreeCredit: true, submittedAt: new Date(), viewedAt: new Date(), shortlistedAt: ['shortlisted','sent','declined','accepted'].includes(example.key) ? new Date() : null, rejectedAt: example.key === 'rejected' ? new Date() : null, acceptedAt: example.key === 'accepted' ? new Date() : null }, update: { status: example.status, submittedAt: new Date(), viewedAt: new Date(), shortlistedAt: ['shortlisted','sent','declined','accepted'].includes(example.key) ? new Date() : null, rejectedAt: example.key === 'rejected' ? new Date() : null, acceptedAt: example.key === 'accepted' ? new Date() : null } });
+    if (example.key === 'rejected') continue;
+    const conversation = await db.conversation.upsert({ where: { applicationId: app.id }, create: { applicationId: app.id, campaignId: example.campaign.id }, update: { campaignId: example.campaign.id, lastMessageAt: new Date() } });
+    await db.conversationParticipant.createMany({ data: [{ conversationId: conversation.id, userId: creator.userId }, { conversationId: conversation.id, userId: example.campaign.business.userId }], skipDuplicates: true });
+    await db.message.deleteMany({ where: { conversationId: conversation.id } });
+    await db.message.createMany({ data: [{ conversationId: conversation.id, type: 'SYSTEM', content: `${creator.displayName} was shortlisted for ${example.campaign.title}.` }, { conversationId: conversation.id, senderId: example.campaign.business.userId, type: 'TEXT', content: 'Thanks for applying. Could you confirm your proposed timeline?' }, { conversationId: conversation.id, senderId: creator.userId, type: 'TEXT', content: 'Yes, I can deliver the agreed content within ten days.' }] });
+    if (['sent','declined','accepted'].includes(example.key)) {
+      const offerStatus = example.key === 'sent' ? 'SENT' : example.key === 'declined' ? 'DECLINED' : 'ACCEPTED';
+      const offer = await db.collaborationOffer.upsert({ where: { applicationId_version: { applicationId: app.id, version: 1 } }, create: { applicationId: app.id, campaignId: example.campaign.id, businessId: example.campaign.businessId, creatorId: creator.id, version: 1, status: offerStatus, compensationMinor: example.campaign.budgetMinMinor ?? 100000, currencyCode: example.campaign.currencyCode, deliverablesSummary: 'Two campaign content pieces plus an agreed performance summary.', additionalTerms: 'Compensation is arranged directly between the Business and Creator.', sentAt: new Date(), declinedAt: example.key === 'declined' ? new Date() : null, acceptedAt: example.key === 'accepted' ? new Date() : null }, update: { status: offerStatus, declinedAt: example.key === 'declined' ? new Date() : null, acceptedAt: example.key === 'accepted' ? new Date() : null } });
+      if (example.key === 'accepted') {
+        await db.businessProfile.update({ where: { id: example.campaign.businessId }, data: { businessEmail: 'collaborations@rivera-demo.example', businessPhone: '+97450000001', preferredContactMethod: 'RIVERA' } });
+        await db.campaignParticipant.upsert({ where: { applicationId: app.id }, create: { campaignId: example.campaign.id, creatorId: creator.id, businessId: example.campaign.businessId, applicationId: app.id, offerId: offer.id, status: 'ACTIVE', agreedCompensationMinor: offer.compensationMinor, currencyCode: offer.currencyCode }, update: { status: 'ACTIVE', offerId: offer.id, agreedCompensationMinor: offer.compensationMinor, currencyCode: offer.currencyCode, endedAt: null } });
+      }
+    }
+  }
+}
+
 async function main() {
   if (!demoPassword) throw new Error('Seed passwords are required outside development.');
   await seedTaxonomy();
   const admin = await seedUser({ email: process.env.ADMIN_SEED_EMAIL ?? (development ? 'admin@rivera.local' : undefined), password: process.env.ADMIN_SEED_PASSWORD ?? demoPassword, firstName: 'Rivera', lastName: 'Admin', role: 'ADMIN' });
-  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications();
+  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications(); await seedCollaborations();
   const pendingCreator = await db.creatorProfile.findFirst({ where: { verificationStatus: 'UNVERIFIED', profileVisibility: 'PUBLIC' } });
   if (pendingCreator && !await db.verificationRequest.findFirst({ where: { creatorProfileId: pendingCreator.id, status: 'PENDING' } })) await db.$transaction([db.creatorProfile.update({ where: { id: pendingCreator.id }, data: { verificationStatus: 'PENDING' } }), db.verificationRequest.create({ data: { userId: pendingCreator.userId, profileType: 'CREATOR', creatorProfileId: pendingCreator.id, noteFromUser: 'Synthetic development verification request.' } })]);
-  console.log(`Phase 5 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, applications=6.`);
+  console.log(`Phase 6 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, application and collaboration states ready.`);
 }
 main().finally(() => db.$disconnect());

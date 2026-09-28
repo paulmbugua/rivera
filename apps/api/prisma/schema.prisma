@@ -88,11 +88,42 @@ enum ApplicationStatus {
   PAYMENT_PROCESSING
   SUBMITTED
   VIEWED
+  OFFERED
   WITHDRAWN
   CANCELLED
   SHORTLISTED
   ACCEPTED
   REJECTED
+}
+
+enum PreferredContactMethod {
+  RIVERA
+  EMAIL
+  PHONE
+  WHATSAPP
+}
+
+enum ConversationType {
+  CAMPAIGN
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+}
+
+enum CollaborationOfferStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum CampaignParticipantStatus {
+  ACTIVE
+  CANCELLED
 }
 
 enum ApplicationPaymentStatus {
@@ -225,6 +256,8 @@ model User {
   verificationRequests VerificationRequest[]    @relation("VerificationOwner")
   verificationReviews  VerificationRequest[]    @relation("VerificationReviewer")
   notifications        Notification[]
+  conversationMemberships ConversationParticipant[]
+  messages             Message[]
 }
 
 model UserRoleAssignment {
@@ -292,6 +325,7 @@ model BusinessProfile {
   website                  String?
   businessEmail            String?
   businessPhone            String?
+  preferredContactMethod   PreferredContactMethod      @default(RIVERA)
   address                  String?
   logoUrl                  String?
   coverImageUrl            String?
@@ -310,6 +344,8 @@ model BusinessProfile {
   campaigns                Campaign[]
   verificationRequests     VerificationRequest[]
   applicationNotifications Notification[]        @relation("BusinessNotifications")
+  collaborationOffers      CollaborationOffer[]
+  campaignParticipants     CampaignParticipant[]
 
   @@index([country])
   @@index([industryId])
@@ -331,6 +367,9 @@ model CreatorProfile {
   profileImageUrl          String?
   coverImageUrl            String?
   websiteUrl               String?
+  professionalContactEmail String?
+  professionalPhone        String?
+  preferredContactMethod   PreferredContactMethod       @default(RIVERA)
   yearsExperience          Int?
   travelAvailable          Boolean                        @default(false)
   remoteCampaignsAllowed   Boolean                        @default(true)
@@ -359,6 +398,8 @@ model CreatorProfile {
   creditTransactions       ApplicationCreditTransaction[]
   freeApplicationCredits   Int                            @default(0)
   applicationNotifications Notification[]                 @relation("CreatorNotifications")
+  collaborationOffers      CollaborationOffer[]
+  campaignParticipants     CampaignParticipant[]
 
   @@index([country])
   @@index([profileVisibility, verificationStatus])
@@ -555,6 +596,9 @@ model Campaign {
   attachments                 CampaignAttachment[]
   savedBy                     SavedCampaign[]
   auditLogs                   CampaignAuditLog[]
+  conversations               Conversation[]
+  collaborationOffers         CollaborationOffer[]
+  participants                CampaignParticipant[]
 
   @@index([status])
   @@index([visibility])
@@ -694,12 +738,18 @@ model CampaignApplication {
   usedFreeCredit             Boolean                  @default(false)
   submittedAt                DateTime?
   viewedAt                   DateTime?
+  shortlistedAt              DateTime?
+  rejectedAt                 DateTime?
+  acceptedAt                 DateTime?
   withdrawnAt                DateTime?
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
   payments                   ApplicationPayment[]
   audits                     ApplicationAuditLog[]
   notifications              Notification[]
+  conversation               Conversation?
+  collaborationOffers        CollaborationOffer[]
+  participant                CampaignParticipant?
 
   @@unique([campaignId, creatorId])
   @@index([campaignId])
@@ -707,6 +757,109 @@ model CampaignApplication {
   @@index([status])
   @@index([submittedAt])
   @@map("Application")
+}
+
+model Conversation {
+  id            String                    @id @default(cuid())
+  campaignId    String
+  campaign      Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  applicationId String                    @unique
+  application   CampaignApplication       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  type          ConversationType          @default(CAMPAIGN)
+  lastMessageAt DateTime                  @default(now())
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  participants  ConversationParticipant[]
+  messages      Message[]
+
+  @@index([campaignId, lastMessageAt])
+}
+
+model ConversationParticipant {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  archivedAt     DateTime?
+
+  @@id([conversationId, userId])
+  @@index([userId, archivedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String?
+  sender         User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  type           MessageType  @default(TEXT)
+  content        String       @db.VarChar(3000)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt, id])
+  @@index([senderId])
+}
+
+model CollaborationOffer {
+  id                       String                   @id @default(cuid())
+  applicationId            String
+  application              CampaignApplication      @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  campaignId               String
+  campaign                 Campaign                 @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  businessId               String
+  business                 BusinessProfile          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  creatorId                String
+  creator                  CreatorProfile           @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  version                  Int
+  status                   CollaborationOfferStatus @default(DRAFT)
+  compensationMinor        Int
+  currencyCode             String                   @db.VarChar(3)
+  deliverablesSummary      String                   @db.VarChar(3000)
+  startDate                DateTime?
+  endDate                  DateTime?
+  deliveryDeadline         DateTime?
+  usageRights              String?                  @db.VarChar(1000)
+  additionalTerms          String?                  @db.VarChar(3000)
+  expiresAt                DateTime?
+  sentAt                   DateTime?
+  acceptedAt               DateTime?
+  declinedAt               DateTime?
+  withdrawnAt              DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  participant              CampaignParticipant?
+
+  @@unique([applicationId, version])
+  @@index([applicationId, status])
+  @@index([campaignId, status])
+  @@index([creatorId, status])
+}
+
+model CampaignParticipant {
+  id                        String                    @id @default(cuid())
+  campaignId                String
+  campaign                  Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  creatorId                 String
+  creator                   CreatorProfile            @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  businessId                String
+  business                  BusinessProfile           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  applicationId             String                    @unique
+  application               CampaignApplication       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  offerId                   String                    @unique
+  offer                     CollaborationOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  status                    CampaignParticipantStatus @default(ACTIVE)
+  agreedCompensationMinor   Int
+  currencyCode              String                    @db.VarChar(3)
+  joinedAt                  DateTime                  @default(now())
+  endedAt                   DateTime?
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+
+  @@unique([campaignId, creatorId])
+  @@index([campaignId, status])
+  @@index([creatorId, status])
 }
 
 model ApplicationFeeRule {

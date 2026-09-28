@@ -65,24 +65,24 @@ test('Stripe webhook verification accepts a current HMAC signature and rejects t
 
 test('payment activation verifies amount and currency and webhook events are idempotent', () => {
   const service = source('src/applications/applications.service.ts');
-  assert.match(service, /state\.amountMinor!==payment\.amountMinor/);
-  assert.match(service, /state\.currencyCode!==payment\.currencyCode/);
+  assert.match(service, /state\.amountMinor\s*!==\s*payment\.amountMinor/);
+  assert.match(service, /state\.currencyCode\s*!==\s*payment\.currencyCode/);
   assert.match(service, /provider_providerEventId/);
-  assert.match(service, /duplicate:true/);
+  assert.match(service, /duplicate:\s*true/);
   assert.match(source('prisma/schema.prisma'), /@@unique\(\[provider, providerEventId\]\)/);
 });
 
 test('credits and successful submission are committed in one serializable transaction', () => {
   const service = source('src/applications/applications.service.ts');
-  assert.match(service, /freeApplicationCredits:\{gt:0\}/);
-  assert.match(service, /freeApplicationCredits:\{decrement:1\}/);
+  assert.match(service, /freeApplicationCredits:\s*\{\s*gt:\s*0\s*\}/);
+  assert.match(service, /freeApplicationCredits:\s*\{\s*decrement:\s*1\s*\}/);
   assert.match(service, /ApplicationCreditTransaction|applicationCreditTransaction\.create/);
   assert.match(service, /TransactionIsolationLevel\.Serializable/);
 });
 
 test('business APIs hide unpaid work and public DTOs omit private contacts', () => {
   const service = source('src/applications/applications.service.ts');
-  assert.match(service, /visible:ApplicationStatus\[\]=\['SUBMITTED','VIEWED','WITHDRAWN'\]/);
+  assert.match(service, /const visible:\s*ApplicationStatus\[\]\s*=\s*\[[\s\S]*?"SUBMITTED"[\s\S]*?"VIEWED"[\s\S]*?"WITHDRAWN"[\s\S]*?\]/);
   assert.doesNotMatch(service.slice(service.indexOf('private safeBusiness'), service.indexOf('const campaignForApplication')), /email|phone|address|adminNotes/i);
   assert.doesNotMatch(service.slice(service.indexOf('private safeCreator'), service.indexOf('private ownDto')), /email|phone|password|session/i);
 });
@@ -91,5 +91,5 @@ test('checkout amount is server resolved and never accepted in its request body'
   const controller = source('src/applications/applications.controllers.ts');
   const checkout = controller.slice(controller.indexOf("@Post('creators/me/applications/:id/checkout')"), controller.indexOf("@Get('creators/me/applications/:id/payment-status')"));
   assert.doesNotMatch(checkout, /@Body/);
-  assert.match(source('src/applications/applications.service.ts'), /this\.fees\.resolve\(app\.campaignId,app\.creatorId\)/);
+  assert.match(source('src/applications/applications.service.ts'), /this\.fees\.resolve\(\s*app\.campaignId,\s*app\.creatorId,?\s*\)/);
 });

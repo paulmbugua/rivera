@@ -1,6 +1,20 @@
 # Rivera
 
-Rivera is a global business and creator marketplace. Phases 1–5 provide authentication, professional profiles, campaign discovery, Creator proposals, free Application Credits and Stripe-verified Rivera Application Fees. Shortlisting, hiring, contact unlock and messaging remain future phases.
+## Phase 6 — shortlist, messaging, Offers and hiring
+
+Rivera now carries a paid Creator Application through Business review to an active collaboration:
+
+`SUBMITTED → VIEWED → SHORTLISTED → OFFERED → ACCEPTED`
+
+- A shortlist opens one private Rivera Conversation for the Application. The UI polls active conversations every seven seconds; Redis and WebSockets are intentionally not required.
+- Collaboration Offers are immutable, versioned commercial snapshots. Creator proposal pricing remains separate, and Rivera does not process Business-to-Creator compensation in this phase.
+- Offer acceptance runs in a serializable PostgreSQL transaction with a campaign-scoped advisory lock, rechecks Campaign state/expiry/capacity, creates one `CampaignParticipant`, and moves a full Campaign to `IN_PROGRESS`.
+- Explicit professional contact details unlock only to the Business and Creator in an `ACTIVE` collaboration. Login emails are never used as contact details and public profile DTOs continue to omit professional contacts.
+- Alternative paths include rejection, shortlist removal, Creator decline, Business withdrawal, Creator withdrawal before hiring, Offer expiry, Campaign cancellation and capacity exhaustion.
+
+New authenticated areas include `/dashboard/creator/messages`, `/dashboard/business/messages`, `/dashboard/creator/offers`, `/dashboard/creator/collaborations`, and Business Campaign hired-Creator pages. Swagger documents the corresponding explicit domain-action endpoints.
+
+Rivera is a global business and creator marketplace. Phases 1–6 now provide authentication, professional profiles, Campaign discovery, Creator proposals, Rivera Application Fees, shortlisting, private messaging, versioned Offers, capacity-safe hiring and collaboration contact unlock.
 
 ## Project layout
 
@@ -157,4 +171,4 @@ Run `docker compose config` and the complete creator, business and password rese
 
 ## Next phase
 
-Phase 5 now provides durable Campaign participants-in-waiting: a Business can review a paid/credited Proposal and the Creator can see its viewed state. Phase 6 can build shortlisting, rejection, acceptance/hiring, controlled contact unlock and messaging on that relationship. None of those Phase 6 actions is implemented yet.
+Phase 6 now provides an active `CampaignParticipant` and accepted Offer snapshot. Phase 7 can build deliverable submission, revision requests, approval, Campaign completion and bilateral ratings on that durable collaboration relationship.

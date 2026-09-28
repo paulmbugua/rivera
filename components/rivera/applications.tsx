@@ -13,6 +13,7 @@ import {
 } from "@/lib/applications";
 import { Campaign } from "@/lib/campaigns";
 import { useAuth } from "./auth-provider";
+import { BusinessApplicationActions } from "./collaborations";
 
 const errorText = (error: unknown) =>
   error instanceof ApiError
@@ -451,6 +452,10 @@ export function CreatorApplications() {
             "AWAITING_PAYMENT",
             "SUBMITTED",
             "VIEWED",
+            "SHORTLISTED",
+            "OFFERED",
+            "ACCEPTED",
+            "REJECTED",
             "WITHDRAWN",
           ].map((x) => (
             <option key={x}>{x}</option>
@@ -616,7 +621,9 @@ export function CreatorApplicationDetail({ id }: { id: string }) {
           <p>{app.pitch}</p>
           <h3>Proposed deliverables</h3>
           <p>{app.proposedDeliverables || "Not specified"}</p>
-          {["SUBMITTED", "VIEWED"].includes(app.status) && (
+          {["SUBMITTED", "VIEWED", "SHORTLISTED", "OFFERED"].includes(
+            app.status,
+          ) && (
             <button
               className="button secondary"
               disabled={busy}
@@ -626,7 +633,15 @@ export function CreatorApplicationDetail({ id }: { id: string }) {
             </button>
           )}
         </article>
-        {["SUBMITTED", "VIEWED", "WITHDRAWN"].includes(app.status) && (
+        {[
+          "SUBMITTED",
+          "VIEWED",
+          "SHORTLISTED",
+          "OFFERED",
+          "ACCEPTED",
+          "REJECTED",
+          "WITHDRAWN",
+        ].includes(app.status) && (
           <article className="application-panel unlocked-brief">
             <p className="eyebrow">FULL CAMPAIGN BRIEF</p>
             <h2>Unlocked Campaign details</h2>
@@ -652,14 +667,20 @@ export function BusinessApplications({ campaignId }: { campaignId: string }) {
   const [result, setResult] = useState<ApplicationResult | null>(null),
     [error, setError] = useState(""),
     [sort, setSort] = useState("newest"),
-    [filters, setFilters] = useState({status:"",country:"",category:"",platform:"",verified:false});
+    [filters, setFilters] = useState({
+      status: "",
+      country: "",
+      category: "",
+      platform: "",
+      verified: false,
+    });
   useEffect(() => {
-    const query = new URLSearchParams({sort});
-    if(filters.status)query.set("status",filters.status);
-    if(filters.country)query.set("country",filters.country.toUpperCase());
-    if(filters.category)query.set("category",filters.category.toLowerCase());
-    if(filters.platform)query.set("platform",filters.platform);
-    if(filters.verified)query.set("verified","true");
+    const query = new URLSearchParams({ sort });
+    if (filters.status) query.set("status", filters.status);
+    if (filters.country) query.set("country", filters.country.toUpperCase());
+    if (filters.category) query.set("category", filters.category.toLowerCase());
+    if (filters.platform) query.set("platform", filters.platform);
+    if (filters.verified) query.set("verified", "true");
     api<ApplicationResult>(
       `/business/campaigns/${campaignId}/applications?${query}`,
     )
@@ -680,12 +701,89 @@ export function BusinessApplications({ campaignId }: { campaignId: string }) {
         </p>
       </header>
       <div className="application-filters">
-        <label className="field">Status<select value={filters.status} onChange={(e)=>setFilters({...filters,status:e.target.value})}><option value="">All submitted</option><option value="SUBMITTED">Submitted</option><option value="VIEWED">Viewed</option><option value="WITHDRAWN">Withdrawn</option></select></label>
-        <label className="field">Creator country code<input maxLength={2} placeholder="QA" value={filters.country} onChange={(e)=>setFilters({...filters,country:e.target.value})}/></label>
-        <label className="field">Category slug<input placeholder="technology" value={filters.category} onChange={(e)=>setFilters({...filters,category:e.target.value})}/></label>
-        <label className="field">Platform<select value={filters.platform} onChange={(e)=>setFilters({...filters,platform:e.target.value})}><option value="">All platforms</option>{["INSTAGRAM","TIKTOK","YOUTUBE","FACEBOOK","X","LINKEDIN","SNAPCHAT","TWITCH","PINTEREST","BLOG","PODCAST","OTHER"].map((platform)=><option key={platform}>{platform}</option>)}</select></label>
-        <label className="field">Sort<select value={sort} onChange={(e)=>setSort(e.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="price-low">Proposal price: low to high</option><option value="price-high">Proposal price: high to low</option></select></label>
-        <label className="check-line"><input type="checkbox" checked={filters.verified} onChange={(e)=>setFilters({...filters,verified:e.target.checked})}/> Verified Creators only</label>
+        <label className="field">
+          Status
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+          >
+            <option value="">All submitted</option>
+            <option value="SUBMITTED">Submitted</option>
+            <option value="VIEWED">Viewed</option>
+            <option value="SHORTLISTED">Shortlisted</option>
+            <option value="OFFERED">Offer sent</option>
+            <option value="ACCEPTED">Hired</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="WITHDRAWN">Withdrawn</option>
+          </select>
+        </label>
+        <label className="field">
+          Creator country code
+          <input
+            maxLength={2}
+            placeholder="QA"
+            value={filters.country}
+            onChange={(e) =>
+              setFilters({ ...filters, country: e.target.value })
+            }
+          />
+        </label>
+        <label className="field">
+          Category slug
+          <input
+            placeholder="technology"
+            value={filters.category}
+            onChange={(e) =>
+              setFilters({ ...filters, category: e.target.value })
+            }
+          />
+        </label>
+        <label className="field">
+          Platform
+          <select
+            value={filters.platform}
+            onChange={(e) =>
+              setFilters({ ...filters, platform: e.target.value })
+            }
+          >
+            <option value="">All platforms</option>
+            {[
+              "INSTAGRAM",
+              "TIKTOK",
+              "YOUTUBE",
+              "FACEBOOK",
+              "X",
+              "LINKEDIN",
+              "SNAPCHAT",
+              "TWITCH",
+              "PINTEREST",
+              "BLOG",
+              "PODCAST",
+              "OTHER",
+            ].map((platform) => (
+              <option key={platform}>{platform}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Sort
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="price-low">Proposal price: low to high</option>
+            <option value="price-high">Proposal price: high to low</option>
+          </select>
+        </label>
+        <label className="check-line">
+          <input
+            type="checkbox"
+            checked={filters.verified}
+            onChange={(e) =>
+              setFilters({ ...filters, verified: e.target.checked })
+            }
+          />{" "}
+          Verified Creators only
+        </label>
       </div>
       {error && <p className="form-error">{error}</p>}
       <div className="application-list">
@@ -798,6 +896,13 @@ export function BusinessApplicationDetail({
           </p>
         </article>
       </div>
+      <BusinessApplicationActions
+        applicationId={app.id}
+        campaignId={campaignId}
+        status={app.status}
+        currencyCode={app.proposedCurrencyCode}
+        activeOfferId={app.offers?.find((offer) => offer.status === "SENT")?.id}
+      />
     </main>
   );
 }

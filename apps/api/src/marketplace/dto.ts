@@ -1,6 +1,6 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsEnum, IsIn, IsISO31661Alpha2, IsInt, IsNumber, IsOptional, IsString, IsUrl, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { EmployeeSize, LanguageProficiency, PortfolioMediaType, ProfileVisibility, SocialPlatform, VerificationProfileType } from '@prisma/client';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsEmail, IsEnum, IsIn, IsISO31661Alpha2, IsInt, IsNumber, IsOptional, IsString, IsUrl, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { EmployeeSize, LanguageProficiency, PortfolioMediaType, PreferredContactMethod, ProfileVisibility, SocialPlatform, VerificationProfileType } from '@prisma/client';
 
 const safeUrl = { protocols: ['http', 'https'], require_protocol: true };
 
@@ -17,6 +17,9 @@ export class CreatorProfileDto {
   @IsOptional() @IsISO31661Alpha2() countryCode?: string;
   @IsOptional() @IsString() @MaxLength(100) city?: string;
   @IsOptional() @IsUrl(safeUrl) websiteUrl?: string;
+  @IsOptional() @IsEmail() @MaxLength(254) professionalContactEmail?: string;
+  @IsOptional() @IsString() @MaxLength(30) professionalPhone?: string;
+  @IsOptional() @IsEnum(PreferredContactMethod) preferredContactMethod?: PreferredContactMethod;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(80) yearsExperience?: number;
   @IsOptional() @IsBoolean() travelAvailable?: boolean;
   @IsOptional() @IsBoolean() remoteCampaignsAllowed?: boolean;
@@ -38,6 +41,7 @@ export class BusinessProfileDto {
   @IsOptional() @IsUrl(safeUrl) website?: string;
   @IsOptional() @IsString() @MaxLength(254) businessEmail?: string;
   @IsOptional() @IsString() @MaxLength(30) businessPhone?: string;
+  @IsOptional() @IsEnum(PreferredContactMethod) preferredContactMethod?: PreferredContactMethod;
   @IsOptional() @IsISO31661Alpha2() countryCode?: string;
   @IsOptional() @IsString() @MaxLength(100) city?: string;
   @IsOptional() @IsString() @MaxLength(300) address?: string;
