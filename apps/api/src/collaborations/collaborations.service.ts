@@ -632,6 +632,36 @@ export class CollaborationsService {
   }
   async acceptOffer(userId: string, id: string) {
     const current = await this.creatorOffer(userId, id);
+    if (
+      current.status === "SENT" &&
+      current.expiresAt &&
+      current.expiresAt <= new Date()
+    ) {
+      await this.db.$transaction(async (tx) => {
+        await tx.collaborationOffer.update({
+          where: { id },
+          data: { status: "EXPIRED" },
+        });
+        await tx.campaignApplication.updateMany({
+          where: { id: current.applicationId, status: "OFFERED" },
+          data: { status: "SHORTLISTED" },
+        });
+        const conversation = await tx.conversation.findUnique({
+          where: { applicationId: current.applicationId },
+        });
+        if (conversation)
+          await this.system(
+            tx,
+            conversation.id,
+            "The Collaboration Offer expired before it was accepted.",
+          );
+      });
+      this.fail(
+        HttpStatus.CONFLICT,
+        "OFFER_EXPIRED",
+        "This Offer has expired.",
+      );
+    }
     const participant = await this.db.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${current.campaignId}))`;
