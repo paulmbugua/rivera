@@ -15,7 +15,7 @@ type Mode = 'register'|'login'|'forgot'|'reset'|'verify';
 const schemas = { register: registerSchema, login, forgot: email, reset, verify: z.object({ token: z.string().min(1) }) };
 const titles = { register: 'Create your account', login: 'Welcome back', forgot: 'Reset your password', reset: 'Choose a new password', verify: 'Verify your email' };
 export function AuthForm({ mode }: { mode: Mode }) {
-  const router = useRouter(); const search = useSearchParams(); const { refresh } = useAuth();
+  const router = useRouter(); const search = useSearchParams()!; const { refresh } = useAuth();
   const [message, setMessage] = useState(''); const [error, setError] = useState('');
   const form = useForm<Record<string,unknown>>({ resolver: zodResolver(schemas[mode] as never) as never, defaultValues: { token: search.get('token') ?? '', firstName: '', lastName: '', email: '', password: '', confirmPassword: '', accountType: '', termsAccepted: false } });
   const field = (name: string, label: string, type = 'text') => <label className="field" key={name}><span>{label}</span><input type={type} autoComplete={name === 'password' ? (mode === 'login' ? 'current-password' : 'new-password') : name} {...form.register(name)} required/><small role="alert">{form.formState.errors[name]?.message as string}</small></label>;

@@ -1,15 +1,466 @@
-'use client';
+"use client";
 /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-import { FormEvent, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { api, ApiError } from '@/lib/api';
-const message=(error:unknown)=>error instanceof ApiError?error.message:'Please try again.';
-export function AdminShell({title,children}:{title:string;children:React.ReactNode}){return <main className="profile-shell"><nav className="admin-nav"><Link href="/admin">Admin</Link><Link href="/admin/creators">Creators</Link><Link href="/admin/businesses">Businesses</Link><Link href="/admin/campaigns">Campaigns</Link><Link href="/admin/verifications">Verifications</Link><Link href="/admin/categories">Categories</Link><Link href="/admin/industries">Industries</Link><Link href="/admin/content-types">Content types</Link></nav><p className="eyebrow">RIVERA ADMINISTRATION</p><h1>{title}</h1>{children}</main>}
-export function TaxonomyManager({kind}:{kind:'categories'|'industries'|'content-types'}){const [items,setItems]=useState<{id:string;name:string;slug:string;active:boolean;sortOrder:number}[]>([]);const [name,setName]=useState('');const [feedback,setFeedback]=useState('');const load=()=>api<typeof items>(`/admin/${kind}`).then(setItems).catch(e=>setFeedback(message(e)));useEffect(()=>{void load()},[kind]);async function add(event:FormEvent){event.preventDefault();try{await api(`/admin/${kind}`,{method:'POST',body:JSON.stringify({name,sortOrder:items.length})});setName('');setFeedback('Record created.');void load()}catch(e){setFeedback(message(e))}}async function toggle(item:typeof items[number]){try{await api(`/admin/${kind}/${item.id}`,{method:'PATCH',body:JSON.stringify({name:item.name,active:!item.active,sortOrder:item.sortOrder})});setFeedback('Record updated.');void load()}catch(e){setFeedback(message(e))}}return <AdminShell title={kind.replaceAll('-',' ')}>{feedback&&<p className="form-success">{feedback}</p>}<form className="inline-form" onSubmit={add}><label className="field">Name<input required value={name} onChange={e=>setName(e.target.value)}/></label><button className="button primary">Create</button></form><div className="manage-list">{items.map(item=><article key={item.id}><div><strong>{item.name}</strong><p>/{item.slug} · order {item.sortOrder} · {item.active?'Active':'Inactive'}</p></div><button onClick={()=>void toggle(item)}>{item.active?'Deactivate':'Activate'}</button></article>)}</div></AdminShell>}
-type Verification={id:string;profileType:string;status:string;noteFromUser?:string;createdAt:string;user:{firstName:string;lastName:string};creatorProfile?:{slug:string;displayName:string};businessProfile?:{slug:string;name:string}};
-type AdminProfile={id:string;displayName?:string;name?:string;slug:string;profileVisibility:string;verificationStatus:string;user:{status:string}};
-export function VerificationQueue(){const [items,setItems]=useState<Verification[]>([]);const [feedback,setFeedback]=useState('');const load=()=>api<Verification[]>('/admin/verifications').then(setItems).catch(e=>setFeedback(message(e)));useEffect(()=>{void load()},[]);async function review(id:string,action:'approve'|'reject'){const note=window.prompt('Optional internal review note')||undefined;try{await api(`/admin/verifications/${id}/${action}`,{method:'POST',body:JSON.stringify({reviewNote:note})});setFeedback(`Request ${action}d.`);void load()}catch(e){setFeedback(message(e))}}return <AdminShell title="Verification queue">{feedback&&<p className="form-success">{feedback}</p>}<div className="manage-list">{items.map(item=><article key={item.id}><div><strong>{item.creatorProfile?.displayName||item.businessProfile?.name} · {item.profileType}</strong><p>{item.user.firstName} {item.user.lastName} · {item.status} · {new Date(item.createdAt).toLocaleDateString()}</p>{item.noteFromUser&&<p>{item.noteFromUser}</p>}</div>{item.status==='PENDING'&&<div><button onClick={()=>void review(item.id,'approve')}>Approve</button><button onClick={()=>void review(item.id,'reject')}>Reject</button></div>}</article>)}</div></AdminShell>}
-export function ProfileAdminList({type}:{type:'creators'|'businesses'}){const [items,setItems]=useState<AdminProfile[]>([]);const [q,setQ]=useState('');const [feedback,setFeedback]=useState('');async function load(search=''){try{setItems(await api<AdminProfile[]>(`/admin/${type}${search?`?q=${encodeURIComponent(search)}`:''}`))}catch(e){setFeedback(message(e))}}useEffect(()=>{void load()},[type]);return <AdminShell title={type}><form className="inline-form" onSubmit={e=>{e.preventDefault();void load(q)}}><label className="field">Search<input value={q} onChange={e=>setQ(e.target.value)}/></label><button className="button primary">Search</button></form>{feedback&&<p className="form-error">{feedback}</p>}<div className="manage-list">{items.map(item=><article key={item.id}><div><strong>{item.displayName||item.name}</strong><p>/{item.slug} · {item.profileVisibility} · {item.verificationStatus} · account {item.user.status}</p></div><div><Link href={`/admin/${type}/${item.id}`}>Inspect</Link><Link href={`/${type}/${item.slug}`}>Public view</Link></div></article>)}</div></AdminShell>}
+import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { api, ApiError } from "@/lib/api";
+const message = (error: unknown) =>
+  error instanceof ApiError ? error.message : "Please try again.";
+export function AdminShell({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="profile-shell">
+      <nav className="admin-nav">
+        <Link href="/admin">Admin</Link>
+        <Link href="/admin/creators">Creators</Link>
+        <Link href="/admin/businesses">Businesses</Link>
+        <Link href="/admin/campaigns">Campaigns</Link>
+        <Link href="/admin/verifications">Verifications</Link>
+        <Link href="/admin/categories">Categories</Link>
+        <Link href="/admin/industries">Industries</Link>
+        <Link href="/admin/content-types">Content types</Link>
+      </nav>
+      <p className="eyebrow">RIVERA ADMINISTRATION</p>
+      <h1>{title}</h1>
+      {children}
+    </main>
+  );
+}
+export function TaxonomyManager({
+  kind,
+}: {
+  kind: "categories" | "industries" | "content-types";
+}) {
+  const [items, setItems] = useState<
+    {
+      id: string;
+      name: string;
+      slug: string;
+      active: boolean;
+      sortOrder: number;
+    }[]
+  >([]);
+  const [name, setName] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const load = () =>
+    api<typeof items>(`/admin/${kind}`)
+      .then(setItems)
+      .catch((e) => setFeedback(message(e)));
+  useEffect(() => {
+    void load();
+  }, [kind]);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    try {
+      await api(`/admin/${kind}`, {
+        method: "POST",
+        body: JSON.stringify({ name, sortOrder: items.length }),
+      });
+      setName("");
+      setFeedback("Record created.");
+      void load();
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  async function toggle(item: (typeof items)[number]) {
+    try {
+      await api(`/admin/${kind}/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: item.name,
+          active: !item.active,
+          sortOrder: item.sortOrder,
+        }),
+      });
+      setFeedback("Record updated.");
+      void load();
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  return (
+    <AdminShell title={kind.replaceAll("-", " ")}>
+      {feedback && <p className="form-success">{feedback}</p>}
+      <form className="inline-form" onSubmit={add}>
+        <label className="field">
+          Name
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <button className="button primary">Create</button>
+      </form>
+      <div className="manage-list">
+        {items.map((item) => (
+          <article key={item.id}>
+            <div>
+              <strong>{item.name}</strong>
+              <p>
+                /{item.slug} · order {item.sortOrder} ·{" "}
+                {item.active ? "Active" : "Inactive"}
+              </p>
+            </div>
+            <button onClick={() => void toggle(item)}>
+              {item.active ? "Deactivate" : "Activate"}
+            </button>
+          </article>
+        ))}
+      </div>
+    </AdminShell>
+  );
+}
+type Verification = {
+  id: string;
+  profileType: string;
+  status: string;
+  noteFromUser?: string;
+  createdAt: string;
+  user: { firstName: string; lastName: string };
+  creatorProfile?: { slug: string; displayName: string };
+  businessProfile?: { slug: string; name: string };
+};
+type AdminProfile = {
+  id: string;
+  displayName?: string;
+  name?: string;
+  slug: string;
+  profileVisibility: string;
+  verificationStatus: string;
+  user: { status: string };
+};
+export function VerificationQueue() {
+  const [items, setItems] = useState<Verification[]>([]);
+  const [feedback, setFeedback] = useState("");
+  const load = () =>
+    api<Verification[]>("/admin/verifications")
+      .then(setItems)
+      .catch((e) => setFeedback(message(e)));
+  useEffect(() => {
+    void load();
+  }, []);
+  async function review(id: string, action: "approve" | "reject") {
+    const note = window.prompt("Optional internal review note") || undefined;
+    try {
+      await api(`/admin/verifications/${id}/${action}`, {
+        method: "POST",
+        body: JSON.stringify({ reviewNote: note }),
+      });
+      setFeedback(`Request ${action}d.`);
+      void load();
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  return (
+    <AdminShell title="Verification queue">
+      {feedback && <p className="form-success">{feedback}</p>}
+      <div className="manage-list">
+        {items.map((item) => (
+          <article key={item.id}>
+            <div>
+              <strong>
+                {item.creatorProfile?.displayName || item.businessProfile?.name}{" "}
+                · {item.profileType}
+              </strong>
+              <p>
+                {item.user.firstName} {item.user.lastName} · {item.status} ·{" "}
+                {new Date(item.createdAt).toLocaleDateString()}
+              </p>
+              {item.noteFromUser && <p>{item.noteFromUser}</p>}
+            </div>
+            {item.status === "PENDING" && (
+              <div>
+                <button onClick={() => void review(item.id, "approve")}>
+                  Approve
+                </button>
+                <button onClick={() => void review(item.id, "reject")}>
+                  Reject
+                </button>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </AdminShell>
+  );
+}
+export function ProfileAdminList({
+  type,
+}: {
+  type: "creators" | "businesses";
+}) {
+  const [items, setItems] = useState<AdminProfile[]>([]);
+  const [q, setQ] = useState("");
+  const [feedback, setFeedback] = useState("");
+  async function load(search = "") {
+    try {
+      setItems(
+        await api<AdminProfile[]>(
+          `/admin/${type}${search ? `?q=${encodeURIComponent(search)}` : ""}`,
+        ),
+      );
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, [type]);
+  return (
+    <AdminShell title={type}>
+      <form
+        className="inline-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void load(q);
+        }}
+      >
+        <label className="field">
+          Search
+          <input value={q} onChange={(e) => setQ(e.target.value)} />
+        </label>
+        <button className="button primary">Search</button>
+      </form>
+      {feedback && <p className="form-error">{feedback}</p>}
+      <div className="manage-list">
+        {items.map((item) => (
+          <article key={item.id}>
+            <div>
+              <strong>{item.displayName || item.name}</strong>
+              <p>
+                /{item.slug} · {item.profileVisibility} ·{" "}
+                {item.verificationStatus} · account {item.user.status}
+              </p>
+            </div>
+            <div>
+              <Link href={`/admin/${type}/${item.id}`}>Inspect</Link>
+              <Link href={`/${type}/${item.slug}`}>Public view</Link>
+            </div>
+          </article>
+        ))}
+      </div>
+    </AdminShell>
+  );
+}
 
-type AdminDetail=AdminProfile&{headline?:string;bio?:string;description?:string;country:string;city:string;isFeatured:boolean;socialAccounts?:{id:string;platform:string;username?:string;followers:number;verifiedByRivera:boolean}[];portfolio?:{id:string;title:string;published:boolean}[];verificationRequests?:{id:string;status:string;createdAt:string}[]};
-export function AdminProfileDetail({type,id}:{type:'creators'|'businesses';id:string}){const [profile,setProfile]=useState<AdminDetail|null>(null);const [feedback,setFeedback]=useState('');const load=()=>api<AdminDetail>(`/admin/${type}/${id}`).then(setProfile).catch(e=>setFeedback(message(e)));useEffect(()=>{void load()},[id,type]);async function moderate(values:{profileVisibility?:string;isFeatured?:boolean}){try{await api(`/admin/${type}/${id}/moderation`,{method:'PATCH',body:JSON.stringify(values)});setFeedback('Moderation settings updated.');void load()}catch(e){setFeedback(message(e))}}async function socialVerification(socialId:string,verified:boolean){try{await api(`/admin/social-accounts/${socialId}/verification`,{method:'PATCH',body:JSON.stringify({verified})});setFeedback('Social verification updated.');void load()}catch(e){setFeedback(message(e))}}return <AdminShell title="Profile review">{feedback&&<p className="form-success">{feedback}</p>}{profile&&<><section className="profile-panel"><p className="creator-location">{type.slice(0,-1)} · {profile.city}, {profile.country}</p><h2>{profile.displayName||profile.name}</h2><p>{profile.headline||profile.bio||profile.description}</p><p>Visibility: <strong>{profile.profileVisibility}</strong> · Verification: <strong>{profile.verificationStatus}</strong> · Account: <strong>{profile.user.status}</strong></p><div className="dashboard-actions"><Link className="button secondary" href={`/${type}/${profile.slug}`}>Open public view</Link><button className="button secondary" onClick={()=>void moderate({profileVisibility:profile.profileVisibility==='PUBLIC'?'PRIVATE':'PUBLIC'})}>{profile.profileVisibility==='PUBLIC'?'Set private':'Set public'}</button><button className="button secondary" onClick={()=>void moderate({isFeatured:!profile.isFeatured})}>{profile.isFeatured?'Remove featured':'Feature creator'}</button></div></section>{profile.socialAccounts&&<section className="profile-panel"><h2>Social accounts</h2><div className="manage-list">{profile.socialAccounts.map(item=><article key={item.id}><div><strong>{item.platform} · {item.username}</strong><p>{item.followers} followers · {item.verifiedByRivera?'Verified':'Creator provided'}</p></div><button onClick={()=>void socialVerification(item.id,!item.verifiedByRivera)}>{item.verifiedByRivera?'Remove verification':'Verify account'}</button></article>)}</div></section>}<section className="profile-panel"><h2>Verification history</h2>{profile.verificationRequests?.length?profile.verificationRequests.map(item=><p key={item.id}>{item.status} · {new Date(item.createdAt).toLocaleDateString()}</p>):<p>No verification requests.</p>}</section></>}</AdminShell>}
+type AdminDetail = AdminProfile & {
+  headline?: string;
+  bio?: string;
+  description?: string;
+  country: string;
+  city: string;
+  isFeatured: boolean;
+  freeApplicationCredits?: number;
+  socialAccounts?: {
+    id: string;
+    platform: string;
+    username?: string;
+    followers: number;
+    verifiedByRivera: boolean;
+  }[];
+  portfolio?: { id: string; title: string; published: boolean }[];
+  verificationRequests?: { id: string; status: string; createdAt: string }[];
+};
+export function AdminProfileDetail({
+  type,
+  id,
+}: {
+  type: "creators" | "businesses";
+  id: string;
+}) {
+  const [profile, setProfile] = useState<AdminDetail | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [creditQuantity, setCreditQuantity] = useState("1");
+  const [creditReason, setCreditReason] = useState("");
+  const load = () =>
+    api<AdminDetail>(`/admin/${type}/${id}`)
+      .then(setProfile)
+      .catch((e) => setFeedback(message(e)));
+  useEffect(() => {
+    void load();
+  }, [id, type]);
+  async function moderate(values: {
+    profileVisibility?: string;
+    isFeatured?: boolean;
+  }) {
+    try {
+      await api(`/admin/${type}/${id}/moderation`, {
+        method: "PATCH",
+        body: JSON.stringify(values),
+      });
+      setFeedback("Moderation settings updated.");
+      void load();
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  async function socialVerification(socialId: string, verified: boolean) {
+    try {
+      await api(`/admin/social-accounts/${socialId}/verification`, {
+        method: "PATCH",
+        body: JSON.stringify({ verified }),
+      });
+      setFeedback("Social verification updated.");
+      void load();
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  async function grantCredits(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const result = await api<{ balance: number }>(
+        `/admin/creators/${id}/application-credits`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            quantity: Number(creditQuantity),
+            reason: creditReason,
+          }),
+        },
+      );
+      setCreditReason("");
+      setFeedback(
+        `Application credits granted. New balance: ${result.balance}.`,
+      );
+      void load();
+    } catch (e) {
+      setFeedback(message(e));
+    }
+  }
+  return (
+    <AdminShell title="Profile review">
+      {feedback && <p className="form-success">{feedback}</p>}
+      {profile && (
+        <>
+          <section className="profile-panel">
+            <p className="creator-location">
+              {type.slice(0, -1)} · {profile.city}, {profile.country}
+            </p>
+            <h2>{profile.displayName || profile.name}</h2>
+            <p>{profile.headline || profile.bio || profile.description}</p>
+            <p>
+              Visibility: <strong>{profile.profileVisibility}</strong> ·
+              Verification: <strong>{profile.verificationStatus}</strong> ·
+              Account: <strong>{profile.user.status}</strong>
+            </p>
+            <div className="dashboard-actions">
+              <Link
+                className="button secondary"
+                href={`/${type}/${profile.slug}`}
+              >
+                Open public view
+              </Link>
+              <button
+                className="button secondary"
+                onClick={() =>
+                  void moderate({
+                    profileVisibility:
+                      profile.profileVisibility === "PUBLIC"
+                        ? "PRIVATE"
+                        : "PUBLIC",
+                  })
+                }
+              >
+                {profile.profileVisibility === "PUBLIC"
+                  ? "Set private"
+                  : "Set public"}
+              </button>
+              <button
+                className="button secondary"
+                onClick={() =>
+                  void moderate({ isFeatured: !profile.isFeatured })
+                }
+              >
+                {profile.isFeatured ? "Remove featured" : "Feature creator"}
+              </button>
+            </div>
+          </section>
+          {type === "creators" && (
+            <section className="profile-panel">
+              <h2>Free Application Credits</h2>
+              <p>
+                Current balance: <strong>{profile.freeApplicationCredits ?? 0}</strong>
+              </p>
+              <form className="inline-form" onSubmit={grantCredits}>
+                <label className="field">
+                  Quantity
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={creditQuantity}
+                    onChange={(event) => setCreditQuantity(event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  Audit reason
+                  <input
+                    required
+                    minLength={3}
+                    maxLength={240}
+                    value={creditReason}
+                    onChange={(event) => setCreditReason(event.target.value)}
+                  />
+                </label>
+                <button className="button primary">Grant credits</button>
+              </form>
+            </section>
+          )}
+          {profile.socialAccounts && (
+            <section className="profile-panel">
+              <h2>Social accounts</h2>
+              <div className="manage-list">
+                {profile.socialAccounts.map((item) => (
+                  <article key={item.id}>
+                    <div>
+                      <strong>
+                        {item.platform} · {item.username}
+                      </strong>
+                      <p>
+                        {item.followers} followers ·{" "}
+                        {item.verifiedByRivera
+                          ? "Verified"
+                          : "Creator provided"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        void socialVerification(item.id, !item.verifiedByRivera)
+                      }
+                    >
+                      {item.verifiedByRivera
+                        ? "Remove verification"
+                        : "Verify account"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+          <section className="profile-panel">
+            <h2>Verification history</h2>
+            {profile.verificationRequests?.length ? (
+              profile.verificationRequests.map((item) => (
+                <p key={item.id}>
+                  {item.status} ·{" "}
+                  {new Date(item.createdAt).toLocaleDateString()}
+                </p>
+              ))
+            ) : (
+              <p>No verification requests.</p>
+            )}
+          </section>
+        </>
+      )}
+    </AdminShell>
+  );
+}

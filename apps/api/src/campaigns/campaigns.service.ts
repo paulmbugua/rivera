@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { CampaignStatus, Prisma } from '@prisma/client';
+import { ApplicationStatus, CampaignStatus, Prisma } from '@prisma/client';
 import { ApiException } from '../common/api-error';
 import { PrismaService } from '../common/prisma.service';
 import { AttachmentDto, CampaignAdminDto, CampaignDto, CampaignQueryDto, OwnerCampaignQueryDto } from './dto';
@@ -13,6 +13,7 @@ const campaignInclude = {
   languages: true,
   deliverables: { include: { contentType: true }, orderBy: { sortOrder: 'asc' as const } },
   attachments: true,
+  _count: { select: { applications: { where: { status: { in: [ApplicationStatus.SUBMITTED, ApplicationStatus.VIEWED, ApplicationStatus.WITHDRAWN] } } } } },
 };
 
 @Injectable()
@@ -88,7 +89,7 @@ export class CampaignsService {
       attachments: campaign.attachments.filter((item: any) => item.visibility === 'PUBLIC').map((item: any) => ({ name: item.name, fileUrl: item.fileUrl, mimeType: item.mimeType, fileSize: item.fileSize })),
     };
   }
-  private ownerDto(campaign: any) { return { ...campaign, acceptingApplications: campaign.status === 'OPEN' && (!campaign.applicationDeadline || new Date(campaign.applicationDeadline) > new Date()) }; }
+  private ownerDto(campaign: any) { return { ...campaign, applicationsCount: campaign._count?.applications ?? 0, acceptingApplications: campaign.status === 'OPEN' && (!campaign.applicationDeadline || new Date(campaign.applicationDeadline) > new Date()) }; }
   private audit(campaignId:string,actorUserId:string,action:string,metadata?:Prisma.InputJsonValue){return this.prisma.campaignAuditLog.create({data:{campaignId,actorUserId,action,metadata}});}
 
   async create(userId: string, dto: CampaignDto) {

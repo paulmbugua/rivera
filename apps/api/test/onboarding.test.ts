@@ -22,7 +22,18 @@ test('Business onboarding normalizes country and completes the profile', async (
 
 test('Creator onboarding normalizes country and completes the profile', async () => {
   let operation: Record<string, unknown> | undefined;
-  const db = { creatorProfile: { upsert: async (input: Record<string, unknown>) => { operation = input; } } };
+  let granted = 0;
+  const tx = {
+    creatorProfile: {
+      upsert: async (input: Record<string, unknown>) => { operation = input; return { id: 'profile-1', freeApplicationCredits: 0 }; },
+      update: async () => { granted += 1; },
+    },
+    applicationCreditTransaction: {
+      findUnique: async () => null,
+      create: async () => undefined,
+    },
+  };
+  const db = { $transaction: async (callback: (client: typeof tx) => unknown) => callback(tx) };
   const result = await new OnboardingController(db as unknown as PrismaService).creator(
     { id: 'creator-1' },
     { displayName: ' Amina Creates ', country: 'qa', city: ' Doha ', primaryCategory: 'Travel', primaryPlatform: 'Instagram', bio: ' Travel stories from around the world. ' },
@@ -32,6 +43,7 @@ test('Creator onboarding normalizes country and completes the profile', async ()
   assert.equal(created.userId, 'creator-1');
   assert.equal(created.country, 'QA');
   assert.equal(created.onboardingCompleted, true);
+  assert.equal(granted, 1);
 });
 
 test('onboarding DTOs reject non-ISO countries and missing profile details', async () => {

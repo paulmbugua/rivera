@@ -107,13 +107,43 @@ async function seedCampaigns() {
   if (creator && saved) await db.savedCampaign.upsert({ where: { creatorId_campaignId: { creatorId: creator.id, campaignId: saved.id } }, create: { creatorId: creator.id, campaignId: saved.id }, update: {} });
 }
 
+async function seedApplications() {
+  const technology = await db.category.findUniqueOrThrow({ where: { slug: 'technology' } });
+  const [globalRule, qatarRule] = await Promise.all([
+    db.applicationFeeRule.upsert({ where: { id: 'phase5-global-default' }, create: { id: 'phase5-global-default', name: 'Global development default', amountMinor: 300, currencyCode: 'USD', priority: 0, active: true }, update: { amountMinor: 300, currencyCode: 'USD', active: true } }),
+    db.applicationFeeRule.upsert({ where: { id: 'phase5-qatar-technology' }, create: { id: 'phase5-qatar-technology', name: 'Qatar technology development fee', countryCode: 'QA', categoryId: technology.id, amountMinor: 1000, currencyCode: 'QAR', priority: 20, active: true }, update: { countryCode: 'QA', categoryId: technology.id, amountMinor: 1000, currencyCode: 'QAR', priority: 20, active: true } }),
+  ]);
+  void globalRule;
+  const creators = await db.creatorProfile.findMany({ orderBy: { createdAt: 'asc' } });
+  const campaigns = await db.campaign.findMany({ where: { status: 'OPEN', visibility: 'PUBLIC' }, orderBy: { createdAt: 'asc' } });
+  if (creators.length < 7 || campaigns.length < 6) return;
+  await db.applicationPayment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_phase5_' } } });
+  const fixtures = [
+    { creator: 1, campaign: 0, status: 'SUBMITTED', paymentStatus: 'PAID', amount: 150000, fee: 1000, feeCurrency: 'QAR', submitted: true, paid: true },
+    { creator: 2, campaign: 1, status: 'SUBMITTED', paymentStatus: 'NOT_REQUIRED', amount: 650000, fee: 300, feeCurrency: 'USD', submitted: true, credit: true },
+    { creator: 3, campaign: 2, status: 'DRAFT', paymentStatus: 'PENDING', amount: 90000, fee: null, feeCurrency: null },
+    { creator: 4, campaign: 3, status: 'AWAITING_PAYMENT', paymentStatus: 'PENDING', amount: 110000, fee: 300, feeCurrency: 'USD', pending: true },
+    { creator: 5, campaign: 4, status: 'VIEWED', paymentStatus: 'NOT_REQUIRED', amount: 8000000, fee: 0, feeCurrency: 'USD', submitted: true, viewed: true },
+    { creator: 6, campaign: 5, status: 'WITHDRAWN', paymentStatus: 'PAID', amount: 400000, fee: 300, feeCurrency: 'USD', submitted: true, paid: true, withdrawn: true },
+  ] as const;
+  for (const [index, fixture] of fixtures.entries()) {
+    const creator = creators[fixture.creator], campaign = campaigns[fixture.campaign]; if (!creator || !campaign) continue;
+    const app = await db.campaignApplication.upsert({ where: { campaignId_creatorId: { campaignId: campaign.id, creatorId: creator.id } }, create: { campaignId: campaign.id, creatorId: creator.id, proposedAmountMinor: fixture.amount, proposedCurrencyCode: campaign.currencyCode, pitch: `This is a synthetic Phase 5 proposal from ${creator.displayName}. It demonstrates the application workflow without representing a real commercial agreement.`, proposedDeliverables: 'Campaign-aligned content and a concise performance summary.', estimatedDeliveryDays: 7, status: fixture.status, paymentStatus: fixture.paymentStatus, applicationFeeMinor: fixture.fee, applicationFeeCurrencyCode: fixture.feeCurrency, applicationFeeRuleId: campaign.campaignCountryCode === 'QA' ? qatarRule.id : globalRule.id, usedFreeCredit: Boolean('credit' in fixture && fixture.credit), submittedAt: fixture.submitted ? new Date() : null, viewedAt: fixture.viewed ? new Date() : null, withdrawnAt: fixture.withdrawn ? new Date() : null }, update: { status: fixture.status, paymentStatus: fixture.paymentStatus, applicationFeeMinor: fixture.fee, applicationFeeCurrencyCode: fixture.feeCurrency, usedFreeCredit: Boolean('credit' in fixture && fixture.credit), submittedAt: fixture.submitted ? new Date() : null, viewedAt: fixture.viewed ? new Date() : null, withdrawnAt: fixture.withdrawn ? new Date() : null } });
+    if (fixture.paid) await db.applicationPayment.create({ data: { applicationId: app.id, creatorId: creator.id, campaignId: campaign.id, providerPaymentId: `test_phase5_pi_paid_${index}`, providerCheckoutSessionId: `test_phase5_cs_paid_${index}`, amountMinor: fixture.fee ?? 300, currencyCode: fixture.feeCurrency ?? 'USD', status: 'PAID', paidAt: new Date() } });
+    if (fixture.pending) await db.applicationPayment.create({ data: { applicationId: app.id, creatorId: creator.id, campaignId: campaign.id, providerCheckoutSessionId: `test_phase5_cs_pending_${index}`, amountMinor: fixture.fee ?? 300, currencyCode: fixture.feeCurrency ?? 'USD', status: 'PENDING', expiresAt: new Date(Date.now() + 30 * 60_000) } });
+  }
+  const featured = creators[0], zero = creators[1];
+  if (featured) { await db.applicationCreditTransaction.deleteMany({ where: { creatorId: featured.id, referenceId: 'phase5-seed-grant' } }); await db.creatorProfile.update({ where: { id: featured.id }, data: { freeApplicationCredits: 3 } }); await db.applicationCreditTransaction.create({ data: { creatorId: featured.id, type: 'GRANT', quantity: 3, balanceAfter: 3, reason: 'Phase 5 development credits', referenceId: 'phase5-seed-grant' } }); }
+  if (zero) await db.creatorProfile.update({ where: { id: zero.id }, data: { freeApplicationCredits: 0 } });
+}
+
 async function main() {
   if (!demoPassword) throw new Error('Seed passwords are required outside development.');
   await seedTaxonomy();
   const admin = await seedUser({ email: process.env.ADMIN_SEED_EMAIL ?? (development ? 'admin@rivera.local' : undefined), password: process.env.ADMIN_SEED_PASSWORD ?? demoPassword, firstName: 'Rivera', lastName: 'Admin', role: 'ADMIN' });
-  await seedBusinesses(); await seedCreators(); await seedCampaigns();
+  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications();
   const pendingCreator = await db.creatorProfile.findFirst({ where: { verificationStatus: 'UNVERIFIED', profileVisibility: 'PUBLIC' } });
   if (pendingCreator && !await db.verificationRequest.findFirst({ where: { creatorProfileId: pendingCreator.id, status: 'PENDING' } })) await db.$transaction([db.creatorProfile.update({ where: { id: pendingCreator.id }, data: { verificationStatus: 'PENDING' } }), db.verificationRequest.create({ data: { userId: pendingCreator.userId, profileType: 'CREATOR', creatorProfileId: pendingCreator.id, noteFromUser: 'Synthetic development verification request.' } })]);
-  console.log(`Phase 4 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12.`);
+  console.log(`Phase 5 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, applications=6.`);
 }
 main().finally(() => db.$disconnect());

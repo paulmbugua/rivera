@@ -1,0 +1,1 @@
+import { AdminPaymentDetail } from '@/components/rivera/application-admin';export default async function Page({params}:{params:Promise<{id:string}>}){return <AdminPaymentDetail id={(await params).id}/>}

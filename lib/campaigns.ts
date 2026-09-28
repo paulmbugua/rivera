@@ -3,7 +3,7 @@ export type Campaign = {
   campaignObjective?:string;targetAudience?:string;expectedOutcomes?:string;budgetMinMinor?:number|null;budgetMaxMinor?:number|null;budgetVisibility:string;currencyCode:string;
   creatorSlots:number;applicationDeadline?:string;campaignStartDate?:string;campaignEndDate?:string;locationType?:string;campaignCountryCode?:string;campaignCity?:string;campaignRegion?:string;
   verifiedCreatorsOnly:boolean;usageRights?:string;usageRightsNotes?:string;productProvided?:boolean;travelExpensesCovered?:boolean;specialInstructions?:string;
-  status:string;visibility:string;isFeatured:boolean;acceptingApplications:boolean;publishedAt?:string;updatedAt?:string;viewCount?:number;matchScore?:number;reasons?:string[];
+  status:string;visibility:string;isFeatured:boolean;acceptingApplications:boolean;applicationsCount?:number;publishedAt?:string;updatedAt?:string;viewCount?:number;matchScore?:number;reasons?:string[];
   business:{id:string;name:string;slug:string;logoUrl?:string;shortDescription?:string;verificationStatus:string};
   categories:{id:string;name:string;slug:string;isPrimary:boolean;categoryId?:string;category?:{id:string;name:string;slug:string}}[];
   creatorLocations:{id?:string;countryCode:string;city?:string;region?:string}[];

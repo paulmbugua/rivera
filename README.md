@@ -1,6 +1,6 @@
 # Rivera
 
-Rivera is a global business and creator marketplace. Phases 1–4 provide authentication, professional profiles and a campaign opportunity marketplace. Proposals, application fees, payments, shortlisting, hiring and messaging remain future phases.
+Rivera is a global business and creator marketplace. Phases 1–5 provide authentication, professional profiles, campaign discovery, Creator proposals, free Application Credits and Stripe-verified Rivera Application Fees. Shortlisting, hiring, contact unlock and messaging remain future phases.
 
 ## Project layout
 
@@ -98,7 +98,40 @@ Creators browse and filter `/campaigns` or use `/dashboard/creator/opportunities
 
 Admins inspect full campaign briefs and moderate status, visibility and featured state at `/admin/campaigns`. `CAMPAIGN_REVIEW_REQUIRED` optionally sends publication through review. Limits are controlled with `MAX_CAMPAIGN_CATEGORIES`, `MAX_CAMPAIGN_DELIVERABLES`, `MAX_CAMPAIGN_ATTACHMENTS` and `MAX_CAMPAIGN_ATTACHMENT_MB`.
 
-The development seed additionally creates eight synthetic campaigns covering local, national, global, remote, open and draft states and one saved Creator opportunity.
+The development seed additionally creates synthetic campaigns covering local, national, global, remote, open and draft states and one saved Creator opportunity.
+
+## Phase 5 proposals and Application Fees
+
+Creators start at an open Campaign and use a short flow: save an editable `DRAFT`, review the Proposal and Rivera fee separately, then use one free Application Credit, submit a zero-fee application, or continue to Stripe-hosted Checkout. The Creator’s proposed compensation is never collected in Phase 5. A Business only receives `SUBMITTED`, `VIEWED`, or historical `WITHDRAWN` Applications; drafts, pending payments and failed payments remain private.
+
+Money is always stored in integer minor units and converted with the currency’s `Intl.NumberFormat` fraction digits. `ApplicationFeeService` resolves active rules in this order: country plus category, country, category, then global; priority breaks ties within a specificity level. Environment defaults are the final fallback. The fee and rule are snapshotted when checkout begins so later Admin changes cannot alter an existing attempt. A unique Creator/Campaign constraint prevents duplicate Applications, while a partial unique payment index prevents simultaneous active checkout attempts.
+
+New Creator onboarding grants `NEW_CREATOR_FREE_APPLICATIONS` once through an idempotent ledger reference. Credit use, ledger insertion and Application submission run in one serializable transaction and cannot produce a negative balance. Admins can create/toggle fee rules, grant credits with a reason, inspect Applications and payments, and issue a full approved refund from `/admin/*`.
+
+Stripe integration is limited to the Rivera Application Fee and is behind a `PaymentProviderAdapter`. Rivera sends the server-calculated amount to hosted Checkout and never receives raw card details. The browser success redirect is only a processing state: a signature-verified webhook (or conservative server reconciliation) must validate the stored amount and currency before activation. Provider event IDs are unique for replay safety, and payment/Application/audit writes are transactional. Failed or expired payment attempts return the Proposal to a retryable draft. If a Campaign closes before a late payment activates, the charge is flagged for Admin refund review rather than exposing the Proposal.
+
+Set these values in the ignored `.env` file:
+
+```dotenv
+STRIPE_APPLICATION_FEE_ENABLED=true
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+DEFAULT_APPLICATION_FEE_MINOR=300
+DEFAULT_APPLICATION_FEE_CURRENCY=USD
+NEW_CREATOR_FREE_APPLICATIONS=3
+APPLICATION_PAYMENT_EXPIRY_MINUTES=30
+```
+
+For local Stripe test mode, install and authenticate the Stripe CLI, then forward only the webhook endpoint:
+
+```sh
+stripe listen --forward-to http://localhost:4000/api/v1/payments/webhooks/stripe
+```
+
+Copy the reported `whsec_...` value to `STRIPE_WEBHOOK_SECRET`, restart the API, and use Stripe’s published test cards in the hosted Checkout page. A redirect alone must leave the Application unsubmitted until the webhook or verified reconciliation succeeds. Replaying the same event is safe. Voluntary withdrawals do not automatically refund fees; duplicate/erroneous charges and cancelled Campaign cases may be refunded by an Admin. The full Campaign brief unlocks only for a paid, credited or zero-fee submission and its DTO still excludes Business email, phone, private address and internal notes.
+
+The Phase 5 seed creates global and Qatar fee rules, Creators with three and zero credits, and representative draft, awaiting-payment, paid, credited, zero-fee viewed and withdrawn Applications using obviously synthetic test references.
 
 ## Checks
 
@@ -110,12 +143,18 @@ pnpm --dir apps/api typecheck
 pnpm --dir apps/api test
 pnpm --dir apps/api prisma:generate
 pnpm --dir apps/api exec prisma validate
+pnpm --dir apps/api exec prisma migrate status
+pnpm --dir apps/api prisma:seed
 pnpm --dir apps/api build
 pnpm build
+docker compose config
+docker compose build api web
+docker compose up -d
+docker compose ps
 ```
 
 Run `docker compose config` and the complete creator, business and password reset flows before a release. The hosted Sites page serves the website only; this repository's NestJS API and PostgreSQL are **not deployed**. Point the hosted frontend at an HTTPS deployment of the API before treating hosted authentication as production-ready.
 
 ## Next phase
 
-The campaign domain now provides the ownership, safe public summary, locked brief, requirements, money, deliverables and lifecycle foundation needed for Phase 5 Creator proposals and payment-verified application submission. No functional application, proposal, payment, shortlisting, hiring or messaging workflow exists yet.
+Phase 5 now provides durable Campaign participants-in-waiting: a Business can review a paid/credited Proposal and the Creator can see its viewed state. Phase 6 can build shortlisting, rejection, acceptance/hiring, controlled contact unlock and messaging on that relationship. None of those Phase 6 actions is implemented yet.

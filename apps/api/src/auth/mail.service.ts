@@ -47,4 +47,7 @@ export class MailService {
   sendWelcomeEmail(email: string, firstName: string) {
     return this.provider.send({ to: email, subject: 'Welcome to Rivera', text: `Welcome to Rivera, ${firstName}. Your email is verified.`, html: template(`Welcome, ${firstName}`, 'Your email is verified. You can now finish setting up your Rivera profile.') });
   }
+  sendMarketplaceEmail(email: string, subject: string, copy: string) {
+    return this.provider.send({ to: email, subject, text: copy, html: template(subject, copy) });
+  }
 }

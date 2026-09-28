@@ -9,7 +9,7 @@ import { ApiException } from './common/api-error';
 import express from 'express';
 import { resolve } from 'node:path';
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.setGlobalPrefix('api/v1');
   const origin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
   app.enableCors({ origin, credentials: true });
@@ -25,8 +25,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, exceptionFactory: errors => new ApiException(HttpStatus.BAD_REQUEST, 'VALIDATION_ERROR', errors.flatMap(error => Object.values(error.constraints ?? {})).join('. ')) }));
   const document = SwaggerModule.createDocument(app, new DocumentBuilder()
     .setTitle('Rivera API')
-    .setDescription('Rivera authentication, professional profiles and campaign opportunity marketplace. Public campaign responses are intentionally limited to the safe summary and exclude the locked brief, contacts, moderation and security data. Errors use { statusCode, code, message }.')
-    .setVersion('0.4')
+    .setDescription('Rivera authentication, profiles, campaigns, Creator proposals, application credits and Stripe-verified Application Fees. Public campaign responses exclude locked briefs and private contacts. Payment webhooks use provider signatures; errors use { statusCode, code, message }.')
+    .setVersion('0.5')
     .addCookieAuth('rivera_access', { type: 'apiKey', in: 'cookie' }, 'access-cookie')
     .build());
   if (process.env.NODE_ENV !== 'production') SwaggerModule.setup('api/docs', app, document);
