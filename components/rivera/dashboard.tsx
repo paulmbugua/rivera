@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Protected } from "./protected";
 import { useAuth } from "./auth-provider";
 import { api } from "@/lib/api";
+import { ArrowUpRight, HeartHandshake, Sparkles } from "lucide-react";
 type Summary = {
   slug: string;
   profileCompletion: number;
@@ -177,29 +178,21 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
           ))}
         </aside>
         <section>
-          <p className="eyebrow">{role} DASHBOARD</p>
-          <h1>Welcome, {user?.firstName}.</h1>
+          <p className="eyebrow"><span className="eyebrow-dot" /> {role} DASHBOARD</p>
+          <h1>Good to see you, {user?.firstName}.</h1>
           {role === "ADMIN" ? (
             <>
-              <p>
-                Manage marketplace identities, campaigns, taxonomies and
-                verification requests.
-              </p>
-              <div className="dashboard-empty">
-                <h2>Marketplace administration</h2>
-                <p>
-                  Campaign inspection and Phase 3 controls are ready in the
-                  navigation.
-                </p>
-              </div>
+              <p>Help Rivera remain a trusted place for purposeful partnerships.</p>
+              <div className="dashboard-focus"><span><HeartHandshake size={24}/></span><div><small>TODAY’S FOCUS</small><h2>Keep the marketplace healthy.</h2><p>Review the people, campaigns and requests that need a thoughtful human decision.</p></div><Link href="/admin/verifications">Review verifications <ArrowUpRight size={18}/></Link></div>
             </>
           ) : (
             <>
               <p>
                 {role === "BUSINESS"
-                  ? "Create clear opportunities and find the right Creator partners."
-                  : "Discover opportunities that match your profile and save the strongest fits."}
+                  ? "Turn a clear idea into a partnership people will remember."
+                  : "Find opportunities that value your point of view and respect your craft."}
               </p>
+              <div className="dashboard-focus"><span><Sparkles size={24}/></span><div><small>YOUR NEXT BEST STEP</small><h2>{role === "BUSINESS" ? "Bring the right people into the idea." : "Find the opportunity that feels like you."}</h2><p>{role === "BUSINESS" ? "Share a considered brief or revisit the campaigns already moving." : "Browse fresh opportunities or give your profile one more detail that helps you stand out."}</p></div><Link href={role === "BUSINESS" ? "/dashboard/business/campaigns/new" : "/dashboard/creator/opportunities"}>{role === "BUSINESS" ? "Create a campaign" : "Explore opportunities"} <ArrowUpRight size={18}/></Link></div>
               <div className="dashboard-stats">
                 <article>
                   <strong>{summary?.profileCompletion ?? 0}%</strong>

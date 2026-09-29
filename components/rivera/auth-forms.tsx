@@ -8,12 +8,20 @@ import { z } from 'zod';
 import { api, destination, User } from '@/lib/api';
 import { useAuth } from './auth-provider';
 import { registerSchema, strongPassword } from '@/lib/auth-validation';
+import { ArrowLeft, BadgeCheck, HeartHandshake, LockKeyhole, MailCheck, Sparkles } from 'lucide-react';
 const login = z.object({ email: z.string().email(), password: z.string().min(1) });
 const email = z.object({ email: z.string().email() });
 const reset = z.object({ password: strongPassword, confirmPassword: z.string() }).refine(x => x.password === x.confirmPassword, { path: ['confirmPassword'], message: 'Passwords do not match' });
 type Mode = 'register'|'login'|'forgot'|'reset'|'verify';
 const schemas = { register: registerSchema, login, forgot: email, reset, verify: z.object({ token: z.string().min(1) }) };
 const titles = { register: 'Create your account', login: 'Welcome back', forgot: 'Reset your password', reset: 'Choose a new password', verify: 'Verify your email' };
+const moments = {
+  register: { icon: HeartHandshake, kicker: 'A GOOD PLACE TO BEGIN', title: 'Your next partnership could start here.', copy: 'Create a profile that feels like you. We’ll keep the process clear, considered and human.' },
+  login: { icon: Sparkles, kicker: 'WELCOME BACK', title: 'There is good work waiting to move forward.', copy: 'Return to your campaigns, conversations and opportunities without losing the thread.' },
+  forgot: { icon: LockKeyhole, kicker: 'IT HAPPENS', title: 'A small pause—not a dead end.', copy: 'Enter your email and we’ll help you get safely back to the work that matters.' },
+  reset: { icon: BadgeCheck, kicker: 'A FRESH START', title: 'Choose something secure and memorable.', copy: 'Your new password protects your profile, your conversations and the partnerships you build.' },
+  verify: { icon: MailCheck, kicker: 'ONE LAST STEP', title: 'Let’s make sure it’s really you.', copy: 'Verification keeps the Rivera community safer and helps every introduction begin with trust.' },
+};
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter(); const search = useSearchParams()!; const { refresh } = useAuth();
   const [message, setMessage] = useState(''); const [error, setError] = useState('');
@@ -29,7 +37,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
       if (mode === 'verify') { const result = await api<{message:string}>('/auth/verify-email', { method:'POST', body:JSON.stringify({token:data.token}) }, false); setMessage(result.message); }
     } catch (e) { setError(e instanceof Error ? e.message : 'Please try again.'); }
   }
-  return <main className="auth-shell"><Link href="/" className="brand"><span className="brand-mark">R.</span>rivera</Link><div className="auth-card"><p className="eyebrow">RIVERA ACCOUNT</p><h1>{titles[mode]}</h1><form onSubmit={form.handleSubmit(submit)} noValidate>
+  const moment = moments[mode]; const MomentIcon = moment.icon;
+  return <main className="auth-shell"><div className="auth-frame"><section className="auth-story"><Link href="/" className="brand"><span className="brand-mark">R.</span>rivera</Link><div className="auth-story-copy"><span className="auth-story-icon"><MomentIcon size={25}/></span><p className="eyebrow">{moment.kicker}</p><h2>{moment.title}</h2><p>{moment.copy}</p></div><p className="auth-story-foot">Where thoughtful brands and distinctive creators make meaningful work.</p></section><section className="auth-form-side"><Link href="/" className="auth-back"><ArrowLeft size={16}/> Back to Rivera</Link><div className="auth-card"><p className="eyebrow">RIVERA ACCOUNT</p><h1>{titles[mode]}</h1><p className="auth-intro">{mode === 'register' ? 'A few details, then you can shape a profile that makes the right first impression.' : mode === 'login' ? 'Pick up where you left off.' : 'We’ll keep this simple and secure.'}</p><form onSubmit={form.handleSubmit(submit)} noValidate>
     {mode === 'register' && <>{field('firstName','First name')}{field('lastName','Last name')}</>}
     {(['register','login','forgot'] as Mode[]).includes(mode) && field('email','Email address','email')}
     {(['register','login','reset'] as Mode[]).includes(mode) && field('password','Password','password')}
@@ -39,5 +48,5 @@ export function AuthForm({ mode }: { mode: Mode }) {
     {mode === 'verify' && field('token','Verification token')}
     {error && <p className="form-error" role="alert">{error}</p>}{message && <p className="form-success" role="status">{message}</p>}
     <button className="button primary form-submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? 'Please wait…' : ({ register:'Create account',login:'Log in',forgot:'Send reset link',reset:'Reset password',verify:'Verify email' }[mode])}</button>
-  </form><div className="auth-links">{mode !== 'login' && <Link href="/login">Log in</Link>}{mode !== 'register' && <Link href="/register">Create account</Link>}{mode === 'login' && <Link href="/forgot-password">Forgot password?</Link>}{mode === 'verify' && <Link href="/resend-verification">Send a new verification link</Link>}{mode === 'login' && <Link href="/resend-verification">Resend verification</Link>}</div></div></main>;
+  </form><div className="auth-links">{mode !== 'login' && <Link href="/login">Log in</Link>}{mode !== 'register' && <Link href="/register">Create account</Link>}{mode === 'login' && <Link href="/forgot-password">Forgot password?</Link>}{mode === 'verify' && <Link href="/resend-verification">Send a new verification link</Link>}{mode === 'login' && <Link href="/resend-verification">Resend verification</Link>}</div></div></section></div></main>;
 }

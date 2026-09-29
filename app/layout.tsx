@@ -3,8 +3,8 @@ import "./globals.css";
 import { AuthProvider } from "@/components/rivera/auth-provider";
 
 export const metadata: Metadata = {
-  title: "Rivera — Where brands and creators connect",
-  description: "Rivera connects businesses and content creators through better campaign collaborations, worldwide.",
+  title: "Rivera — Make work people feel",
+  description: "Rivera helps thoughtful brands and distinctive creators find each other and build meaningful campaigns together.",
   other: {
     "codex-preview": "development",
   },
