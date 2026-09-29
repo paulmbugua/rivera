@@ -96,6 +96,7 @@ services:
       API_INTERNAL_URL: http://api:4000/api/v1
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      XDG_CONFIG_HOME: /tmp/rivera-sites-runtime/config
     ports: ["127.0.0.1:3000:3000"]
     depends_on: [api]
 volumes:

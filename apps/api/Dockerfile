@@ -11,11 +11,12 @@ RUN pnpm --dir apps/api prisma:generate && pnpm --dir apps/api build
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=4000
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/* && corepack enable && groupadd --system rivera && useradd --system --gid rivera rivera
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/* && corepack enable && groupadd --system rivera && useradd --system --create-home --gid rivera rivera
 COPY --from=builder --chown=rivera:rivera /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder --chown=rivera:rivera /app/node_modules ./node_modules
 COPY --from=builder --chown=rivera:rivera /app/apps/api ./apps/api
 COPY --from=builder --chown=rivera:rivera /app/packages/shared ./packages/shared
+RUN pnpm --dir apps/api prisma:generate && cd apps/api && node -e "const client=require('@prisma/client');if(!client.UserRole)throw new Error('Prisma Client enums were not generated')"
 USER rivera
 EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 CMD node -e "fetch('http://127.0.0.1:4000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
