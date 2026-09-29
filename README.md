@@ -1,5 +1,11 @@
 # Rivera
 
+## Phase 9 production-readiness foundation
+
+Rivera now includes structured request logging and correlation IDs, stable exception responses, liveness/readiness endpoints, database-backed reconciliation runs, generalized safety reports, audited Admin support actions, notification preferences, first-party marketplace metrics, reviewed data export/deletion requests, stricter production configuration and multi-stage non-root containers. See [production operations](docs/PRODUCTION_OPERATIONS.md) for backup, restore, staging and release procedures.
+
+Operational routes include `/api/v1/health/ready`, `/api/v1/settings/notification-preferences`, `/api/v1/reports`, `/api/v1/admin/reports`, `/api/v1/admin/support/search`, `/api/v1/admin/analytics` and `/api/v1/admin/data-requests`.
+
 ## Phase 8 — funded collaborations and Creator payouts
 
 Rivera now keeps application fees, Creator compensation and marketplace service fees as separate financial records. Businesses fund accepted collaborations through provider-hosted Stripe Checkout; only verified webhook or reconciliation results mark them funded. The default service fee is 10% paid on top by the Business and is snapshotted before checkout.

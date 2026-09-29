@@ -311,6 +311,52 @@ enum VerificationRequestStatus {
   CANCELLED
 }
 
+enum NotificationCategory {
+  ACCOUNT
+  CAMPAIGNS
+  APPLICATIONS
+  MESSAGES
+  OFFERS
+  COLLABORATIONS
+  PAYMENTS
+  REVIEWS
+  MARKETING
+}
+
+enum SafetyReportType {
+  USER
+  CAMPAIGN
+  MESSAGE
+  REVIEW
+  PAYMENT
+}
+
+enum SafetyReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum DataLifecycleRequestType {
+  EXPORT
+  DELETION
+}
+
+enum DataLifecycleRequestStatus {
+  REQUESTED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum OperationalJobStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
 model User {
   id                            String                    @id @default(cuid())
   email                         String                    @unique
@@ -345,6 +391,12 @@ model User {
   paymentIssuesOpened           PaymentIssue[]            @relation("PaymentIssueOpener")
   collaborationRefundsRequested CollaborationRefund[]     @relation("CollaborationRefundRequester")
   collaborationRefundsApproved  CollaborationRefund[]     @relation("CollaborationRefundApprover")
+  notificationPreferences       NotificationPreference[]
+  safetyReports                 SafetyReport[]             @relation("SafetyReportReporter")
+  safetyReportsReviewed         SafetyReport[]             @relation("SafetyReportReviewer")
+  analyticsEvents               AnalyticsEvent[]
+  dataLifecycleRequests         DataLifecycleRequest[]
+  adminAuditLogs                AdminAuditLog[]            @relation("AdminAuditActor")
 }
 
 model UserRoleAssignment {
@@ -1329,4 +1381,99 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([applicationId])
+}
+
+model NotificationPreference {
+  id           String               @id @default(cuid())
+  userId       String
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     NotificationCategory
+  emailEnabled Boolean              @default(true)
+  inAppEnabled Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([userId, category])
+  @@index([userId])
+}
+
+model SafetyReport {
+  id                String             @id @default(cuid())
+  reporterId        String
+  reporter          User               @relation("SafetyReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reviewedById      String?
+  reviewedBy        User?              @relation("SafetyReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  type              SafetyReportType
+  subjectId         String
+  reason            String             @db.VarChar(1000)
+  status            SafetyReportStatus @default(OPEN)
+  privateAdminNote  String?            @db.VarChar(2000)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  resolvedAt        DateTime?
+
+  @@unique([reporterId, type, subjectId])
+  @@index([status, createdAt])
+  @@index([type, subjectId])
+}
+
+model AnalyticsEvent {
+  id           String   @id @default(cuid())
+  event        String   @db.VarChar(80)
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  requestId    String?  @db.VarChar(80)
+  entityType   String?  @db.VarChar(80)
+  entityId     String?  @db.VarChar(191)
+  amountMinor  Int?
+  currencyCode String?  @db.VarChar(3)
+  dimensions   Json?
+  createdAt    DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@index([userId, createdAt])
+}
+
+model DataLifecycleRequest {
+  id           String                     @id @default(cuid())
+  userId       String
+  user         User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type         DataLifecycleRequestType
+  status       DataLifecycleRequestStatus @default(REQUESTED)
+  privateNote  String?                    @db.VarChar(2000)
+  requestedAt  DateTime                   @default(now())
+  completedAt  DateTime?
+  updatedAt    DateTime                   @updatedAt
+
+  @@index([userId, status])
+  @@index([type, status, requestedAt])
+}
+
+model OperationalJobRun {
+  id           String               @id @default(cuid())
+  jobName      String               @db.VarChar(120)
+  scheduledFor DateTime
+  status       OperationalJobStatus @default(RUNNING)
+  processed    Int                  @default(0)
+  failed       Int                  @default(0)
+  errorCode    String?              @db.VarChar(120)
+  startedAt    DateTime             @default(now())
+  finishedAt   DateTime?
+
+  @@unique([jobName, scheduledFor])
+  @@index([status, startedAt])
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation("AdminAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action     String   @db.VarChar(120)
+  targetType String   @db.VarChar(80)
+  targetId   String   @db.VarChar(191)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
 }

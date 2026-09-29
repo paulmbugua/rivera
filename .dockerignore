@@ -10,7 +10,6 @@ node_modules/**
 **/.pnpm/**
 **/dist
 dist
-build
 .next
 .vinext
 .sites-runtime

@@ -313,6 +313,7 @@ export class MarketplacePaymentService {
         collaborationPayment: { include: { transfers: true, refunds: true } },
       },
       orderBy: { updatedAt: "desc" },
+      take: 100,
     });
     return participants.map((p) => {
       if (p.collaborationPayment)
@@ -384,6 +385,7 @@ export class MarketplacePaymentService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
   }
   private async eligible(p: any) {
@@ -648,6 +650,7 @@ export class MarketplacePaymentService {
         refunds: true,
       },
       orderBy: { updatedAt: "desc" },
+      take: 100,
     });
     const totals = Object.values(
       items.reduce((a: any, x: any) => {
@@ -674,6 +677,7 @@ export class MarketplacePaymentService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
   }
   async adminRefunds() {
@@ -684,6 +688,7 @@ export class MarketplacePaymentService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
   }
   async adminIssues() {
@@ -698,6 +703,7 @@ export class MarketplacePaymentService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
   }
   async resolveIssue(adminId: string, id: string, dto: ResolvePaymentIssueDto) {
@@ -724,6 +730,7 @@ export class MarketplacePaymentService {
     return this.db.creatorPayoutAccount.findMany({
       include: { creator: { select: { displayName: true, slug: true } } },
       orderBy: { updatedAt: "desc" },
+      take: 100,
     });
   }
   async reconcilePayoutAccount(id: string) {

@@ -161,6 +161,8 @@ export class CollaborationsService {
       app.creator.user.email,
       "You were shortlisted on Rivera",
       `${app.campaign.business.name} shortlisted your application for ${app.campaign.title}. Rivera messaging is now available.`,
+      app.creator.userId,
+      "APPLICATIONS",
     );
     return value;
   }
@@ -473,6 +475,8 @@ export class CollaborationsService {
       app.creator.user.email,
       "Collaboration Offer received",
       `${app.campaign.business.name} sent you a Collaboration Offer for ${app.campaign.title}. Review it in Rivera.`,
+      app.creator.userId,
+      "OFFERS",
     );
     return offer;
   }
@@ -817,6 +821,8 @@ export class CollaborationsService {
       participant.business.user.email,
       "Your Rivera Offer was accepted",
       `${participant.creator.displayName} accepted the Offer for ${participant.campaign.title}.`,
+      participant.business.userId,
+      "OFFERS",
     );
     return this.participantDto(participant);
   }

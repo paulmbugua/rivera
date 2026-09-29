@@ -748,6 +748,7 @@ export class ApplicationsService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
     return items.map((p) => ({
       id: p.id,
@@ -1468,12 +1469,16 @@ export class ApplicationsService {
         creatorUser.email,
         "Proposal submitted",
         `Your proposal for ${app.campaign.title} was submitted successfully.`,
+        creatorUser.id,
+        "APPLICATIONS",
       );
     if (business)
       void this.mail.sendMarketplaceEmail(
         business.user.email,
         "New proposal received",
         `${app.creator.displayName} submitted a proposal for ${app.campaign.title}.`,
+        business.userId,
+        "APPLICATIONS",
       );
   }
 
@@ -1592,6 +1597,7 @@ export class ApplicationsService {
         refunds: true,
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
     return items.map((p) => ({
       ...p,

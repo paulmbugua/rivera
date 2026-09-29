@@ -5,12 +5,19 @@ services:
       POSTGRES_USER: rivera
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: rivera
-    ports: ['127.0.0.1:${POSTGRES_PORT:-5432}:5432']
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
     volumes: [rivera_pg:/var/lib/postgresql/data]
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U rivera -d rivera']
+      test: ["CMD-SHELL", "pg_isready -U rivera -d rivera"]
       interval: 5s
       retries: 10
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: ["pnpm", "--dir", "apps/api", "prisma:deploy"]
+    environment:
+      DATABASE_URL: postgresql://rivera:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/rivera?schema=public
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     environment:
@@ -48,6 +55,11 @@ services:
       MARKETPLACE_SERVICE_FEE_POLICY: ${MARKETPLACE_SERVICE_FEE_POLICY:-BUSINESS_PAYS_ON_TOP}
       AUTO_RELEASE_ENABLED: ${AUTO_RELEASE_ENABLED:-false}
       AUTO_RELEASE_DELAY_HOURS: ${AUTO_RELEASE_DELAY_HOURS:-72}
+      JOBS_ENABLED: ${JOBS_ENABLED:-true}
+      RECONCILIATION_INTERVAL_SECONDS: ${RECONCILIATION_INTERVAL_SECONDS:-300}
+      ERROR_MONITORING_ENABLED: ${ERROR_MONITORING_ENABLED:-false}
+      ERROR_MONITORING_DSN: ${ERROR_MONITORING_DSN:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@rivera.local}
       CAMPAIGN_REVIEW_REQUIRED: ${CAMPAIGN_REVIEW_REQUIRED:-false}
       MAX_CAMPAIGN_CATEGORIES: ${MAX_CAMPAIGN_CATEGORIES:-5}
       MAX_CAMPAIGN_DELIVERABLES: ${MAX_CAMPAIGN_DELIVERABLES:-20}
@@ -68,9 +80,14 @@ services:
       CREATOR_SEED_PASSWORD: ${CREATOR_SEED_PASSWORD:-RiveraDemo123}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       NODE_ENV: development
-    ports: ['127.0.0.1:4000:4000']
-    volumes: [rivera_uploads:/app/uploads, rivera_private_uploads:/app/private-uploads]
-    depends_on: { postgres: { condition: service_healthy } }
+    ports: ["127.0.0.1:4000:4000"]
+    volumes:
+      [rivera_uploads:/app/uploads, rivera_private_uploads:/app/private-uploads]
+    depends_on:
+      {
+        postgres: { condition: service_healthy },
+        migrate: { condition: service_completed_successfully },
+      }
   web:
     build: { context: ., dockerfile: Dockerfile.web }
     environment:
@@ -78,7 +95,7 @@ services:
       API_INTERNAL_URL: http://api:4000/api/v1
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
-    ports: ['127.0.0.1:3000:3000']
+    ports: ["127.0.0.1:3000:3000"]
     depends_on: [api]
 volumes:
   rivera_pg:
