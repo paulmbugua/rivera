@@ -15,6 +15,8 @@ type Payment = {
   releasedAmountMinor: number;
   currencyCode: string;
   status: string;
+  participantStatus?: string;
+  fundingDueAt?: string;
   fundedAt?: string;
   campaign: { title: string; slug?: string };
   creator?: { displayName: string };
@@ -115,6 +117,8 @@ export function BusinessPayments() {
               <p className="eyebrow">{statusLabel(x.status)}</p>
               <h2>{x.campaign.title}</h2>
               <p>{x.creator?.displayName}</p>
+              {x.fundingDueAt && <p>Funding deadline: {new Date(x.fundingDueAt).toLocaleString()}</p>}
+              {x.status === "FAILED" && <p className="form-error">The last funding attempt failed. This collaboration is still inactive; try again.</p>}
               <dl>
                 <dt>Creator compensation</dt>
                 <dd>{money(x.creatorNetMinor, x.currencyCode)}</dd>
@@ -223,6 +227,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
                   {money(x.creatorNetMinor, x.currencyCode)} compensation ·{" "}
                   {money(x.releasedAmountMinor, x.currencyCode)} released
                 </p>
+                {x.status === "FUNDED" && <p>Funded by the Business and held for approved completion. This is not yet money received.</p>}
               </div>
             </article>
           ))}

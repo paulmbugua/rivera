@@ -29,6 +29,8 @@ type MarketSummary = {
   applicationsShortlisted?: number;
   offersSent?: number;
   creatorsHired?: number;
+  awaitingFunding?: number;
+  fundedCreators?: number;
   offersReceived?: number;
   activeCollaborations?: number;
   completedCollaborations?: number;
@@ -137,6 +139,8 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
     ["Revisions requested", market.revisionsRequested],
     ["Reviews pending", market.reviewsPending],
     ["Creators hired", market.creatorsHired],
+    ["Awaiting funding", market.awaitingFunding],
+    ["Funded / active", market.activeCollaborations ?? market.fundedCreators],
     ["Campaign views", market.campaignViews],
   ];
   const creatorStats: [string, number | undefined][] = [
@@ -144,6 +148,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
     ["Awaiting review", market.awaitingReview],
     ["Revisions requested", market.revisionsRequested],
     ["Completed", market.completedCollaborations],
+    ["Waiting for funding", market.awaitingFunding],
     ["Reviews pending", market.reviewsPending],
     ["Active collaborations", market.activeCollaborations],
   ];

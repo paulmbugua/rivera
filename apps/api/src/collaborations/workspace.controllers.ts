@@ -60,6 +60,11 @@ export class CreatorWorkspaceController {
     status: 201,
     description: "A new immutable HTTPS-link submission version.",
   })
+  @ApiResponse({
+    status: 409,
+    description:
+      "COLLABORATION_NOT_FUNDED — verified funding is required before submission.",
+  })
   submit(
     @CurrentUser() u: AuthUser,
     @Param("id") id: string,
@@ -85,6 +90,11 @@ export class CreatorWorkspaceController {
         file: { type: "string", format: "binary" },
       },
     },
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      "COLLABORATION_NOT_FUNDED — verified funding is required before upload.",
   })
   submitFile(
     @CurrentUser() u: AuthUser,

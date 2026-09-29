@@ -525,6 +525,88 @@ export class ReconciliationScheduler implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
   }
+  private async fundingDeadlines() {
+    const now = new Date();
+    const reminderCutoff = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+    const participants = await this.db.campaignParticipant.findMany({
+      where: {
+        status: "AWAITING_FUNDING",
+        fundingDueAt: { not: null, lte: reminderCutoff },
+      },
+      include: {
+        collaborationPayment: { select: { status: true } },
+        campaign: { select: { title: true } },
+        creator: { include: { user: true } },
+        business: { include: { user: true } },
+        application: { include: { conversation: true } },
+      },
+      orderBy: { fundingDueAt: "asc" },
+      take: 25,
+    });
+    let processed = 0;
+    for (const participant of participants) {
+      if (participant.collaborationPayment?.status === "FUNDED") continue;
+      const overdue = participant.fundingDueAt! <= now;
+      const field = overdue
+        ? "fundingOverdueNotifiedAt"
+        : "fundingReminderSentAt";
+      if (participant[field]) continue;
+      await this.db.$transaction(async (tx) => {
+        const claimed = await tx.campaignParticipant.updateMany({
+          where: { id: participant.id, status: "AWAITING_FUNDING", [field]: null },
+          data: { [field]: now },
+        });
+        if (!claimed.count) return;
+        await tx.notification.createMany({
+          data: overdue
+            ? [
+                {
+                  userId: participant.business.userId,
+                  businessId: participant.businessId,
+                  applicationId: participant.applicationId,
+                  type: "FUNDING_OVERDUE",
+                  title: "Collaboration funding is overdue",
+                  body: `${participant.campaign.title} is still inactive. Fund it now or cancel the reserved slot.`,
+                },
+                {
+                  userId: participant.creator.userId,
+                  creatorId: participant.creatorId,
+                  applicationId: participant.applicationId,
+                  type: "FUNDING_OVERDUE",
+                  title: "Collaboration funding is overdue",
+                  body: "Do not begin formal work. You may now cancel this unfunded collaboration.",
+                },
+              ]
+            : [
+                {
+                  userId: participant.business.userId,
+                  businessId: participant.businessId,
+                  applicationId: participant.applicationId,
+                  type: "FUNDING_REMINDER",
+                  title: "Fund your accepted collaboration",
+                  body: `${participant.campaign.title} must be funded before the Creator can submit work.`,
+                },
+              ],
+        });
+        if (overdue && participant.application.conversation) {
+          await tx.message.create({
+            data: {
+              conversationId: participant.application.conversation.id,
+              type: "SYSTEM",
+              content:
+                "The funding deadline has passed. Formal work remains locked until the Business funds this collaboration.",
+            },
+          });
+          await tx.conversation.update({
+            where: { id: participant.application.conversation.id },
+            data: { lastMessageAt: now },
+          });
+        }
+        processed += 1;
+      });
+    }
+    return processed;
+  }
   async run() {
     const scheduledFor = new Date(Math.floor(Date.now() / 60000) * 60000);
     try {
@@ -544,11 +626,12 @@ export class ReconciliationScheduler implements OnModuleInit, OnModuleDestroy {
         } catch {
           failed += 1;
         }
+      const deadlineNotifications = await this.fundingDeadlines();
       await this.db.operationalJobRun.update({
         where: { id: job.id },
         data: {
           status: failed ? "FAILED" : "SUCCEEDED",
-          processed: pending.length,
+          processed: pending.length + deadlineNotifications,
           failed,
           finishedAt: new Date(),
           errorCode: failed ? "ITEM_FAILURES" : null,

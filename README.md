@@ -6,6 +6,12 @@ Rivera now includes structured request logging and correlation IDs, stable excep
 
 Operational routes include `/api/v1/health/ready`, `/api/v1/settings/notification-preferences`, `/api/v1/reports`, `/api/v1/admin/reports`, `/api/v1/admin/support/search`, `/api/v1/admin/analytics` and `/api/v1/admin/data-requests`.
 
+## Pre-funding work gate
+
+Rivera enforces **no funds → no formal work**. Accepting an Offer reserves a Campaign slot and creates an `AWAITING_FUNDING` participant with a configurable deadline (`COLLABORATION_FUNDING_DEADLINE_HOURS`, 48 hours by default). The Creator can review the terms, Work Items and conversation, but every deliverable endpoint remains locked until the payment provider verifies the server-calculated Business payment. A verified webhook or secure reconciliation atomically marks the payment `FUNDED` and the participant `ACTIVE`; a browser redirect never activates work.
+
+Business funding separately shows the unchanged Creator compensation, Rivera fee and total due. Funding failures remain retryable and do not activate work. Overdue collaborations generate reminders but are not auto-charged; the Business may cancel before funding, and the Creator may cancel after the deadline. Funding is distinct from payout: release still requires approved deliverables, completed collaboration and a provider-ready Creator payout account.
+
 ## Phase 8 — funded collaborations and Creator payouts
 
 Rivera now keeps application fees, Creator compensation and marketplace service fees as separate financial records. Businesses fund accepted collaborations through provider-hosted Stripe Checkout; only verified webhook or reconciliation results mark them funded. The default service fee is 10% paid on top by the Business and is snapshotted before checkout.
@@ -20,7 +26,7 @@ Configure `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` with Stripe test-mode 
 
 An accepted Offer now creates an operational workspace rooted in its `CampaignParticipant`. Structured Campaign deliverables become required Work Items without changing the accepted compensation or Offer snapshot. The hired Creator can submit HTTPS links or private JPEG, PNG, WEBP, PDF and MP4 files; every resubmission creates an immutable numbered version. The Campaign-owning Business can approve only the latest submitted version or request a revision with a useful note.
 
-Progress is the objective ratio of approved required Work Items. All required items must be approved before the Business can explicitly complete a collaboration. Multi-Creator Campaigns remain open until every participant is complete and the Business explicitly completes the Campaign. Rivera continues to display agreed compensation as “Not managed by Rivera” and does not imply that payment occurred.
+Progress is the objective ratio of approved required Work Items. All required items must be approved before the Business can explicitly complete a collaboration. Multi-Creator Campaigns remain open until every participant is complete and the Business explicitly completes the Campaign. Rivera distinguishes awaiting funding, funded, released and settled states and never implies that funded money has already reached the Creator.
 
 Completed participants can review each other once. Published reviews update the Creator or Business aggregate and public profile; hidden and removed reviews do not. Reports and Admin hide/restore/remove actions are retained and audited. Workspace, submission, file, approval, completion and review operations all enforce ownership in the NestJS API.
 
@@ -30,13 +36,13 @@ The Phase 7 seed includes active Work Items in pending, submitted, revision-requ
 
 ## Phase 6 — shortlist, messaging, Offers and hiring
 
-Rivera now carries a paid Creator Application through Business review to an active collaboration:
+Rivera now carries a paid Creator Application through Business review to an accepted collaboration that becomes active only after verified funding:
 
 `SUBMITTED → VIEWED → SHORTLISTED → OFFERED → ACCEPTED`
 
 - A shortlist opens one private Rivera Conversation for the Application. The UI polls active conversations every seven seconds; Redis and WebSockets are intentionally not required.
 - Collaboration Offers are immutable, versioned commercial snapshots. Creator proposal pricing remains separate, and Rivera does not process Business-to-Creator compensation in this phase.
-- Offer acceptance runs in a serializable PostgreSQL transaction with a campaign-scoped advisory lock, rechecks Campaign state/expiry/capacity, creates one `CampaignParticipant`, and moves a full Campaign to `IN_PROGRESS`.
+- Offer acceptance runs in a serializable PostgreSQL transaction with a campaign-scoped advisory lock, rechecks Campaign state/expiry/capacity, creates one `AWAITING_FUNDING` `CampaignParticipant`, and moves a full Campaign to `IN_PROGRESS`.
 - Explicit professional contact details unlock only to the Business and Creator in an `ACTIVE` collaboration. Login emails are never used as contact details and public profile DTOs continue to omit professional contacts.
 - Alternative paths include rejection, shortlist removal, Creator decline, Business withdrawal, Creator withdrawal before hiring, Offer expiry, Campaign cancellation and capacity exhaustion.
 

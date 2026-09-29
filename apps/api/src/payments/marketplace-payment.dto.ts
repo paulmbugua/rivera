@@ -28,6 +28,6 @@ export class FeeSettingsDto {
   @IsInt() @Min(0) @Max(10000) basisPoints!: number;
   @IsInt() @Min(0) fixedMinor!: number;
   @IsOptional()
-  @IsIn(["BUSINESS_PAYS_ON_TOP", "DEDUCT_FROM_CREATOR"])
-  policy?: "BUSINESS_PAYS_ON_TOP" | "DEDUCT_FROM_CREATOR";
+  @IsIn(["BUSINESS_PAYS_ON_TOP"])
+  policy?: "BUSINESS_PAYS_ON_TOP";
 }

@@ -61,12 +61,17 @@ type Collaboration = {
   business: { name: string; slug: string };
   offer: Offer;
   conversationId?: string | null;
-  paymentNotice: string;
+  fundingDueAt?: string;
+  fundingOverdue?: boolean;
+  activatedAt?: string;
+  fundingStatus?: string;
+  canSubmitWork?: boolean;
   completedAt?: string;
   progress?: { required: number; approved: number; percent: number; readyForCompletion: boolean };
   myReview?: { id: string; rating: number } | null;
   workItems?: WorkItem[];
 };
+type FundingQuote={campaignParticipantId:string;grossAmountMinor:number;platformFeeMinor:number;creatorNetMinor:number;currencyCode:string;status:string};
 type Asset = { id:string; type:"FILE"|"LINK"; name:string; url?:string; mimeType?:string; fileSize?:number };
 type Submission = { id:string; version:number; status:string; message?:string; revisionNote?:string; submittedAt:string; assets:Asset[] };
 type WorkItem = { id:string; title:string; description?:string; quantity:number; dueDate?:string; required:boolean; status:string; submissions:Submission[] };
@@ -526,13 +531,15 @@ function CollaborationView({
   item: Collaboration;
   role: "creator" | "business";
 }) {
-  const [contact, setContact] = useState<CollaborationContact>(), [workspace,setWorkspace]=useState<Collaboration>(item),
+  const [contact, setContact] = useState<CollaborationContact>(), [workspace,setWorkspace]=useState<Collaboration>(item), [funding,setFunding]=useState<FundingQuote>(),
     [error, setError] = useState(""), [busy,setBusy]=useState(""), [message,setMessage]=useState<Record<string,string>>({}), [link,setLink]=useState<Record<string,string>>({}), [files,setFiles]=useState<Record<string,File|undefined>>({}), [rating,setRating]=useState(5), [comment,setComment]=useState("");
   const load=()=>api<Collaboration>(role==="creator"?`/creators/me/collaborations/${item.id}/work-items`:`/business/campaign-participants/${item.id}/work-items`).then(setWorkspace).catch(e=>setError(errorText(e)));
-  useEffect(()=>{void load()},[item.id,role]);
+  useEffect(()=>{void load();if(role==="business")void api<FundingQuote[]>("/business/collaboration-payments").then(rows=>setFunding(rows.find(x=>x.campaignParticipantId===item.id))).catch(e=>setError(errorText(e)))},[item.id,role]);
   async function submit(workItemId:string){setBusy(workItemId);setError("");try{const file=files[workItemId];if(file){const data=new FormData();data.append("file",file);data.append("message",message[workItemId]??"");await api(`/creators/me/work-items/${workItemId}/submissions/file`,{method:"POST",body:data});}else{await api(`/creators/me/work-items/${workItemId}/submissions`,{method:"POST",body:JSON.stringify({message:message[workItemId]||undefined,links:link[workItemId]?.trim()?[{name:"Deliverable link",url:link[workItemId].trim()}]:[]})});}setMessage({...message,[workItemId]:""});setLink({...link,[workItemId]:""});await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
   async function act(path:string,body?:unknown){setBusy(path);setError("");try{await api(path,{method:"POST",body:body?JSON.stringify(body):undefined});await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
   async function review(){await act("/reviews",{participantId:item.id,rating,comment:comment||undefined});}
+  async function fund(){if(!funding||!window.confirm(`Fund this collaboration for ${money(funding.grossAmountMinor,funding.currencyCode)}?`))return;setBusy("fund");setError("");try{const result=await api<{checkoutUrl?:string}>(`/business/campaign-participants/${item.id}/payment`,{method:"POST"});if(result.checkoutUrl){window.location.assign(result.checkoutUrl);return;}await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
+  async function cancelUnfunded(){if(!window.confirm("Cancel this unfunded collaboration and release its reserved Campaign slot?"))return;await act(role==="business"?`/business/campaign-participants/${item.id}/cancel-unfunded`:`/creators/me/collaborations/${item.id}/cancel-unfunded`);}
   return (
     <main className="application-shell">
       <header>
@@ -552,6 +559,8 @@ function CollaborationView({
         </p>
       </header>
       {error && <p className="form-error" role="alert">{error}</p>}
+      {workspace.status==="AWAITING_FUNDING"&&<section className="application-panel" aria-label="Funding required"><p className="eyebrow">AWAITING FUNDING</p><h2>{role==="creator"?"You’re hired — waiting for Business funding.":"Fund this collaboration before work begins"}</h2><p>{role==="creator"?"The Business must fund this collaboration before you begin submitting Campaign work through Rivera.":"This collaboration must be funded before Campaign work can be submitted."} Formal work is locked until Rivera verifies payment.</p>{workspace.fundingDueAt&&<p><strong>Funding deadline:</strong> {new Date(workspace.fundingDueAt).toLocaleString()}{workspace.fundingOverdue?" · Overdue":""}</p>}{role==="business"&&funding&&<><dl><dt>Creator compensation</dt><dd>{money(funding.creatorNetMinor,funding.currencyCode)}</dd><dt>Rivera fee</dt><dd>{money(funding.platformFeeMinor,funding.currencyCode)}</dd><dt>Total Business payment</dt><dd>{money(funding.grossAmountMinor,funding.currencyCode)}</dd></dl><div className="dashboard-actions"><button className="button primary" disabled={!!busy||funding.status==="PAYMENT_PENDING"} onClick={()=>void fund()}>{funding.status==="PAYMENT_PENDING"?"Payment processing":"Fund Collaboration"}</button><button className="button secondary" disabled={!!busy} onClick={()=>void cancelUnfunded()}>Cancel unfunded collaboration</button></div></>}{role==="creator"&&workspace.fundingOverdue&&<button className="button secondary" disabled={!!busy} onClick={()=>void cancelUnfunded()}>Cancel overdue unfunded collaboration</button>}</section>}
+      {workspace.status==="ACTIVE"&&workspace.fundingStatus==="FUNDED"&&<section className="application-panel"><p className="eyebrow">FUNDED · WORK UNLOCKED</p><h2>Funding confirmed. Work can now begin.</h2>{role==="creator"&&<p>Complete payout setup before earnings can be released. Funded compensation is not the same as money received.</p>}</section>}
       <section className="application-panel" aria-label="Deliverable progress">
         <p className="eyebrow">WORKSPACE PROGRESS</p>
         <h2>{workspace.progress?.approved??0} of {workspace.progress?.required??0} required items approved</h2>
@@ -565,10 +574,21 @@ function CollaborationView({
             <dd>{money(item.agreedCompensationMinor, item.currencyCode)}</dd>
             <dt>Joined</dt>
             <dd>{new Date(item.joinedAt).toLocaleDateString()}</dd>
+            <dt>Planned start</dt>
+            <dd>{item.offer.startDate?new Date(item.offer.startDate).toLocaleDateString():"As agreed in the conversation"}</dd>
+            <dt>Planned end</dt>
+            <dd>{item.offer.endDate?new Date(item.offer.endDate).toLocaleDateString():"As agreed in the conversation"}</dd>
+            <dt>Delivery deadline</dt>
+            <dd>{item.offer.deliveryDeadline?new Date(item.offer.deliveryDeadline).toLocaleDateString():"No separate deadline"}</dd>
+            <dt>Funding deadline</dt>
+            <dd>{workspace.fundingDueAt?new Date(workspace.fundingDueAt).toLocaleString():"Not applicable"}</dd>
+            <dt>Activated</dt>
+            <dd>{workspace.activatedAt?new Date(workspace.activatedAt).toLocaleString():"Waiting for verified funding"}</dd>
             <dt>Payment status</dt>
-            <dd>Not managed by Rivera</dd>
+            <dd>{statusLabel(workspace.fundingStatus??"NOT_FUNDED")}</dd>
           </dl>
           <h3>Agreed deliverables</h3><p>{item.offer.deliverablesSummary}</p>
+          <h3>Usage rights</h3><p>{item.offer.usageRights || "As agreed in Rivera"}</p>
           <h3>Additional terms</h3>
           <p>{item.offer.additionalTerms || "None"}</p>
           {item.conversationId && (
@@ -629,7 +649,7 @@ function CollaborationView({
             {work.submissions.map(sub=><div key={sub.id} className="privacy-note"><strong>Version {sub.version} · {statusLabel(sub.status)}</strong>{sub.message&&<p>{sub.message}</p>}{sub.revisionNote&&<p><strong>Revision note:</strong> {sub.revisionNote}</p>}<div className="dashboard-actions">{sub.assets.map(asset=>asset.type==="LINK"?<a className="button secondary" key={asset.id} href={asset.url} target="_blank" rel="noreferrer">Open {asset.name}</a>:<a className="button secondary" key={asset.id} href={`${API_URL}/submission-assets/${asset.id}/file`}>Download {asset.name}</a>)}</div>
               {role==="business"&&sub===work.submissions[0]&&sub.status==="SUBMITTED"&&<div className="dashboard-actions"><button className="button primary" disabled={!!busy} onClick={()=>void act(`/business/submissions/${sub.id}/approve`)}>Approve</button><button className="button secondary" disabled={!!busy} onClick={()=>{const note=window.prompt("Describe the required revision (at least 10 characters)");if(note)void act(`/business/submissions/${sub.id}/request-revision`,{note});}}>Request revision</button></div>}
             </div>)}
-            {role==="creator"&&["PENDING","IN_PROGRESS","REVISION_REQUESTED"].includes(work.status)&&<div className="settings-grid"><label className="field">Submission note<textarea rows={3} value={message[work.id]??""} onChange={e=>setMessage({...message,[work.id]:e.target.value})}/></label><label className="field">HTTPS deliverable link<input type="url" placeholder="https://…" value={link[work.id]??""} onChange={e=>setLink({...link,[work.id]:e.target.value})}/></label><label className="field">Or private file (JPG, PNG, WEBP, PDF, MP4)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4" onChange={e=>setFiles({...files,[work.id]:e.target.files?.[0]})}/></label><button className="button primary" disabled={busy===work.id||(!link[work.id]?.trim()&&!files[work.id])} onClick={()=>void submit(work.id)}>Submit new version</button></div>}
+            {role==="creator"&&workspace.canSubmitWork&&["PENDING","IN_PROGRESS","REVISION_REQUESTED"].includes(work.status)&&<div className="settings-grid"><label className="field">Submission note<textarea rows={3} value={message[work.id]??""} onChange={e=>setMessage({...message,[work.id]:e.target.value})}/></label><label className="field">HTTPS deliverable link<input type="url" placeholder="https://…" value={link[work.id]??""} onChange={e=>setLink({...link,[work.id]:e.target.value})}/></label><label className="field">Or private file (JPG, PNG, WEBP, PDF, MP4)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4" onChange={e=>setFiles({...files,[work.id]:e.target.files?.[0]})}/></label><button className="button primary" disabled={busy===work.id||(!link[work.id]?.trim()&&!files[work.id])} onClick={()=>void submit(work.id)}>Submit new version</button></div>}
           </article>)}
         </div>
         {role==="business"&&workspace.status==="ACTIVE"&&<button className="button primary" disabled={!workspace.progress?.readyForCompletion||!!busy} onClick={()=>void act(`/business/campaign-participants/${item.id}/complete`)}>Complete collaboration</button>}
@@ -658,7 +678,8 @@ export function CreatorCollaborations({ id }: { id?: string }) {
       <header>
         <Link href="/dashboard/creator">← Dashboard</Link>
         <p className="eyebrow">HIRED CREATOR WORK</p>
-        <h1>Active Collaborations</h1>
+        <h1>Your Collaborations</h1>
+        <p>Accepted work stays locked until the Business completes funding.</p>
       </header>
       <div className="application-list">
         {items.map((x) => (
@@ -669,6 +690,7 @@ export function CreatorCollaborations({ id }: { id?: string }) {
                 {x.business.name} ·{" "}
                 {money(x.agreedCompensationMinor, x.currencyCode)}
               </p>
+              <p>{statusLabel(x.status)} · {statusLabel(x.fundingStatus??"NOT_FUNDED")}</p>
             </div>
             <Link href={`/dashboard/creator/collaborations/${x.id}`}>
               View Collaboration →
@@ -689,6 +711,8 @@ export function BusinessCollaborations({
   const [data, setData] = useState<{
     items: Collaboration[];
     creatorSlots: number;
+    accepted: number;
+    awaitingFunding: number;
     active: number;
     slotsRemaining: number;
   }>();
@@ -715,8 +739,7 @@ export function BusinessCollaborations({
         <p className="eyebrow">HIRED CREATORS</p>
         <h1>Campaign Collaborations</h1>
         <p>
-          {data?.active ?? 0} hired · {data?.slotsRemaining ?? 0} slots
-          remaining
+          {data?.accepted ?? 0} accepted · {data?.awaitingFunding ?? 0} awaiting funding · {data?.active ?? 0} funded and active · {data?.slotsRemaining ?? 0} slots remaining
         </p>
       </header>
       <div className="application-list">

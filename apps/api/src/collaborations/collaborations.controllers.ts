@@ -97,6 +97,14 @@ export class BusinessCollaborationController {
   ) {
     return this.service.businessParticipants(user.id, campaignId, id);
   }
+  @Post("campaign-participants/:id/cancel-unfunded")
+  @ApiOperation({ summary: "Cancel an owned collaboration before funding" })
+  cancelUnfunded(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+  ) {
+    return this.service.cancelUnfunded(user.id, id, "BUSINESS");
+  }
   @Get("collaboration-summary") summary(@CurrentUser() user: AuthUser) {
     return this.service.dashboard(user.id, "BUSINESS");
   }
@@ -121,11 +129,12 @@ export class CreatorCollaborationController {
   @Post("offers/:id/accept")
   @ApiOperation({
     summary:
-      "Atomically accept an Offer, enforce Campaign capacity, and create the active participant",
+      "Atomically accept an Offer, reserve Campaign capacity, and await Business funding",
   })
   @ApiResponse({
     status: 201,
-    description: "Offer accepted and active CampaignParticipant created.",
+    description:
+      "Offer accepted and AWAITING_FUNDING CampaignParticipant created.",
   })
   @ApiResponse({
     status: 409,
@@ -149,6 +158,16 @@ export class CreatorCollaborationController {
     @Param("id") id: string,
   ) {
     return this.service.creatorCollaborations(user.id, id);
+  }
+  @Post("collaborations/:id/cancel-unfunded")
+  @ApiOperation({
+    summary: "Cancel an unfunded collaboration after its deadline",
+  })
+  cancelUnfunded(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+  ) {
+    return this.service.cancelUnfunded(user.id, id, "CREATOR");
   }
   @Get("collaboration-summary") summary(@CurrentUser() user: AuthUser) {
     return this.service.dashboard(user.id, "CREATOR");

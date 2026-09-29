@@ -126,6 +126,12 @@ const env = z.object({
     .default(30),
   JOBS_ENABLED: z.enum(["true", "false"]).default("false"),
   RECONCILIATION_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
+  COLLABORATION_FUNDING_DEADLINE_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(720)
+    .default(48),
   ERROR_MONITORING_ENABLED: z.enum(["true", "false"]).default("false"),
 });
 function validate(config: Record<string, unknown>) {

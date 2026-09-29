@@ -703,7 +703,10 @@ export class CollaborationsService {
             "This Campaign is not accepting Offer decisions.",
           );
         const hired = await tx.campaignParticipant.count({
-          where: { campaignId: offer.campaignId, status: "ACTIVE" },
+          where: {
+            campaignId: offer.campaignId,
+            status: { in: ["AWAITING_FUNDING", "ACTIVE", "COMPLETED"] },
+          },
         });
         if (hired >= offer.campaign.creatorSlots)
           this.fail(
@@ -712,6 +715,12 @@ export class CollaborationsService {
             "All Creator slots are filled.",
           );
         const acceptedAt = new Date();
+        const fundingDeadlineHours = Number(
+          process.env.COLLABORATION_FUNDING_DEADLINE_HOURS ?? 48,
+        );
+        const fundingDueAt = new Date(
+          acceptedAt.getTime() + fundingDeadlineHours * 60 * 60_000,
+        );
         await tx.collaborationOffer.update({
           where: { id },
           data: { status: "ACCEPTED", acceptedAt },
@@ -727,10 +736,11 @@ export class CollaborationsService {
             businessId: offer.campaign.businessId,
             applicationId: offer.applicationId,
             offerId: id,
-            status: "ACTIVE",
+            status: "AWAITING_FUNDING",
             agreedCompensationMinor: offer.compensationMinor,
             currencyCode: offer.currencyCode,
             joinedAt: acceptedAt,
+            fundingDueAt,
           },
           include: {
             campaign: true,
@@ -779,7 +789,7 @@ export class CollaborationsService {
           await this.system(
             tx,
             created.application.conversation.id,
-            "The Collaboration Offer was accepted. The Creator is now hired.",
+            "The Collaboration Offer was accepted. The collaboration is awaiting Business funding before work can begin.",
           );
         await tx.notification.createMany({
           data: [
@@ -787,9 +797,9 @@ export class CollaborationsService {
               userId: offer.creator.userId,
               creatorId: offer.creatorId,
               applicationId: offer.applicationId,
-              type: "CREATOR_HIRED",
-              title: "Collaboration active",
-              body: `You are now hired for ${offer.campaign.title}.`,
+              type: "COLLABORATION_AWAITING_FUNDING",
+              title: "You're hired — waiting for funding",
+              body: `The Business must fund ${offer.campaign.title} before Campaign work can begin.`,
             },
             {
               userId: offer.campaign.business.userId,
@@ -797,7 +807,7 @@ export class CollaborationsService {
               applicationId: offer.applicationId,
               type: "OFFER_ACCEPTED",
               title: "Offer accepted",
-              body: `${offer.creator.displayName} accepted the Offer for ${offer.campaign.title}.`,
+              body: `${offer.creator.displayName} accepted the Offer for ${offer.campaign.title}. Fund the collaboration by ${fundingDueAt.toISOString()}.`,
             },
             ...(hired + 1 >= offer.campaign.creatorSlots
               ? [
@@ -820,7 +830,7 @@ export class CollaborationsService {
     void this.mail.sendMarketplaceEmail(
       participant.business.user.email,
       "Your Rivera Offer was accepted",
-      `${participant.creator.displayName} accepted the Offer for ${participant.campaign.title}.`,
+      `${participant.creator.displayName} accepted the Offer for ${participant.campaign.title}. Fund the collaboration before Campaign work begins.`,
       participant.business.userId,
       "OFFERS",
     );
@@ -828,10 +838,18 @@ export class CollaborationsService {
   }
 
   private participantDto(p: any) {
+    const paymentStatus = p.collaborationPayment?.status ?? "NOT_FUNDED";
+    const fundingOverdue =
+      p.status === "AWAITING_FUNDING" &&
+      p.fundingDueAt &&
+      new Date(p.fundingDueAt) < new Date();
     return {
       id: p.id,
       status: p.status,
       joinedAt: p.joinedAt,
+      fundingDueAt: p.fundingDueAt,
+      fundingOverdue: Boolean(fundingOverdue),
+      activatedAt: p.activatedAt,
       endedAt: p.endedAt,
       agreedCompensationMinor: p.agreedCompensationMinor,
       currencyCode: p.currencyCode,
@@ -856,7 +874,11 @@ export class CollaborationsService {
       },
       offer: { ...p.offer },
       conversationId: p.application?.conversation?.id ?? null,
-      paymentNotice: "Payment status: Not managed by Rivera",
+      fundingStatus: paymentStatus,
+      paymentNotice:
+        paymentStatus === "FUNDED"
+          ? "Funded — work can begin. Creator payout is released only after approved completion."
+          : "The Business must fund this collaboration before the Creator submits Campaign work through Rivera.",
     };
   }
   private participantInclude() {
@@ -866,6 +888,9 @@ export class CollaborationsService {
       business: true,
       offer: true,
       application: { include: { conversation: true } },
+      collaborationPayment: {
+        select: { id: true, status: true, fundedAt: true },
+      },
     } as const;
   }
   async creatorCollaborations(userId: string, id?: string) {
@@ -929,13 +954,124 @@ export class CollaborationsService {
     return {
       items: items.map((x) => this.participantDto(x)),
       creatorSlots: campaign.creatorSlots,
+      accepted: items.filter((x) => x.status !== "CANCELLED").length,
+      awaitingFunding: items.filter(
+        (x) => x.status === "AWAITING_FUNDING",
+      ).length,
       active: items.filter((x) => x.status === "ACTIVE").length,
       slotsRemaining: Math.max(
         0,
         campaign.creatorSlots -
-          items.filter((x) => x.status === "ACTIVE").length,
+          items.filter((x) =>
+            ["AWAITING_FUNDING", "ACTIVE", "COMPLETED"].includes(x.status),
+          ).length,
       ),
     };
+  }
+  async cancelUnfunded(
+    userId: string,
+    id: string,
+    role: "CREATOR" | "BUSINESS",
+  ) {
+    const participant = await this.db.campaignParticipant.findFirst({
+      where: {
+        id,
+        ...(role === "CREATOR"
+          ? { creator: { userId } }
+          : { business: { userId } }),
+      },
+      include: {
+        creator: { include: { user: true } },
+        business: { include: { user: true } },
+        campaign: true,
+        collaborationPayment: true,
+        application: { include: { conversation: true } },
+      },
+    });
+    if (!participant)
+      this.fail(
+        HttpStatus.FORBIDDEN,
+        "COLLABORATION_CANCELLATION_DENIED",
+        "Only this collaboration's Creator or Business can cancel it.",
+      );
+    if (participant.status !== "AWAITING_FUNDING")
+      this.fail(
+        HttpStatus.CONFLICT,
+        "COLLABORATION_NOT_AWAITING_FUNDING",
+        "Only an unfunded collaboration can be cancelled here.",
+      );
+    if (
+      participant.collaborationPayment &&
+      !["NOT_FUNDED", "FAILED", "CANCELLED"].includes(
+        participant.collaborationPayment.status,
+      )
+    )
+      this.fail(
+        HttpStatus.CONFLICT,
+        "COLLABORATION_FUNDING_IN_PROGRESS",
+        "This collaboration cannot be cancelled while funding is processing or confirmed.",
+      );
+    if (
+      role === "CREATOR" &&
+      (!participant.fundingDueAt || participant.fundingDueAt > new Date())
+    )
+      this.fail(
+        HttpStatus.CONFLICT,
+        "FUNDING_DEADLINE_NOT_PASSED",
+        "The Creator can cancel after the Business funding deadline passes.",
+      );
+    const now = new Date();
+    return this.db.$transaction(async (tx) => {
+      const cancelled = await tx.campaignParticipant.updateMany({
+        where: { id, status: "AWAITING_FUNDING" },
+        data: { status: "CANCELLED", endedAt: now },
+      });
+      if (!cancelled.count)
+        this.fail(
+          HttpStatus.CONFLICT,
+          "COLLABORATION_STATE_CHANGED",
+          "The collaboration changed while cancellation was being processed.",
+        );
+      if (participant.collaborationPayment)
+        await tx.collaborationPayment.updateMany({
+          where: {
+            id: participant.collaborationPayment.id,
+            fundedAt: null,
+            status: { in: ["NOT_FUNDED", "FAILED", "CANCELLED"] },
+          },
+          data: { status: "CANCELLED" },
+        });
+      await tx.applicationAuditLog.create({
+        data: {
+          applicationId: participant.applicationId,
+          actorUserId: userId,
+          action: "COLLABORATION_CANCELLED_UNFUNDED",
+          metadata: { participantId: id, role },
+        },
+      });
+      const other =
+        role === "CREATOR"
+          ? participant.business.user
+          : participant.creator.user;
+      await tx.notification.create({
+        data: {
+          userId: other.id,
+          creatorId: role === "BUSINESS" ? participant.creatorId : null,
+          businessId: role === "CREATOR" ? participant.businessId : null,
+          applicationId: participant.applicationId,
+          type: "COLLABORATION_CANCELLED_UNFUNDED",
+          title: "Unfunded collaboration cancelled",
+          body: `The unfunded collaboration for ${participant.campaign.title} was cancelled.`,
+        },
+      });
+      if (participant.application.conversation)
+        await this.system(
+          tx,
+          participant.application.conversation.id,
+          "The unfunded collaboration was cancelled. No Campaign work or Creator payout is due.",
+        );
+      return tx.campaignParticipant.findUniqueOrThrow({ where: { id } });
+    });
   }
   async contact(userId: string, id: string) {
     const item = await this.db.campaignParticipant.findFirst({
@@ -964,7 +1100,7 @@ export class CollaborationsService {
         preferredContactMethod: item.business.preferredContactMethod,
       },
       safetyNotice:
-        "Rivera does not currently process Creator campaign payments. Never share passwords or verification codes, and be cautious with requests for unusual upfront payments.",
+        "Funding and payout are separate Rivera states. Never share passwords, verification codes, card details or bank credentials in messages.",
     };
   }
   async dashboard(userId: string, role: "CREATOR" | "BUSINESS") {
@@ -973,12 +1109,16 @@ export class CollaborationsService {
         where: { userId },
       });
       if (!creator) return {};
-      const [shortlisted, offers, active, unread] = await Promise.all([
+      const [shortlisted, offers, awaitingFunding, active, unread] =
+        await Promise.all([
         this.db.campaignApplication.count({
           where: { creatorId: creator.id, status: "SHORTLISTED" },
         }),
         this.db.collaborationOffer.count({
           where: { creatorId: creator.id, status: "SENT" },
+        }),
+        this.db.campaignParticipant.count({
+          where: { creatorId: creator.id, status: "AWAITING_FUNDING" },
         }),
         this.db.campaignParticipant.count({
           where: { creatorId: creator.id, status: "ACTIVE" },
@@ -994,6 +1134,7 @@ export class CollaborationsService {
       return {
         shortlisted,
         offersReceived: offers,
+        awaitingFunding,
         activeCollaborations: active,
         recentMessages: unread,
       };
@@ -1002,7 +1143,8 @@ export class CollaborationsService {
       where: { userId },
     });
     if (!business) return {};
-    const [shortlisted, offers, hired, slots] = await Promise.all([
+    const [shortlisted, offers, awaitingFunding, active, hired, slots] =
+      await Promise.all([
       this.db.campaignApplication.count({
         where: { campaign: { businessId: business.id }, status: "SHORTLISTED" },
       }),
@@ -1010,7 +1152,16 @@ export class CollaborationsService {
         where: { businessId: business.id, status: "SENT" },
       }),
       this.db.campaignParticipant.count({
+        where: { businessId: business.id, status: "AWAITING_FUNDING" },
+      }),
+      this.db.campaignParticipant.count({
         where: { businessId: business.id, status: "ACTIVE" },
+      }),
+      this.db.campaignParticipant.count({
+        where: {
+          businessId: business.id,
+          status: { in: ["AWAITING_FUNDING", "ACTIVE", "COMPLETED"] },
+        },
       }),
       this.db.campaign.aggregate({
         where: {
@@ -1023,6 +1174,8 @@ export class CollaborationsService {
     return {
       shortlisted,
       offersSent: offers,
+      awaitingFunding,
+      fundedCreators: active,
       creatorsHired: hired,
       slotsRemaining: Math.max(0, (slots._sum.creatorSlots ?? 0) - hired),
     };

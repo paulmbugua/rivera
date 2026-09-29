@@ -7,7 +7,7 @@ import {
   Post,
   UseGuards,
 } from "@nestjs/common";
-import { ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { AuthGuard, AuthUser, Roles } from "../auth/guard";
@@ -34,6 +34,13 @@ export class CreatorPayoutController {
   @ApiOperation({
     summary: "Create or continue Stripe-hosted Connect onboarding",
   })
+  @ApiResponse({
+    status: 201,
+    description:
+      "Provider-hosted checkout for the server-calculated Creator compensation plus Rivera fee.",
+  })
+  @ApiResponse({ status: 403, description: "COLLABORATION_PAYMENT_ACCESS_DENIED" })
+  @ApiResponse({ status: 409, description: "COLLABORATION_NOT_AWAITING_FUNDING" })
   onboard(@CurrentUser() u: AuthUser) {
     return this.service.onboard(u.id);
   }

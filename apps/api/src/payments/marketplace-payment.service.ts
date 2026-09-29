@@ -60,10 +60,7 @@ export class MarketplacePaymentService {
           process.env.MARKETPLACE_SERVICE_FEE_FIXED_MINOR ??
           0,
       ),
-      policy:
-        values.MARKETPLACE_SERVICE_FEE_POLICY ??
-        process.env.MARKETPLACE_SERVICE_FEE_POLICY ??
-        "BUSINESS_PAYS_ON_TOP",
+      policy: "BUSINESS_PAYS_ON_TOP",
     };
   }
   async updateFeeSettings(dto: FeeSettingsDto) {
@@ -71,7 +68,7 @@ export class MarketplacePaymentService {
       Object.entries({
         MARKETPLACE_SERVICE_FEE_BPS: String(dto.basisPoints),
         MARKETPLACE_SERVICE_FEE_FIXED_MINOR: String(dto.fixedMinor),
-        MARKETPLACE_SERVICE_FEE_POLICY: dto.policy ?? "BUSINESS_PAYS_ON_TOP",
+        MARKETPLACE_SERVICE_FEE_POLICY: "BUSINESS_PAYS_ON_TOP",
       }).map(([key, value]) =>
         this.db.platformSetting.upsert({
           where: { key },
@@ -89,12 +86,6 @@ export class MarketplacePaymentService {
     const fee =
       Math.floor((compensation * settings.basisPoints + 9999) / 10000) +
       settings.fixedMinor;
-    if (settings.policy === "DEDUCT_FROM_CREATOR")
-      return {
-        grossAmountMinor: compensation,
-        platformFeeMinor: fee,
-        creatorNetMinor: compensation - fee,
-      };
     return {
       grossAmountMinor: compensation + fee,
       platformFeeMinor: fee,
@@ -213,11 +204,11 @@ export class MarketplacePaymentService {
   }
   async fund(userId: string, participantId: string) {
     const p = await this.ownedParticipant(userId, participantId);
-    if (p.status !== "ACTIVE")
+    if (p.status !== "AWAITING_FUNDING")
       this.fail(
         HttpStatus.CONFLICT,
-        "COLLABORATION_NOT_ACTIVE",
-        "Only an active collaboration can be funded.",
+        "COLLABORATION_NOT_AWAITING_FUNDING",
+        "Only a collaboration awaiting Business funding can be funded.",
       );
     const settings = await this.feeSettings(),
       money = this.calculate(p.agreedCompensationMinor, settings);
@@ -253,6 +244,7 @@ export class MarketplacePaymentService {
       amountMinor: money.grossAmountMinor,
       currencyCode: p.currencyCode,
       expiresAt: new Date(Date.now() + 30 * 60_000),
+      attemptKey: payment.updatedAt.getTime().toString(36),
     });
     const updated = await this.db.collaborationPayment.update({
       where: { id: payment.id },
@@ -291,6 +283,8 @@ export class MarketplacePaymentService {
       releasedAmountMinor: x.releasedAmountMinor,
       currencyCode: x.currencyCode,
       status: x.status,
+      participantStatus: x.campaignParticipant?.status,
+      fundingDueAt: x.campaignParticipant?.fundingDueAt,
       fundedAt: x.fundedAt,
       eligibleForReleaseAt: x.eligibleForReleaseAt,
       releasedAt: x.releasedAt,
@@ -305,7 +299,10 @@ export class MarketplacePaymentService {
   async businessPayments(userId: string) {
     const settings = await this.feeSettings();
     const participants = await this.db.campaignParticipant.findMany({
-      where: { business: { userId }, status: { in: ["ACTIVE", "COMPLETED"] } },
+      where: {
+        business: { userId },
+        status: { in: ["AWAITING_FUNDING", "ACTIVE", "COMPLETED"] },
+      },
       include: {
         campaign: { select: { title: true, slug: true } },
         creator: { select: { displayName: true, slug: true } },
@@ -322,6 +319,7 @@ export class MarketplacePaymentService {
           campaign: p.campaign,
           creator: p.creator,
           business: p.business,
+          campaignParticipant: p,
         });
       return {
         campaignParticipantId: p.id,
@@ -331,6 +329,8 @@ export class MarketplacePaymentService {
         releasedAmountMinor: 0,
         currencyCode: p.currencyCode,
         status: "NOT_FUNDED",
+        participantStatus: p.status,
+        fundingDueAt: p.fundingDueAt,
         campaign: p.campaign,
         creator: p.creator,
         business: p.business,
@@ -784,10 +784,7 @@ export class MarketplacePaymentService {
           state.paymentId,
         );
       else if (state.status === "failed")
-        await this.db.collaborationPayment.update({
-          where: { id },
-          data: { status: "FAILED" },
-        });
+        await this.markFundingFailed(id);
     }
     for (const transfer of payment.transfers.filter(
       (x) => x.status === "PENDING",
@@ -834,12 +831,13 @@ export class MarketplacePaymentService {
           include: {
             creator: { include: { user: true } },
             business: { include: { user: true } },
+            application: { include: { conversation: true } },
           },
         },
       },
     });
     if (!payment) return;
-    if (payment.status === "FUNDED") return;
+    if (payment.fundedAt) return;
     if (
       amount !== payment.grossAmountMinor ||
       currency.toUpperCase() !== payment.currencyCode
@@ -852,9 +850,9 @@ export class MarketplacePaymentService {
         "Provider payment does not match the expected amount and currency.",
       );
     const now = new Date();
-    await this.db.$transaction([
-      this.db.collaborationPayment.update({
-        where: { id },
+    await this.db.$transaction(async (tx) => {
+      const funded = await tx.collaborationPayment.updateMany({
+        where: { id, fundedAt: null },
         data: {
           status: "FUNDED",
           fundedAmountMinor: amount,
@@ -862,28 +860,109 @@ export class MarketplacePaymentService {
           providerPaymentIntentId:
             paymentIntentId ?? payment.providerPaymentIntentId,
         },
-      }),
-      this.db.notification.create({
+      });
+      if (!funded.count) return;
+      const activated = await tx.campaignParticipant.updateMany({
+        where: { id: payment.campaignParticipantId, status: "AWAITING_FUNDING" },
+        data: { status: "ACTIVE", activatedAt: now },
+      });
+      if (!activated.count)
+        this.fail(
+          HttpStatus.CONFLICT,
+          "COLLABORATION_NOT_AWAITING_FUNDING",
+          "Only a collaboration awaiting funding can be activated.",
+        );
+      await tx.notification.createMany({
+        data: [
+          {
+            userId: payment.campaignParticipant.creator.userId,
+            creatorId: payment.creatorId,
+            applicationId: payment.campaignParticipant.applicationId,
+            type: "COLLABORATION_FUNDED",
+            title: "Your collaboration has been funded",
+            body: "Funding is confirmed. Work can now begin.",
+          },
+          {
+            userId: payment.campaignParticipant.business.userId,
+            businessId: payment.businessId,
+            applicationId: payment.campaignParticipant.applicationId,
+            type: "COLLABORATION_FUNDED",
+            title: "Collaboration funded successfully",
+            body: "The collaboration is active. Creator payout remains locked until approved completion.",
+          },
+        ],
+      });
+      const conversation =
+        payment.campaignParticipant.application.conversation;
+      if (conversation) {
+        await tx.message.create({
+          data: {
+            conversationId: conversation.id,
+            type: "SYSTEM",
+            content:
+              "The Business has funded this collaboration. Work can now begin.",
+          },
+        });
+        await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { lastMessageAt: now },
+        });
+      }
+      await tx.applicationAuditLog.create({
         data: {
-          userId: payment.campaignParticipant.creator.userId,
-          creatorId: payment.creatorId,
           applicationId: payment.campaignParticipant.applicationId,
-          type: "COLLABORATION_FUNDED",
-          title: "Collaboration funded",
-          body: "The collaboration is funded and pending release after approved completion.",
+          actorUserId: payment.campaignParticipant.business.userId,
+          action: "COLLABORATION_FUNDED_AND_ACTIVATED",
+          metadata: {
+            participantId: payment.campaignParticipantId,
+            paymentId: payment.id,
+            amountMinor: amount,
+            currencyCode: currency.toUpperCase(),
+          },
         },
-      }),
-      this.db.notification.create({
-        data: {
-          userId: payment.campaignParticipant.business.userId,
-          businessId: payment.businessId,
-          applicationId: payment.campaignParticipant.applicationId,
-          type: "COLLABORATION_FUNDED",
-          title: "Collaboration funded",
-          body: "Funding is confirmed. Release remains pending until the collaboration is completed.",
+      });
+    });
+  }
+  private async markFundingFailed(id: string) {
+    const payment = await this.db.collaborationPayment.findUnique({
+      where: { id },
+      include: {
+        campaignParticipant: {
+          include: {
+            creator: { include: { user: true } },
+            business: { include: { user: true } },
+          },
         },
-      }),
-    ]);
+      },
+    });
+    if (!payment || payment.fundedAt || payment.status === "FAILED") return;
+    await this.db.$transaction(async (tx) => {
+      const failed = await tx.collaborationPayment.updateMany({
+        where: { id, fundedAt: null, status: { not: "FAILED" } },
+        data: { status: "FAILED" },
+      });
+      if (!failed.count) return;
+      await tx.notification.createMany({
+        data: [
+          {
+            userId: payment.campaignParticipant.business.userId,
+            businessId: payment.businessId,
+            applicationId: payment.campaignParticipant.applicationId,
+            type: "FUNDING_FAILED",
+            title: "Funding attempt failed",
+            body: "The collaboration remains inactive. Try funding it again.",
+          },
+          {
+            userId: payment.campaignParticipant.creator.userId,
+            creatorId: payment.creatorId,
+            applicationId: payment.campaignParticipant.applicationId,
+            type: "FUNDING_FAILED",
+            title: "Collaboration funding was not completed",
+            body: "The collaboration remains awaiting Business funding. Do not begin formal work yet.",
+          },
+        ],
+      });
+    });
   }
   private async applyTransferState(
     id: string,
@@ -1035,10 +1114,7 @@ export class MarketplacePaymentService {
         event.type === "payment_intent.payment_failed") &&
       id
     ) {
-      await this.db.collaborationPayment.update({
-        where: { id },
-        data: { status: "FAILED" },
-      });
+      await this.markFundingFailed(id);
       return true;
     }
     if (event.type === "refund.updated" && typeof o.id === "string") {
