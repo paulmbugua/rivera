@@ -201,13 +201,28 @@ async function seedPhase7() {
   await db.businessProfile.update({where:{id:campaign.businessId},data:{averageRating:4,ratingCount:1}});
 }
 
+async function seedPhase8() {
+  const creators=await db.creatorProfile.findMany({take:2,orderBy:{createdAt:'asc'}});
+  for (const [index,creator] of creators.entries()) await db.creatorPayoutAccount.upsert({where:{creatorId:creator.id},create:{creatorId:creator.id,providerAccountId:`acct_test_rivera_${index+1}`,countryCode:creator.country,defaultCurrencyCode:creator.minimumRateCurrency??'USD',onboardingStatus:index?'RESTRICTED':'ACTIVE',chargesEnabled:!index,payoutsEnabled:!index,detailsSubmitted:!index,requirementsDueJson:index?['external_account']:[],lastSyncedAt:new Date()},update:{onboardingStatus:index?'RESTRICTED':'ACTIVE',chargesEnabled:!index,payoutsEnabled:!index,detailsSubmitted:!index,requirementsDueJson:index?['external_account']:[],lastSyncedAt:new Date()}});
+  for(const [key,value] of Object.entries({MARKETPLACE_SERVICE_FEE_BPS:'1000',MARKETPLACE_SERVICE_FEE_FIXED_MINOR:'0',MARKETPLACE_SERVICE_FEE_POLICY:'BUSINESS_PAYS_ON_TOP'}))await db.platformSetting.upsert({where:{key},create:{key,value},update:{}});
+  const participants=await db.campaignParticipant.findMany({include:{business:true},orderBy:{createdAt:'asc'}});
+  const statuses=['PAYMENT_PENDING','FUNDED','SETTLED','FAILED','REFUNDED'] as const;
+  for(const [index,p] of participants.entries()){
+    const fee=Math.floor((p.agreedCompensationMinor*1000+9999)/10000),status=statuses[index%statuses.length],funded=['FUNDED','SETTLED','REFUNDED'].includes(status)?p.agreedCompensationMinor+fee:0,released=status==='SETTLED'?p.agreedCompensationMinor:0,refunded=status==='REFUNDED'?funded:0;
+    const payment=await db.collaborationPayment.upsert({where:{campaignParticipantId:p.id},create:{campaignParticipantId:p.id,campaignId:p.campaignId,businessId:p.businessId,creatorId:p.creatorId,providerPaymentIntentId:`pi_test_rivera_${index+1}`,providerCheckoutSessionId:`cs_test_rivera_${index+1}`,grossAmountMinor:p.agreedCompensationMinor+fee,currencyCode:p.currencyCode,platformFeeMinor:fee,creatorNetMinor:p.agreedCompensationMinor,fundedAmountMinor:funded,releasedAmountMinor:released,refundedAmountMinor:refunded,status,fundedAt:funded?new Date():null,eligibleForReleaseAt:status==='FUNDED'&&p.status==='COMPLETED'?new Date():null,releasedAt:released?new Date():null,settledAt:status==='SETTLED'?new Date():null},update:{grossAmountMinor:p.agreedCompensationMinor+fee,platformFeeMinor:fee,creatorNetMinor:p.agreedCompensationMinor,currencyCode:p.currencyCode,status,fundedAmountMinor:funded,releasedAmountMinor:released,refundedAmountMinor:refunded}});
+    if(status==='SETTLED')await db.creatorTransfer.upsert({where:{providerTransferId:`tr_test_rivera_${index+1}`},create:{collaborationPaymentId:payment.id,creatorId:p.creatorId,providerTransferId:`tr_test_rivera_${index+1}`,amountMinor:p.agreedCompensationMinor,currencyCode:p.currencyCode,status:'SUCCEEDED',releasedAt:new Date(),settledAt:new Date()},update:{status:'SUCCEEDED'}});
+    if(status==='REFUNDED')await db.collaborationRefund.upsert({where:{providerRefundId:`re_test_rivera_${index+1}`},create:{collaborationPaymentId:payment.id,providerRefundId:`re_test_rivera_${index+1}`,amountMinor:funded,currencyCode:p.currencyCode,reason:'Synthetic Phase 8 development refund.',status:'SUCCEEDED',requestedByUserId:p.business.userId,completedAt:new Date()},update:{status:'SUCCEEDED'}});
+  }
+  const first=participants[0];if(first&&!await db.paymentIssue.findFirst({where:{campaignParticipantId:first.id,type:'PAYMENT_NOT_RELEASED'}}))await db.paymentIssue.create({data:{campaignParticipantId:first.id,collaborationPaymentId:(await db.collaborationPayment.findUnique({where:{campaignParticipantId:first.id}}))?.id,openedByUserId:first.business.userId,type:'PAYMENT_NOT_RELEASED',description:'Synthetic Phase 8 open payment issue for Admin workflow testing.'}});
+}
+
 async function main() {
   if (!demoPassword) throw new Error('Seed passwords are required outside development.');
   await seedTaxonomy();
   const admin = await seedUser({ email: process.env.ADMIN_SEED_EMAIL ?? (development ? 'admin@rivera.local' : undefined), password: process.env.ADMIN_SEED_PASSWORD ?? demoPassword, firstName: 'Rivera', lastName: 'Admin', role: 'ADMIN' });
-  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications(); await seedCollaborations(); await seedPhase7();
+  await seedBusinesses(); await seedCreators(); await seedCampaigns(); await seedApplications(); await seedCollaborations(); await seedPhase7(); await seedPhase8();
   const pendingCreator = await db.creatorProfile.findFirst({ where: { verificationStatus: 'UNVERIFIED', profileVisibility: 'PUBLIC' } });
   if (pendingCreator && !await db.verificationRequest.findFirst({ where: { creatorProfileId: pendingCreator.id, status: 'PENDING' } })) await db.$transaction([db.creatorProfile.update({ where: { id: pendingCreator.id }, data: { verificationStatus: 'PENDING' } }), db.verificationRequest.create({ data: { userId: pendingCreator.userId, profileType: 'CREATOR', creatorProfileId: pendingCreator.id, noteFromUser: 'Synthetic development verification request.' } })]);
-  console.log(`Phase 7 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, workspaces, submissions, completion, and mutual reviews ready.`);
+  console.log(`Phase 8 seed complete: admin=${Boolean(admin)}, businesses=3, creators=${creatorFixtures.length}, campaigns=12, workspaces, reviews, payout accounts, collaboration payments, transfers, refunds, and issues ready.`);
 }
 main().finally(() => db.$disconnect());

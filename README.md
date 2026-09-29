@@ -1,5 +1,15 @@
 # Rivera
 
+## Phase 8 — funded collaborations and Creator payouts
+
+Rivera now keeps application fees, Creator compensation and marketplace service fees as separate financial records. Businesses fund accepted collaborations through provider-hosted Stripe Checkout; only verified webhook or reconciliation results mark them funded. The default service fee is 10% paid on top by the Business and is snapshotted before checkout.
+
+Creators use Stripe Connect Express-style hosted onboarding from `/dashboard/creator/payouts`. Completed collaborations with every required work item approved can be released once to a provider-verified payout account. Transfers, refunds, disputes, reconciliation and payment issues preserve immutable provider references and audit history. The UI distinguishes funded, released and settled funds and never calls this legal escrow.
+
+Financial routes include `/dashboard/business/payments`, `/dashboard/creator/earnings`, `/dashboard/creator/payouts`, and Admin views under `/admin/collaboration-payments`, `/admin/transfers`, `/admin/refunds`, `/admin/payment-issues` and `/admin/payout-accounts`. Development seed references use obvious `*_test_rivera_*` values and never contact Stripe.
+
+Configure `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` with Stripe test-mode values for real hosted onboarding and checkout. Marketplace defaults are controlled by `MARKETPLACE_SERVICE_FEE_BPS`, `MARKETPLACE_SERVICE_FEE_FIXED_MINOR` and `MARKETPLACE_SERVICE_FEE_POLICY`; Admin updates affect only future payment snapshots. Manual Business release is the Phase 8 default.
+
 ## Phase 7 — campaign workspaces, deliverables, completion and reviews
 
 An accepted Offer now creates an operational workspace rooted in its `CampaignParticipant`. Structured Campaign deliverables become required Work Items without changing the accepted compensation or Offer snapshot. The hired Creator can submit HTTPS links or private JPEG, PNG, WEBP, PDF and MP4 files; every resubmission creates an immutable numbered version. The Campaign-owning Business can approve only the latest submitted version or request a revision with a useful note.

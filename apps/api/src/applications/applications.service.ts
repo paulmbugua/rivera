@@ -19,6 +19,7 @@ import {
   ProviderPayment,
   VerifiedWebhook,
 } from "./payment.provider";
+import { MarketplacePaymentService } from "../payments/marketplace-payment.service";
 
 const creatorProfileInclude = {
   categories: { include: { category: true } },
@@ -69,6 +70,7 @@ export class ApplicationsService {
     private fees: ApplicationFeeService,
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProviderAdapter,
     private mail: MailService,
+    private marketplacePayments: MarketplacePaymentService,
   ) {}
   private fail(status: HttpStatus, code: string, message: string): never {
     throw new ApiException(status, code, message);
@@ -1163,7 +1165,8 @@ export class ApplicationsService {
       throw error;
     }
     try {
-      await this.processWebhook(event);
+      const marketplaceHandled = await this.marketplacePayments.processWebhook(event);
+      if (!marketplaceHandled) await this.processWebhook(event);
       await this.db.paymentWebhookEvent.update({
         where: {
           provider_providerEventId: {

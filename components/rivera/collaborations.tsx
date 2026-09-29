@@ -72,7 +72,7 @@ type Submission = { id:string; version:number; status:string; message?:string; r
 type WorkItem = { id:string; title:string; description?:string; quantity:number; dueDate?:string; required:boolean; status:string; submissions:Submission[] };
 type CollaborationContact={creator:{professionalContactEmail?:string;professionalPhone?:string;preferredContactMethod:string};business:{businessEmail?:string;businessPhone?:string;preferredContactMethod:string}};
 const safety =
-  "Rivera does not currently process Creator campaign payments. Never share passwords or verification codes, and be cautious with requests for unusual upfront payments.";
+  "Rivera funding, release and payout status is shown in your financial dashboard. Never share passwords, verification codes, card details or bank credentials in messages.";
 
 export function Messages({ role }: { role: "creator" | "business" }) {
   const [items, setItems] = useState<Conversation[]>([]),

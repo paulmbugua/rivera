@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import test from 'node:test';const finance=readFileSync(new URL('../components/rivera/financial.tsx',import.meta.url),'utf8'),dashboard=readFileSync(new URL('../components/rivera/dashboard.tsx',import.meta.url),'utf8');
+test('Business UI separates compensation fee total and release',()=>{for(const x of ['Creator compensation','Rivera fee','Total Business payment','Release Creator payment'])assert.match(finance,new RegExp(x));});
+test('Creator UI distinguishes earnings payout readiness and released funds',()=>{for(const x of ['Creator earnings','PAYOUT READINESS','released','Set up payouts'])assert.match(finance,new RegExp(x));});
+test('money actions require explicit confirmation',()=>assert.match(finance,/window\.confirm/));
+test('navigation separates application fees and collaboration finance',()=>{assert.match(dashboard,/Application Fee Payments/);assert.match(dashboard,/Collaboration Payments/);assert.match(dashboard,/Payout Accounts/);});

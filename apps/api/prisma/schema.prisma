@@ -201,6 +201,52 @@ enum PaymentRefundReason {
   OTHER
 }
 
+enum PayoutAccountStatus {
+  NOT_STARTED
+  PENDING
+  RESTRICTED
+  ACTIVE
+  DISABLED
+}
+
+enum CollaborationPaymentStatus {
+  NOT_FUNDED
+  PAYMENT_PENDING
+  FUNDED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  RELEASE_PENDING
+  RELEASED
+  PAYOUT_PENDING
+  SETTLED
+  FAILED
+  CANCELLED
+}
+
+enum CreatorTransferStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REVERSED
+}
+
+enum PaymentIssueType {
+  PAYMENT_NOT_RELEASED
+  WORK_NOT_COMPLETED
+  UNAUTHORIZED_CHARGE
+  REFUND_REQUEST
+  CREATOR_PAYOUT_PROBLEM
+  PROVIDER_DISPUTE
+  OTHER
+}
+
+enum PaymentIssueStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
 enum ProfileVisibility {
   PUBLIC
   UNLISTED
@@ -266,36 +312,39 @@ enum VerificationRequestStatus {
 }
 
 model User {
-  id                      String                    @id @default(cuid())
-  email                   String                    @unique
-  passwordHash            String
-  firstName               String
-  lastName                String
-  phone                   String?
-  countryCode             String?
-  city                    String?
-  profileImageUrl         String?
-  status                  UserStatus                @default(PENDING_VERIFICATION)
-  emailVerifiedAt         DateTime?
-  lastLoginAt             DateTime?
-  deletedAt               DateTime?
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  roles                   UserRoleAssignment[]
-  sessions                RefreshSession[]
-  verificationTokens      EmailVerificationToken[]
-  resetTokens             PasswordResetToken[]
-  business                BusinessProfile?
-  creator                 CreatorProfile?
-  verificationRequests    VerificationRequest[]     @relation("VerificationOwner")
-  verificationReviews     VerificationRequest[]     @relation("VerificationReviewer")
-  notifications           Notification[]
-  conversationMemberships ConversationParticipant[]
-  messages                Message[]
-  deliverableReviews      DeliverableSubmission[]   @relation("SubmissionReviewer")
-  reviewsGiven            Review[]                  @relation("ReviewAuthor")
-  reviewsReceived         Review[]                  @relation("ReviewSubject")
-  reviewReports           ReviewReport[]
+  id                            String                    @id @default(cuid())
+  email                         String                    @unique
+  passwordHash                  String
+  firstName                     String
+  lastName                      String
+  phone                         String?
+  countryCode                   String?
+  city                          String?
+  profileImageUrl               String?
+  status                        UserStatus                @default(PENDING_VERIFICATION)
+  emailVerifiedAt               DateTime?
+  lastLoginAt                   DateTime?
+  deletedAt                     DateTime?
+  createdAt                     DateTime                  @default(now())
+  updatedAt                     DateTime                  @updatedAt
+  roles                         UserRoleAssignment[]
+  sessions                      RefreshSession[]
+  verificationTokens            EmailVerificationToken[]
+  resetTokens                   PasswordResetToken[]
+  business                      BusinessProfile?
+  creator                       CreatorProfile?
+  verificationRequests          VerificationRequest[]     @relation("VerificationOwner")
+  verificationReviews           VerificationRequest[]     @relation("VerificationReviewer")
+  notifications                 Notification[]
+  conversationMemberships       ConversationParticipant[]
+  messages                      Message[]
+  deliverableReviews            DeliverableSubmission[]   @relation("SubmissionReviewer")
+  reviewsGiven                  Review[]                  @relation("ReviewAuthor")
+  reviewsReceived               Review[]                  @relation("ReviewSubject")
+  reviewReports                 ReviewReport[]
+  paymentIssuesOpened           PaymentIssue[]            @relation("PaymentIssueOpener")
+  collaborationRefundsRequested CollaborationRefund[]     @relation("CollaborationRefundRequester")
+  collaborationRefundsApproved  CollaborationRefund[]     @relation("CollaborationRefundApprover")
 }
 
 model UserRoleAssignment {
@@ -385,6 +434,7 @@ model BusinessProfile {
   collaborationOffers      CollaborationOffer[]
   campaignParticipants     CampaignParticipant[]
   workItems                CampaignWorkItem[]
+  collaborationPayments    CollaborationPayment[]
 
   @@index([country])
   @@index([industryId])
@@ -441,6 +491,9 @@ model CreatorProfile {
   campaignParticipants     CampaignParticipant[]
   workItems                CampaignWorkItem[]
   submissions              DeliverableSubmission[]
+  payoutAccount            CreatorPayoutAccount?
+  collaborationPayments    CollaborationPayment[]
+  creatorTransfers         CreatorTransfer[]
 
   @@index([country])
   @@index([profileVisibility, verificationStatus])
@@ -644,6 +697,7 @@ model Campaign {
   workItems                   CampaignWorkItem[]
   submissions                 DeliverableSubmission[]
   reviews                     Review[]
+  collaborationPayments       CollaborationPayment[]
 
   @@index([status])
   @@index([visibility])
@@ -905,6 +959,8 @@ model CampaignParticipant {
   workItems               CampaignWorkItem[]
   submissions             DeliverableSubmission[]
   reviews                 Review[]
+  collaborationPayment    CollaborationPayment?
+  paymentIssues           PaymentIssue[]
 
   @@unique([campaignId, creatorId])
   @@index([campaignId, status])
@@ -1020,6 +1076,131 @@ model ReviewReport {
 
   @@unique([reviewId, reporterId])
   @@index([status, createdAt])
+}
+
+model CreatorPayoutAccount {
+  id                  String              @id @default(cuid())
+  creatorId           String              @unique
+  creator             CreatorProfile      @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  provider            PaymentProvider     @default(STRIPE)
+  providerAccountId   String              @unique
+  countryCode         String              @db.VarChar(2)
+  defaultCurrencyCode String?             @db.VarChar(3)
+  onboardingStatus    PayoutAccountStatus @default(PENDING)
+  chargesEnabled      Boolean             @default(false)
+  payoutsEnabled      Boolean             @default(false)
+  detailsSubmitted    Boolean             @default(false)
+  requirementsDueJson Json?
+  lastSyncedAt        DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([onboardingStatus])
+}
+
+model CollaborationPayment {
+  id                        String                     @id @default(cuid())
+  campaignParticipantId     String                     @unique
+  campaignParticipant       CampaignParticipant        @relation(fields: [campaignParticipantId], references: [id], onDelete: Restrict)
+  campaignId                String
+  campaign                  Campaign                   @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  businessId                String
+  business                  BusinessProfile            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  creatorId                 String
+  creator                   CreatorProfile             @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  provider                  PaymentProvider            @default(STRIPE)
+  providerPaymentIntentId   String?                    @unique
+  providerCheckoutSessionId String?                    @unique
+  providerChargeId          String?                    @unique
+  grossAmountMinor          Int
+  currencyCode              String                     @db.VarChar(3)
+  platformFeeMinor          Int
+  providerFeeMinor          Int?
+  creatorNetMinor           Int
+  fundedAmountMinor         Int                        @default(0)
+  refundedAmountMinor       Int                        @default(0)
+  releasedAmountMinor       Int                        @default(0)
+  status                    CollaborationPaymentStatus @default(NOT_FUNDED)
+  fundedAt                  DateTime?
+  eligibleForReleaseAt      DateTime?
+  releasedAt                DateTime?
+  settledAt                 DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  transfers                 CreatorTransfer[]
+  refunds                   CollaborationRefund[]
+  issues                    PaymentIssue[]
+
+  @@index([businessId, status])
+  @@index([creatorId, status])
+  @@index([campaignId])
+  @@index([status, updatedAt])
+}
+
+model CreatorTransfer {
+  id                     String                @id @default(cuid())
+  collaborationPaymentId String
+  collaborationPayment   CollaborationPayment  @relation(fields: [collaborationPaymentId], references: [id], onDelete: Restrict)
+  creatorId              String
+  creator                CreatorProfile        @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  provider               PaymentProvider       @default(STRIPE)
+  providerTransferId     String                @unique
+  amountMinor            Int
+  currencyCode           String                @db.VarChar(3)
+  status                 CreatorTransferStatus @default(PENDING)
+  failureCode            String?               @db.VarChar(100)
+  failureMessage         String?               @db.VarChar(500)
+  createdAt              DateTime              @default(now())
+  releasedAt             DateTime?
+  settledAt              DateTime?
+
+  @@unique([collaborationPaymentId, amountMinor])
+  @@index([creatorId, status])
+}
+
+model CollaborationRefund {
+  id                     String               @id @default(cuid())
+  collaborationPaymentId String
+  collaborationPayment   CollaborationPayment @relation(fields: [collaborationPaymentId], references: [id], onDelete: Restrict)
+  providerRefundId       String?              @unique
+  amountMinor            Int
+  currencyCode           String               @db.VarChar(3)
+  reason                 String               @db.VarChar(500)
+  status                 PaymentRefundStatus  @default(PENDING)
+  requestedByUserId      String?
+  requestedByUser        User?                @relation("CollaborationRefundRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  approvedByAdminId      String?
+  approvedByAdmin        User?                @relation("CollaborationRefundApprover", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
+  createdAt              DateTime             @default(now())
+  completedAt            DateTime?
+
+  @@index([collaborationPaymentId, status])
+}
+
+model PaymentIssue {
+  id                     String                @id @default(cuid())
+  campaignParticipantId  String
+  campaignParticipant    CampaignParticipant   @relation(fields: [campaignParticipantId], references: [id], onDelete: Restrict)
+  collaborationPaymentId String?
+  collaborationPayment   CollaborationPayment? @relation(fields: [collaborationPaymentId], references: [id], onDelete: Restrict)
+  openedByUserId         String
+  openedByUser           User                  @relation("PaymentIssueOpener", fields: [openedByUserId], references: [id], onDelete: Restrict)
+  type                   PaymentIssueType
+  description            String                @db.VarChar(2000)
+  status                 PaymentIssueStatus    @default(OPEN)
+  providerDisputeId      String?               @unique
+  adminNote              String?               @db.VarChar(2000)
+  createdAt              DateTime              @default(now())
+  resolvedAt             DateTime?
+
+  @@index([status, createdAt])
+  @@index([campaignParticipantId])
+}
+
+model PlatformSetting {
+  key       String   @id @db.VarChar(100)
+  value     String   @db.VarChar(500)
+  updatedAt DateTime @updatedAt
 }
 
 model ApplicationFeeRule {
