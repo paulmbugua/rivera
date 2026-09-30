@@ -199,11 +199,15 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
                   <span>Profile completion</span>
                 </article>
                 <article>
-                  <strong>{summary?.profileVisibility ?? "PRIVATE"}</strong>
+                  <strong className="dashboard-stat-status">
+                    {summary?.profileVisibility ?? "PRIVATE"}
+                  </strong>
                   <span>Visibility</span>
                 </article>
                 <article>
-                  <strong>{summary?.verificationStatus ?? "UNVERIFIED"}</strong>
+                  <strong className="dashboard-stat-status">
+                    {summary?.verificationStatus ?? "UNVERIFIED"}
+                  </strong>
                   <span>Verification</span>
                 </article>
                 {(role === "BUSINESS" ? businessStats : creatorStats).map(
