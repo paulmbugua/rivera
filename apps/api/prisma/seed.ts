@@ -202,8 +202,12 @@ async function seedPhase7() {
 }
 
 async function seedPhase8() {
-  const creators=await db.creatorProfile.findMany({take:2,orderBy:{createdAt:'asc'}});
-  for (const [index,creator] of creators.entries()) await db.creatorPayoutAccount.upsert({where:{creatorId:creator.id},create:{creatorId:creator.id,providerAccountId:`acct_test_rivera_${index+1}`,countryCode:creator.country,defaultCurrencyCode:creator.minimumRateCurrency??'USD',onboardingStatus:index?'RESTRICTED':'ACTIVE',chargesEnabled:!index,payoutsEnabled:!index,detailsSubmitted:!index,requirementsDueJson:index?['external_account']:[],lastSyncedAt:new Date()},update:{onboardingStatus:index?'RESTRICTED':'ACTIVE',chargesEnabled:!index,payoutsEnabled:!index,detailsSubmitted:!index,requirementsDueJson:index?['external_account']:[],lastSyncedAt:new Date()}});
+  const creators=await db.creatorProfile.findMany({take:2,orderBy:{createdAt:'asc'},include:{user:{select:{countryCode:true}}}});
+  for (const [index,creator] of creators.entries()) {
+    const profileCountry = creator.country.trim().toUpperCase();
+    const countryCode = /^[A-Z]{2}$/.test(profileCountry) ? profileCountry : creator.user.countryCode?.toUpperCase() ?? 'US';
+    await db.creatorPayoutAccount.upsert({where:{creatorId:creator.id},create:{creatorId:creator.id,providerAccountId:`acct_test_rivera_${index+1}`,countryCode,defaultCurrencyCode:creator.minimumRateCurrency??'USD',onboardingStatus:index?'RESTRICTED':'ACTIVE',chargesEnabled:!index,payoutsEnabled:!index,detailsSubmitted:!index,requirementsDueJson:index?['external_account']:[],lastSyncedAt:new Date()},update:{countryCode,onboardingStatus:index?'RESTRICTED':'ACTIVE',chargesEnabled:!index,payoutsEnabled:!index,detailsSubmitted:!index,requirementsDueJson:index?['external_account']:[],lastSyncedAt:new Date()}});
+  }
   for(const [key,value] of Object.entries({MARKETPLACE_SERVICE_FEE_BPS:'1000',MARKETPLACE_SERVICE_FEE_FIXED_MINOR:'0',MARKETPLACE_SERVICE_FEE_POLICY:'BUSINESS_PAYS_ON_TOP'}))await db.platformSetting.upsert({where:{key},create:{key,value},update:{}});
   const participants=await db.campaignParticipant.findMany({include:{business:true},orderBy:{createdAt:'asc'}});
   const statuses=['PAYMENT_PENDING','FUNDED','SETTLED','FAILED','REFUNDED'] as const;

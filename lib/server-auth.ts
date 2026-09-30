@@ -1,28 +1,50 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { UserRole } from '@/packages/shared/src';
+import type { User } from '@/lib/api';
 
-type Claims = { sub?: string; roles?: UserRole[]; exp?: number };
-const decode = (value: string) => Uint8Array.from(Buffer.from(value.replace(/-/g,'+').replace(/_/g,'/'), 'base64'));
+const serverApiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:4000/api/v1';
 
-async function verifiedClaims(token: string): Promise<Claims | null> {
-  const secret=process.env.JWT_ACCESS_SECRET;
-  if(!secret)return null;
-  const parts=token.split('.');
-  if(parts.length!==3)return null;
-  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['verify']);
-  if(!await crypto.subtle.verify('HMAC',key,decode(parts[2]),new TextEncoder().encode(`${parts[0]}.${parts[1]}`)))return null;
-  try{const claims=JSON.parse(new TextDecoder().decode(decode(parts[1]))) as Claims;return claims.exp&&claims.exp*1000>Date.now()?claims:null}catch{return null}
+function roleDestination(user: User) {
+  if (user.roles.includes('ADMIN')) return '/admin';
+  if (user.roles.includes('BUSINESS')) {
+    return user.onboardingCompleted ? '/dashboard/business' : '/onboarding/business';
+  }
+  return user.onboardingCompleted ? '/dashboard/creator' : '/onboarding/creator';
 }
 
-export async function requirePageRole(role?:UserRole){
-  const token=(await cookies()).get('rivera_access')?.value;
-  const claims=token?await verifiedClaims(token):null;
-  if(!claims?.sub)redirect('/login');
-  if(role&&!claims.roles?.includes(role)){
-    if(claims.roles?.includes('ADMIN'))redirect('/admin');
-    if(claims.roles?.includes('BUSINESS'))redirect('/dashboard/business');
-    redirect('/dashboard/creator');
+export async function getServerUser(): Promise<User | null> {
+  const cookieStore = await cookies();
+  if (!cookieStore.get('rivera_access')) return null;
+  const cookieHeader = cookieStore.getAll().map(({ name, value }) => `${name}=${value}`).join('; ');
+
+  let response: Response;
+  try {
+    response = await fetch(`${serverApiUrl}/auth/me`, {
+      headers: { accept: 'application/json', cookie: cookieHeader },
+      cache: 'no-store',
+    });
+  } catch (error) {
+    throw new Error('Rivera could not verify this session because the API is unavailable.', { cause: error });
   }
-  return claims;
+
+  if (response.status === 401 || response.status === 403) return null;
+  if (!response.ok) throw new Error(`Rivera session verification failed with status ${response.status}.`);
+  return response.json() as Promise<User>;
+}
+
+type PageRoleOptions = { onboarding?: 'complete' | 'incomplete' };
+
+export async function requirePageRole(role?: UserRole, options: PageRoleOptions = {}) {
+  const user = await getServerUser();
+  if (!user) redirect('/login');
+  if (role && !user.roles.includes(role)) redirect(roleDestination(user));
+
+  if (role === 'BUSINESS' || role === 'CREATOR') {
+    const onboardingRoute = role === 'BUSINESS' ? '/onboarding/business' : '/onboarding/creator';
+    const dashboardRoute = role === 'BUSINESS' ? '/dashboard/business' : '/dashboard/creator';
+    if (options.onboarding === 'complete' && !user.onboardingCompleted) redirect(onboardingRoute);
+    if (options.onboarding === 'incomplete' && user.onboardingCompleted) redirect(dashboardRoute);
+  }
+  return user;
 }

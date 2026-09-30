@@ -92,8 +92,9 @@ services:
   web:
     build: { context: ., dockerfile: Dockerfile.web }
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
       API_INTERNAL_URL: http://api:4000/api/v1
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
       XDG_CONFIG_HOME: /tmp/rivera-sites-runtime/config

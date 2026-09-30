@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 export class ApiError extends Error { constructor(message: string, public status: number, public code = 'UNKNOWN_ERROR') { super(message); } }
 export async function api<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   let response: Response;
@@ -19,7 +19,7 @@ import type { UserRole } from '@/packages/shared/src';
 export type User = { id: string; email: string; firstName: string; lastName: string; phone: string | null; countryCode: string | null; city: string | null; profileImageUrl: string | null; status: string; emailVerified: boolean; roles: UserRole[]; onboardingCompleted: boolean };
 export const destination = (user: User) => user.roles.includes('ADMIN') ? '/admin' : user.roles.includes('BUSINESS') ? (user.onboardingCompleted ? '/dashboard/business' : '/onboarding/business') : (user.onboardingCompleted ? '/dashboard/creator' : '/onboarding/creator');
 
-export const SERVER_API_URL = process.env.API_INTERNAL_URL ?? API_URL;
+export const SERVER_API_URL = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export async function publicApi<T>(path: string): Promise<T | null> {
   try { const response = await fetch(`${SERVER_API_URL}${path}`, { cache: 'no-store' }); return response.ok ? await response.json() as T : null; } catch { return null; }
 }

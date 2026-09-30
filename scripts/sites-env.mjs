@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,4 +19,18 @@ for (const directory of [
   process.env.MINIFLARE_REGISTRY_PATH,
 ]) {
   mkdirSync(directory, { recursive: true });
+}
+
+// A production Vinext build emits a self-contained Wrangler configuration.
+// Local Docker environment variables must be copied into Worker bindings before
+// Wrangler starts; otherwise process.env is empty inside the Worker runtime.
+const wranglerConfigPath = path.join(projectRoot, "dist/server/wrangler.json");
+if (existsSync(wranglerConfigPath) && process.env.API_INTERNAL_URL) {
+  const config = JSON.parse(readFileSync(wranglerConfigPath, "utf8"));
+  config.vars = {
+    ...(config.vars || {}),
+    API_INTERNAL_URL: process.env.API_INTERNAL_URL,
+    ...(process.env.WEB_ORIGIN ? { WEB_ORIGIN: process.env.WEB_ORIGIN } : {}),
+  };
+  writeFileSync(wranglerConfigPath, `${JSON.stringify(config)}\n`);
 }

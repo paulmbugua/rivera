@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,7 +23,7 @@ const moments = {
   verify: { icon: MailCheck, kicker: 'ONE LAST STEP', title: 'Let’s make sure it’s really you.', copy: 'Verification keeps the Rivera community safer and helps every introduction begin with trust.' },
 };
 export function AuthForm({ mode }: { mode: Mode }) {
-  const router = useRouter(); const search = useSearchParams()!; const { refresh } = useAuth();
+  const search = useSearchParams()!; const { refresh } = useAuth();
   const [message, setMessage] = useState(''); const [error, setError] = useState('');
   const form = useForm<Record<string,unknown>>({ resolver: zodResolver(schemas[mode] as never) as never, defaultValues: { token: search.get('token') ?? '', firstName: '', lastName: '', email: '', password: '', confirmPassword: '', accountType: '', termsAccepted: false } });
   const field = (name: string, label: string, type = 'text') => <label className="field" key={name}><span>{label}</span><input type={type} autoComplete={name === 'password' ? (mode === 'login' ? 'current-password' : 'new-password') : name} {...form.register(name)} required/><small role="alert">{form.formState.errors[name]?.message as string}</small></label>;
@@ -31,7 +31,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setError('');setMessage('');
     try {
       if (mode === 'register') { await api('/auth/register', { method:'POST', body: JSON.stringify({ firstName:data.firstName,lastName:data.lastName,email:data.email,password:data.password,accountType:data.accountType,termsAccepted:data.termsAccepted }) }, false); setMessage('Account created. Check your email for a verification link.'); }
-      if (mode === 'login') { const response = await api<{user:User}>('/auth/login', { method:'POST', body: JSON.stringify(data) }, false); await refresh(); router.replace(destination(response.user)); }
+      if (mode === 'login') { const response = await api<{user:User}>('/auth/login', { method:'POST', body: JSON.stringify(data) }, false); const user = await refresh(); window.location.replace(destination(user ?? response.user)); }
       if (mode === 'forgot') { const result = await api<{message:string}>('/auth/forgot-password', { method:'POST', body:JSON.stringify(data) }, false); setMessage(result.message); }
       if (mode === 'reset') { const result = await api<{message:string}>('/auth/reset-password', { method:'POST', body:JSON.stringify({ token:search.get('token'), password:data.password }) }, false); setMessage(result.message); }
       if (mode === 'verify') { const result = await api<{message:string}>('/auth/verify-email', { method:'POST', body:JSON.stringify({token:data.token}) }, false); setMessage(result.message); }

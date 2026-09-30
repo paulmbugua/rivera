@@ -92,7 +92,7 @@ pnpm --dir apps/api prisma:generate
 docker compose up -d postgres
 ```
 
-Export `DATABASE_URL`, `JWT_ACCESS_SECRET`, `WEB_ORIGIN`, and `APP_URL` from `.env`, run `pnpm --dir apps/api prisma:deploy`, then start `pnpm --dir apps/api dev` and `pnpm dev` in separate terminals. Set `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1` for the browser. The Vinext development server uses `http://localhost:5173` outside Compose, so set `WEB_ORIGIN` and `APP_URL` to that origin when using this mode.
+Export `DATABASE_URL`, `JWT_ACCESS_SECRET`, `WEB_ORIGIN`, and `APP_URL` from `.env`, run `pnpm --dir apps/api prisma:deploy`, then start `pnpm --dir apps/api dev` and `pnpm dev` in separate terminals. Keep `NEXT_PUBLIC_API_URL=/api/v1` so the browser uses Rivera's same-origin API bridge, and set `API_INTERNAL_URL=http://localhost:4000/api/v1` so the web server can reach the API. The Vinext development server uses `http://localhost:5173` outside Compose, so set `WEB_ORIGIN` and `APP_URL` to that origin when using this mode.
 
 Create the required development Admin, Business and Creator accounts and their completed profiles with:
 
