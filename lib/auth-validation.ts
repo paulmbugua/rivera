@@ -1,3 +1,3 @@
 import { z } from 'zod';
-export const strongPassword = z.string().min(12, 'Use at least 12 characters').regex(/[a-z]/, 'Add a lowercase letter').regex(/[A-Z]/, 'Add an uppercase letter').regex(/\d/, 'Add a number');
+export const strongPassword = z.string().min(8, 'Use at least 8 characters').regex(/[a-z]/, 'Add a lowercase letter').regex(/[A-Z]/, 'Add an uppercase letter').regex(/\d/, 'Add a number');
 export const registerSchema = z.object({ firstName: z.string().min(1), lastName: z.string().min(1), email: z.string().email(), password: strongPassword, confirmPassword: z.string(), accountType: z.enum(['BUSINESS','CREATOR']), termsAccepted: z.boolean().refine(Boolean, 'You must agree to the Terms and Privacy Policy') }).refine(x => x.password === x.confirmPassword, { path: ['confirmPassword'], message: 'Passwords do not match' });

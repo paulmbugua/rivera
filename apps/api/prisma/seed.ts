@@ -8,7 +8,7 @@ const slug = (value: string) => value.toLowerCase().replace(/&/g, 'and').replace
 
 async function seedUser(input: { email?: string; password?: string; firstName: string; lastName: string; role: UserRole }) {
   if (!input.email && !input.password) return null;
-  if (!input.email || !input.password || input.password.length < 12) throw new Error(`Provide a valid email and 12+ character password for ${input.role}`);
+  if (!input.email || !input.password || input.password.length < 8) throw new Error(`Provide a valid email and 8+ character password for ${input.role}`);
   const email = input.email.trim().toLowerCase();
   const existing = await db.user.findUnique({ where: { email }, include: { roles: true } });
   if (existing && !existing.roles.some(role => role.role === input.role)) throw new Error(`${email} belongs to a different role`);

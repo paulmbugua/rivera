@@ -6,9 +6,16 @@ import { AuthGuard } from '../src/auth/guard';
 import { compare } from 'bcryptjs';
 import { PrismaService } from '../src/common/prisma.service';
 import { MailService } from '../src/auth/mail.service';
+import { RegisterDto } from '../src/auth/dto';
+import { validate } from 'class-validator';
 const secret = 'test-secret-that-is-longer-than-32-characters';
 process.env.JWT_ACCESS_SECRET = secret;
 const codeOf = (error: unknown) => ((error as { getResponse?:()=>unknown }).getResponse?.() as {code?:string})?.code;
+test('registration accepts eight-character strong passwords and rejects seven', async () => {
+  const make = (password: string) => Object.assign(new RegisterDto(), { firstName: 'A', lastName: 'B', email: 'a@example.com', password, accountType: 'BUSINESS', termsAccepted: true });
+  assert.equal((await validate(make('Abcdefg1'))).length, 0);
+  assert.ok((await validate(make('Abcdef1'))).length > 0);
+});
 function fixture() {
   const sent: string[] = [];
   const records: Array<Record<string, unknown>> = [];
