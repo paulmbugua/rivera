@@ -6,37 +6,40 @@ class RiveraLogo extends StatelessWidget {
   const RiveraLogo({super.key, this.light = false});
   final bool light;
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: light ? riveraPaper : riveraInk,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Text(
-              'R.',
-              style: TextStyle(
-                color: light ? riveraInk : riveraPaper,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: light ? riveraPaper : colors.primary,
+            borderRadius: BorderRadius.circular(13),
           ),
-          const SizedBox(width: 10),
-          Text(
-            'rivera',
+          child: Text(
+            'R.',
             style: TextStyle(
-              color: light ? riveraPaper : riveraInk,
-              fontSize: 23,
-              fontWeight: FontWeight.w700,
+              color: light ? riveraInk : colors.onPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        ],
-      );
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'rivera',
+          style: TextStyle(
+            color: light ? riveraPaper : colors.onSurface,
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class Eyebrow extends StatelessWidget {
@@ -50,7 +53,7 @@ class Eyebrow extends StatelessWidget {
             width: 7,
             height: 7,
             decoration: BoxDecoration(
-              color: light ? riveraGold : riveraGreen,
+              color: light ? riveraGold : Theme.of(context).colorScheme.primary,
               shape: BoxShape.circle,
             ),
           ),
@@ -60,7 +63,8 @@ class Eyebrow extends StatelessWidget {
               text.toUpperCase(),
               style: TextStyle(
                 fontFamily: 'Arial',
-                color: light ? riveraPaper : riveraGreen,
+                color:
+                    light ? riveraPaper : Theme.of(context).colorScheme.primary,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.5,
@@ -104,10 +108,12 @@ class SectionHeading extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               copy!,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(color: riveraInk.withValues(alpha: .72)),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: .72),
+                  ),
             ),
           ],
         ],
@@ -134,11 +140,15 @@ class RiveraEmpty extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(18),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDDECE7),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: riveraGreen, size: 30),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  size: 30,
+                ),
               ),
               const SizedBox(height: 18),
               Text(
@@ -150,10 +160,12 @@ class RiveraEmpty extends StatelessWidget {
               Text(
                 copy,
                 textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: riveraInk.withValues(alpha: .68)),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: .68),
+                    ),
               ),
               if (action != null) ...[const SizedBox(height: 18), action!],
             ],
@@ -176,17 +188,24 @@ class StatusPill extends StatelessWidget {
       'PUBLIC',
       'VERIFIED',
     ].contains(value.toUpperCase());
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final background = positive
+        ? (dark ? const Color(0xFF24483D) : const Color(0xFFDDECE7))
+        : (dark ? const Color(0xFF493A21) : const Color(0xFFF5E6C9));
+    final foreground = positive
+        ? (dark ? const Color(0xFFA9E4D1) : riveraGreen)
+        : (dark ? const Color(0xFFFFD790) : const Color(0xFF80591B));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: positive ? const Color(0xFFDDECE7) : const Color(0xFFF5E6C9),
+        color: background,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         value.replaceAll('_', ' '),
         style: TextStyle(
           fontFamily: 'Arial',
-          color: positive ? riveraGreen : const Color(0xFF80591B),
+          color: foreground,
           fontWeight: FontWeight.w700,
           fontSize: 11,
         ),

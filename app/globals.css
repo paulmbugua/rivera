@@ -164,3 +164,104 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 }
 @media(max-width:620px){.dashboard-focus{grid-template-columns:auto 1fr}.dashboard-focus>a{grid-column:1/-1;justify-content:center}.dashboard-focus h2{font-size:21px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* Rivera adaptive surfaces — calm, tactile and intentionally minimal */
+:root{
+  color-scheme:light;
+  --rivera-input:#fff;
+  --rivera-soft:rgba(220,232,210,.46);
+  --rivera-elevated:#fff;
+  --rivera-danger:#8f342f;
+  --rivera-radius:24px;
+  --background:var(--rivera-cream);
+  --foreground:var(--rivera-ink);
+  --primary:var(--rivera-forest);
+  --primary-foreground:#fff;
+  --border:var(--rivera-line);
+}
+
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --rivera-ink:#ecf4f0;
+  --rivera-forest:#235246;
+  --rivera-green:#8bcdb7;
+  --rivera-lime:#cce779;
+  --rivera-sage:#243f38;
+  --rivera-cream:#0e1917;
+  --rivera-paper:#152522;
+  --rivera-muted:#a7bbb4;
+  --rivera-line:rgba(191,222,210,.15);
+  --rivera-shadow:0 20px 65px rgba(0,0,0,.28);
+  --rivera-input:#1b2e2a;
+  --rivera-soft:rgba(92,145,127,.16);
+  --rivera-elevated:#1a2c28;
+  --rivera-danger:#ffaaa1;
+  --background:var(--rivera-cream);
+  --foreground:var(--rivera-ink);
+  --primary:var(--rivera-green);
+  --primary-foreground:#0b1815;
+  --border:var(--rivera-line);
+}
+
+body{min-height:100vh;background:var(--rivera-cream);color:var(--rivera-ink)}
+input::placeholder,textarea::placeholder{color:var(--rivera-muted);opacity:.72}
+input,select,textarea{color:var(--rivera-ink)}
+.button{min-height:46px;padding-inline:19px;border-radius:999px;box-shadow:none}
+.button.primary{background:var(--rivera-forest);color:var(--primary-foreground)}
+.button.secondary{background:var(--rivera-soft);color:var(--rivera-ink);border-color:var(--rivera-line)}
+.button:active,.header-link:active{transform:translateY(0) scale(.98)}
+.field input,.field select,.field textarea,.directory-filters input,.directory-filters select,
+.campaign-filter-grid input,.campaign-filter-grid select,.application-filters input,.application-filters select{
+  background:var(--rivera-input);color:var(--rivera-ink);border-color:var(--rivera-line);border-radius:15px;box-shadow:0 1px 0 rgba(255,255,255,.04)
+}
+.auth-card .roles label,.requirement-grid article,.portfolio-manage article,.public-portfolio>a{
+  background:var(--rivera-input);color:var(--rivera-ink);border-color:var(--rivera-line);border-radius:16px
+}
+.campaign-filter-grid,.application-filters,.deliverable-editor,.proposal-review dl,.message-thread{background:var(--rivera-soft)}
+.campaign-card,.campaign-form-panel,.campaign-detail section,.campaign-summary-box,.owner-campaign,
+.application-panel,.application-card,.message,.completion,.settings-card section,.profile-panel,
+.directory-filters,.creator-card,.public-profile-grid section,.public-profile-grid aside>section,
+.stat-card,.dashboard-stats article,.dashboard-empty{background:var(--rivera-paper);border-color:var(--rivera-line);border-radius:var(--rivera-radius)}
+.campaign-card,.application-card,.creator-card,.profile-panel,.settings-card section{box-shadow:0 9px 32px rgba(23,42,38,.045)}
+.manage-list article,.choice-grid label,.check-line{border-color:var(--rivera-line);border-radius:14px}
+.manage-list button,.portfolio-manage button{background:var(--rivera-soft);color:var(--rivera-ink);border-radius:999px;padding:9px 14px}
+.dashboard-empty{position:relative;overflow:hidden;min-height:180px;display:grid;align-content:center;padding:40px 110px 40px 38px}
+.dashboard-empty::after{content:"✦";position:absolute;right:31px;top:50%;translate:0 -50%;width:58px;height:58px;display:grid;place-items:center;border-radius:20px 20px 20px 7px;background:var(--rivera-soft);color:var(--rivera-green);font-size:24px}
+.dashboard-empty p{color:var(--rivera-muted);max-width:590px}
+
+.theme-preference{background:linear-gradient(135deg,var(--rivera-paper),var(--rivera-soft))!important;overflow:hidden;position:relative}
+.settings-section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.settings-section-heading h2{margin:4px 0 7px!important;font-family:Georgia,"Times New Roman",serif;font-size:27px;font-weight:500;letter-spacing:-.025em}
+.settings-section-heading p{margin:0;color:var(--rivera-muted);line-height:1.55}
+.settings-kicker{font-size:11px!important;text-transform:uppercase;letter-spacing:.16em;font-weight:900;color:var(--rivera-green)!important}
+.theme-orb{width:48px;height:48px;flex:0 0 auto;display:grid;place-items:center;border-radius:16px 16px 16px 6px;background:var(--rivera-forest);color:var(--primary-foreground)}
+.theme-orb svg{width:20px}
+.theme-options{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:23px}
+.theme-option{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:11px;min-height:72px;padding:13px 14px;border:1px solid var(--rivera-line);border-radius:17px;background:var(--rivera-input);color:var(--rivera-ink);cursor:pointer;text-align:left}
+.theme-option:hover{border-color:var(--rivera-green);transform:translateY(-2px)}
+.theme-option>svg{width:19px;color:var(--rivera-green)}
+.theme-option span{display:grid;gap:3px}.theme-option strong{font-size:13px}.theme-option small{color:var(--rivera-muted);font-size:11px}
+.theme-option i{width:10px;height:10px;border:2px solid var(--rivera-line);border-radius:50%}
+.theme-option.selected{border-color:var(--rivera-green);background:var(--rivera-soft);box-shadow:0 0 0 3px rgba(80,153,128,.1)}
+.theme-option.selected i{border-color:var(--rivera-green);background:var(--rivera-green);box-shadow:0 0 0 3px var(--rivera-input)}
+
+html[data-theme="dark"] .site-header nav,html[data-theme="dark"] .hero-copy>p,
+html[data-theme="dark"] .hero-reassurance,html[data-theme="dark"] .lead-copy,
+html[data-theme="dark"] .closing>p,html[data-theme="dark"] .legal-page p,
+html[data-theme="dark"] .campaign-facts,html[data-theme="dark"] .campaign-summary-box dt,
+html[data-theme="dark"] .application-panel dt{color:var(--rivera-muted)!important}
+html[data-theme="dark"] .dashboard-shell>header{background:rgba(14,25,23,.88)}
+html[data-theme="dark"] .dashboard-stats strong{color:var(--rivera-green)}
+html[data-theme="dark"] .auth-card .roles label:has(input:checked){background:var(--rivera-soft)}
+html[data-theme="dark"] .public-campaign>header,html[data-theme="dark"] .dashboard-focus,
+html[data-theme="dark"] .auth-story,html[data-theme="dark"] .ticker{color:#fff}
+html[data-theme="dark"] .fee-disclosure{background:#34251e;color:#f6ddd0}
+html[data-theme="dark"] .form-error{background:#391f1f;border-color:#70403c;color:#ffb9b1}
+html[data-theme="dark"] .form-success{background:#183326;border-color:#315b44;color:#b9e5c7}
+html[data-theme="dark"] .form-warning{background:#382f19;border-color:#6d5d2c;color:#f3dda0}
+html[data-theme="dark"] .deactivate{color:var(--rivera-danger)}
+
+@media(max-width:620px){
+  .theme-options{grid-template-columns:1fr}.theme-option{min-height:64px}
+  .dashboard-empty{padding:92px 24px 28px;text-align:center}.dashboard-empty::after{right:50%;top:25px;translate:50% 0}
+}

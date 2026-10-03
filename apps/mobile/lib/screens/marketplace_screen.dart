@@ -194,10 +194,10 @@ class CampaignCard extends StatelessWidget {
                             'businessName',
                           ],
                           'A Rivera brand'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Arial',
                         fontWeight: FontWeight.w700,
-                        color: riveraGreen,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ),
@@ -220,10 +220,12 @@ class CampaignCard extends StatelessWidget {
                     'A new creator opportunity.'),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: riveraInk.withValues(alpha: .7)),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: .7),
+                    ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -231,6 +233,7 @@ class CampaignCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _meta(
+                    context,
                     Icons.location_on_outlined,
                     item['locationType']?.toString() ??
                         item['campaignCountryCode']?.toString() ??
@@ -238,10 +241,12 @@ class CampaignCard extends StatelessWidget {
                   ),
                   if (max != null)
                     _meta(
+                      context,
                       Icons.payments_outlined,
                       '$currency ${_compact(max)}',
                     ),
                   _meta(
+                    context,
                     Icons.people_outline,
                     '${item['creatorSlots'] ?? 1} spot${item['creatorSlots'] == 1 ? '' : 's'}',
                   ),
@@ -254,10 +259,10 @@ class CampaignCard extends StatelessWidget {
     );
   }
 
-  Widget _meta(IconData icon, String label) => Row(
+  Widget _meta(BuildContext context, IconData icon, String label) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 17, color: riveraGreen),
+          Icon(icon, size: 17, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 5),
           Text(
             label.replaceAll('_', ' '),
@@ -288,7 +293,8 @@ class CreatorCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 29,
-                  backgroundColor: const Color(0xFFDDECE7),
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                   backgroundImage: item['profileImageUrl'] != null
                       ? NetworkImage(item['profileImageUrl'].toString())
                       : null,
@@ -302,8 +308,10 @@ class CreatorCard extends StatelessWidget {
                                   'R')
                               .substring(0, 1)
                               .toUpperCase(),
-                          style: const TextStyle(
-                            color: riveraGreen,
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                           ),
@@ -324,12 +332,12 @@ class CreatorCard extends StatelessWidget {
                             ),
                           ),
                           if (item['verificationStatus'] == 'VERIFIED')
-                            const Padding(
-                              padding: EdgeInsets.only(left: 5),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 5),
                               child: Icon(
                                 Icons.verified_rounded,
                                 size: 18,
-                                color: riveraGreen,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                         ],
@@ -344,10 +352,10 @@ class CreatorCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         '${item['city'] ?? ''}${item['city'] != null ? ', ' : ''}${item['countryCode'] ?? 'Global'} · ${_compact(item['combinedFollowers'] ?? 0)} followers',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Arial',
                           fontSize: 12,
-                          color: riveraGreen,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ],
@@ -487,7 +495,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: riveraGreen),
+            Icon(icon, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 13),
             Expanded(
               child: Column(
@@ -531,13 +539,16 @@ class CreatorDetailScreen extends StatelessWidget {
             Center(
               child: CircleAvatar(
                 radius: 52,
-                backgroundColor: const Color(0xFFDDECE7),
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 backgroundImage: creator['profileImageUrl'] != null
                     ? NetworkImage(creator['profileImageUrl'].toString())
                     : null,
                 child: creator['profileImageUrl'] == null
-                    ? const Icon(Icons.person_outline,
-                        size: 48, color: riveraGreen)
+                    ? Icon(
+                        Icons.person_outline,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
                     : null,
               ),
             ),

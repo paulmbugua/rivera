@@ -9,6 +9,7 @@ import { countryOptions } from "@/lib/countries";
 import { strongPassword } from "@/lib/auth-validation";
 import { useAuth } from "@/components/rivera/auth-provider";
 import { OperationalSettings } from "@/components/rivera/operations";
+import { ThemePreference } from "@/components/rivera/theme-preference";
 
 const profileSchema = z.object({
   firstName: z.string().min(1),
@@ -73,10 +74,11 @@ export default function Settings() {
     name: keyof z.infer<typeof profileSchema>,
     label: string,
     type = "text",
+    placeholder = "",
   ) => (
     <label className="field">
       <span>{label}</span>
-      <input type={type} {...form.register(name)} />
+      <input type={type} placeholder={placeholder} {...form.register(name)} />
       <small role="alert">{form.formState.errors[name]?.message}</small>
     </label>
   );
@@ -89,6 +91,7 @@ export default function Settings() {
         <p className="settings-email">
           {user.email} <span>Verified</span>
         </p>
+        <ThemePreference />
         <section>
           <h2>Profile details</h2>
           <p>
@@ -122,13 +125,14 @@ export default function Settings() {
             })}
           >
             <div className="settings-grid">
-              {field(profile, "firstName", "First name")}
-              {field(profile, "lastName", "Last name")}
-              {field(profile, "phone", "Phone (optional)", "tel")}
+              {field(profile, "firstName", "First name", "text", "e.g. Amina")}
+              {field(profile, "lastName", "Last name", "text", "e.g. Rivera")}
+              {field(profile, "phone", "Phone (optional)", "tel", "+254 700 000 000")}
               <label className="field">
                 <span>Country (optional)</span>
                 <input
                   list="settings-countries"
+                  placeholder="Search by ISO country code"
                   {...profile.register("countryCode")}
                 />
                 <datalist id="settings-countries">
@@ -142,7 +146,7 @@ export default function Settings() {
                   {profile.formState.errors.countryCode?.message}
                 </small>
               </label>
-              {field(profile, "city", "City (optional)")}
+              {field(profile, "city", "City (optional)", "text", "e.g. Nairobi")}
             </div>
             <button
               className="button primary"

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/app_controller.dart';
 import '../core/api_client.dart';
-import '../core/theme.dart';
 import '../widgets/common.dart';
 import 'workspace_screen.dart';
 
@@ -29,16 +28,19 @@ class AccountScreen extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 32,
-                  backgroundColor: const Color(0xFFDDECE7),
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                   backgroundImage: user.profileImageUrl != null
                       ? NetworkImage(user.profileImageUrl!)
                       : null,
                   child: user.profileImageUrl == null
                       ? Text(
                           user.firstName.isEmpty ? 'R' : user.firstName[0],
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 24,
-                            color: riveraGreen,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
                             fontWeight: FontWeight.w800,
                           ),
                         )
@@ -66,6 +68,8 @@ class AccountScreen extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 14),
+        _ThemeChooser(controller: controller),
         const SizedBox(height: 14),
         _tile(
           context,
@@ -174,7 +178,7 @@ class AccountScreen extends StatelessWidget {
         child: ListTile(
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-          leading: Icon(icon, color: riveraGreen),
+          leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
           title:
               Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text(subtitle),
@@ -196,6 +200,100 @@ class AccountScreen extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _ThemeChooser extends StatelessWidget {
+  const _ThemeChooser({required this.controller});
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(15),
+                      topRight: Radius.circular(15),
+                      bottomRight: Radius.circular(15),
+                      bottomLeft: Radius.circular(5),
+                    ),
+                  ),
+                  child: Icon(
+                    controller.themeMode == ThemeMode.dark
+                        ? Icons.dark_mode_rounded
+                        : Icons.light_mode_rounded,
+                    color: colors.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Appearance',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Arial',
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text('Device mode is the Rivera default.'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  icon: Icon(Icons.phone_android_rounded, size: 18),
+                  label: Text('Device'),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  icon: Icon(Icons.light_mode_outlined, size: 18),
+                  label: Text('Light'),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  icon: Icon(Icons.dark_mode_outlined, size: 18),
+                  label: Text('Dark'),
+                ),
+              ],
+              selected: {controller.themeMode},
+              onSelectionChanged: (value) {
+                controller.setThemeMode(value.first);
+              },
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AccountEditor extends StatefulWidget {

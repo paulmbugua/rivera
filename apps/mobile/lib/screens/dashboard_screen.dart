@@ -46,10 +46,12 @@ class DashboardScreen extends StatelessWidget {
                 : user.isCreator
                     ? 'Find opportunities that value your point of view and respect your craft.'
                     : 'Help Rivera remain a trusted place for purposeful partnerships.',
-            style: Theme.of(context)
-                .textTheme
-                .bodyLarge
-                ?.copyWith(color: riveraInk.withValues(alpha: .7)),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: .7),
+                ),
           ),
           const SizedBox(height: 24),
           Container(
@@ -128,7 +130,11 @@ class DashboardScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(stat.icon, color: riveraGreen, size: 21),
+                      Icon(
+                        stat.icon,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 21,
+                      ),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
@@ -145,10 +151,13 @@ class DashboardScreen extends StatelessWidget {
                       Text(
                         stat.label,
                         maxLines: 2,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Arial',
                           fontSize: 12,
-                          color: Color(0xFF56706C),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: .66),
                         ),
                       ),
                     ],

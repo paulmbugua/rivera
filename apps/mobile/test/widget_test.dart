@@ -14,4 +14,12 @@ void main() {
     expect(find.text('rivera'), findsOneWidget);
     expect(find.text('R.'), findsOneWidget);
   });
+
+  test('Rivera provides complete light and dark themes', () {
+    final light = riveraTheme(Brightness.light);
+    final dark = riveraTheme(Brightness.dark);
+    expect(light.brightness, Brightness.light);
+    expect(dark.brightness, Brightness.dark);
+    expect(light.scaffoldBackgroundColor, isNot(dark.scaffoldBackgroundColor));
+  });
 }

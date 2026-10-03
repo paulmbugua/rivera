@@ -55,10 +55,12 @@ class LandingScreen extends StatelessWidget {
                       const SizedBox(height: 18),
                       Text(
                         'Rivera brings thoughtful brands and distinctive creators into one clear, trusted place to discover, agree and deliver meaningful work.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(color: riveraInk.withValues(alpha: .72)),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: .72),
+                            ),
                       ),
                       const SizedBox(height: 24),
                       FilledButton(
@@ -190,10 +192,13 @@ class LandingScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDDECE7),
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: riveraGreen),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -204,10 +209,12 @@ class LandingScreen extends StatelessWidget {
                     const SizedBox(height: 7),
                     Text(
                       copy,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: riveraInk.withValues(alpha: .7)),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: .7),
+                          ),
                     ),
                   ],
                 ),

@@ -573,9 +573,9 @@ class DetailView extends StatelessWidget {
                       children: [
                         Text(
                           _label(e.key),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Arial',
-                            color: riveraGreen,
+                            color: Theme.of(context).colorScheme.primary,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             letterSpacing: .7,

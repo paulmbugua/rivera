@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'api_client.dart';
 import 'models.dart';
@@ -6,6 +7,7 @@ import 'models.dart';
 class AppController extends ChangeNotifier {
   AppController({ApiClient? api}) : api = api ?? ApiClient();
   final ApiClient api;
+  static const _preferences = MethodChannel('rivera/preferences');
 
   RiveraUser? user;
   bool booting = true;
@@ -15,8 +17,10 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic> dashboard = {};
   List<Map<String, dynamic>> campaigns = [];
   List<Map<String, dynamic>> creators = [];
+  ThemeMode themeMode = ThemeMode.system;
 
   Future<void> bootstrap() async {
+    await _restoreTheme();
     await api.restoreSession();
     try {
       user = RiveraUser.fromJson(mapOf(await api.get('/auth/me')));
@@ -31,6 +35,29 @@ class AppController extends ChangeNotifier {
     } finally {
       booting = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _restoreTheme() async {
+    try {
+      final saved = await _preferences.invokeMethod<String>('readTheme');
+      themeMode = switch (saved) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+    } catch (_) {
+      themeMode = ThemeMode.system;
+    }
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeMode = mode;
+    notifyListeners();
+    try {
+      await _preferences.invokeMethod('writeTheme', mode.name);
+    } catch (_) {
+      // The preference remains active for this session if native storage fails.
     }
   }
 

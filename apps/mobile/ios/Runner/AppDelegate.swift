@@ -40,5 +40,17 @@ import UIKit
         result(FlutterMethodNotImplemented)
       }
     }
+    let preferences = FlutterMethodChannel(name: "rivera/preferences", binaryMessenger: registrar.messenger())
+    preferences.setMethodCallHandler { call, result in
+      switch call.method {
+      case "readTheme":
+        result(UserDefaults.standard.string(forKey: "rivera-theme") ?? "system")
+      case "writeTheme":
+        UserDefaults.standard.set(call.arguments as? String ?? "system", forKey: "rivera-theme")
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }

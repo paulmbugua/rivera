@@ -33,6 +33,18 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        val preferences = getSharedPreferences("rivera_preferences", MODE_PRIVATE)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rivera/preferences")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "readTheme" -> result.success(preferences.getString("theme", "system"))
+                    "writeTheme" -> {
+                        preferences.edit().putString("theme", call.arguments as? String ?: "system").apply()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     private fun sessionKey(): SecretKey {

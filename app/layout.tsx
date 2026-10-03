@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/rivera/auth-provider";
+import { ThemeProvider } from "@/components/rivera/theme-provider";
 
 export const metadata: Metadata = {
   title: "Rivera — Make work people feel",
@@ -20,8 +21,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased"><AuthProvider>{children}</AuthProvider></body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased">
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

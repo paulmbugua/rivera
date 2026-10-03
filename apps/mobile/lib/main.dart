@@ -47,7 +47,9 @@ class _RiveraAppState extends State<RiveraApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Rivera',
-        theme: riveraTheme(),
+        theme: riveraTheme(Brightness.light),
+        darkTheme: riveraTheme(Brightness.dark),
+        themeMode: controller.themeMode,
         scrollBehavior: const MaterialScrollBehavior().copyWith(
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
