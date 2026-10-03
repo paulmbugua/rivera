@@ -53,6 +53,7 @@ Rivera is a global business and creator marketplace. Phases 1–6 now provide au
 ## Project layout
 
 - `app/`, `components/rivera/`, `lib/`: **Next.js 16 App Router** website, typed API client, auth and onboarding pages. Sites uses Vinext only as its Cloudflare-compatible build adapter; the client application itself is Next.js, not a Vite SPA.
+- `apps/mobile/`: Flutter mobile client for Android and iOS, with the same Rivera authentication, role-aware onboarding, marketplace, campaigns, proposals, workspaces, finance, settings and Admin API surfaces.
 - `apps/api/src/`: NestJS API; development Swagger at `/api/docs`
 - `apps/api/prisma/`: PostgreSQL schema, initial migration and optional admin seed
 - `packages/shared/`: shared TypeScript types
@@ -81,6 +82,22 @@ The first build downloads the workspace dependencies and can take several minute
 The API container applies the committed migration before starting. Open `http://localhost:3000` for the site, `http://localhost:4000/api/v1/health` for health, and `http://localhost:4000/api/docs` for development API docs. PostgreSQL is bound to localhost only. If port 5432 is already occupied, change `POSTGRES_PORT` in `.env`, for example to `55432`; containers continue to communicate on their internal port automatically. If startup fails, inspect `docker compose logs web api postgres`.
 
 Stop the app with `docker compose down`. Add `--volumes` only when you intentionally want to erase the local database.
+
+## Flutter mobile app
+
+Install Flutter, start Rivera's Docker stack, then launch an Android emulator and run:
+
+```powershell
+.\scripts\run-mobile-dev.ps1
+```
+
+The default mobile API URL is `http://10.0.2.2:4000/api/v1`, the Android emulator alias for the host machine. For a physical device on the same network, pass the computer's LAN address:
+
+```powershell
+.\scripts\run-mobile-dev.ps1 -ApiUrl "http://192.168.1.20:4000/api/v1"
+```
+
+For iOS Simulator on macOS, use `http://127.0.0.1:4000/api/v1`. See `apps/mobile/README.md` for platform setup, secure session storage and build commands.
 
 ## Local startup without Docker for Node services
 
