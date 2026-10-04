@@ -10,6 +10,11 @@ node_modules/**
 **/.pnpm/**
 **/dist
 dist
+apps/mobile/build
+apps/mobile/.dart_tool
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/**/*.apk
 .next
 .vinext
 .sites-runtime
