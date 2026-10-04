@@ -4,22 +4,35 @@ Flutter client for Rivera’s creator marketplace. It shares the existing NestJS
 
 ## Run locally
 
-Start Rivera’s Docker stack from the repository root, then run the mobile app:
+Start Rivera’s Docker stack from the repository root. For a USB-connected Android phone, enable **Developer options** and **USB debugging**, accept the authorization prompt on the phone, then use the project helper:
 
 ```powershell
 docker compose up -d
-cd apps\mobile
-C:\dev\flutter\bin\flutter.bat pub get
-C:\dev\flutter\bin\flutter.bat run --dart-define=API_URL=http://10.0.2.2:4000/api/v1
+.\scripts\run-mobile-dev.ps1
 ```
 
-`10.0.2.2` is the Android emulator alias for the Windows host. For a physical phone, use the computer’s LAN address instead:
+The helper detects the authorized phone, forwards device ports `4000` and `3000` to the PC with `adb reverse`, installs a debug build, and keeps Flutter and application logs visible in the terminal. While it is running, press `r` for hot reload, `R` for hot restart, and `q` to stop. Most Dart UI changes only need hot reload; native Android configuration and dependency changes require stopping and running the command again.
+
+To select one phone when several devices are attached:
 
 ```powershell
-C:\dev\flutter\bin\flutter.bat run --dart-define=API_URL=http://YOUR-PC-IP:4000/api/v1
+adb devices
+.\scripts\run-mobile-dev.ps1 -Device YOUR_DEVICE_ID
 ```
 
-The API must be reachable from the device. Rivera stores its access and refresh cookies in platform secure storage and automatically rotates an expired session through `/auth/refresh`.
+To watch logs without launching a second app instance, use another terminal:
+
+```powershell
+flutter logs -d YOUR_DEVICE_ID
+```
+
+For the Android emulator, skip USB forwarding and use its Windows-host alias:
+
+```powershell
+.\scripts\run-mobile-dev.ps1 -Device emulator-5554 -NoUsbReverse -ApiUrl http://10.0.2.2:4000/api/v1
+```
+
+Rivera stores its access and refresh cookies in platform secure storage and automatically rotates an expired session through `/auth/refresh`.
 
 ## Quality checks
 
