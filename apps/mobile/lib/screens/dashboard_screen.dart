@@ -29,17 +29,20 @@ class DashboardScreen extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: controller.refreshWorkspace,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 34),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         children: [
           const RiveraLogo(),
-          const SizedBox(height: 32),
+          const SizedBox(height: 26),
           Eyebrow('$role dashboard'),
-          const SizedBox(height: 10),
+          const SizedBox(height: 9),
           Text(
-            'Good to see you,\n${user.firstName}.',
-            style: Theme.of(context).textTheme.displaySmall,
+            'Good to see you, ${user.firstName}.',
+            style: Theme.of(context)
+                .textTheme
+                .displaySmall
+                ?.copyWith(fontSize: 36, letterSpacing: -1.2),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             user.isBusiness
                 ? 'Turn a clear idea into a partnership people will remember.'
@@ -53,9 +56,9 @@ class DashboardScreen extends StatelessWidget {
                       .withValues(alpha: .7),
                 ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: riveraInk,
               borderRadius: BorderRadius.circular(26),
@@ -67,7 +70,7 @@ class DashboardScreen extends StatelessWidget {
                   user.isAdmin ? 'Today’s focus' : 'Your next best step',
                   light: true,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 11),
                 Text(
                   user.isBusiness
                       ? 'Bring the right people into the idea.'
@@ -91,7 +94,7 @@ class DashboardScreen extends StatelessWidget {
                       .bodyMedium
                       ?.copyWith(color: riveraPaper.withValues(alpha: .78)),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 15),
                 FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(
                     backgroundColor: riveraGold,
@@ -110,61 +113,63 @@ class DashboardScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 1.12,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: stats.length,
-            itemBuilder: (_, i) {
-              final stat = stats[i];
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(17),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Icon(
-                        stat.icon,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 21,
+          const SizedBox(height: 22),
+          Text('At a glance', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 11),
+          SizedBox(
+            height: 132,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: stats.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final stat = stats[i];
+                return SizedBox(
+                  width: 148,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Icon(
+                            stat.icon,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 20,
+                          ),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              stat.value,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(
+                                    fontSize: stat.value.length > 8 ? 20 : 30,
+                                  ),
+                            ),
+                          ),
+                          Text(
+                            stat.label,
+                            maxLines: 2,
+                            style: TextStyle(
+                              fontFamily: 'Arial',
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: .66),
+                            ),
+                          ),
+                        ],
                       ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          stat.value,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                fontSize: stat.value.length > 8 ? 20 : 30,
-                              ),
-                        ),
-                      ),
-                      Text(
-                        stat.label,
-                        maxLines: 2,
-                        style: TextStyle(
-                          fontFamily: 'Arial',
-                          fontSize: 12,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: .66),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),

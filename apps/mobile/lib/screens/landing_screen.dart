@@ -38,23 +38,23 @@ class LandingScreen extends StatelessWidget {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 42, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 30, 20, 32),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Eyebrow('Where brands meet creators'),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                       Text(
-                        'Ideas feel bigger\nwhen the right people\nmake them together.',
+                        'Make work\npeople feel.',
                         style: Theme.of(context)
                             .textTheme
                             .displaySmall
-                            ?.copyWith(fontSize: 45),
+                            ?.copyWith(fontSize: 46, letterSpacing: -1.8),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
                       Text(
-                        'Rivera brings thoughtful brands and distinctive creators into one clear, trusted place to discover, agree and deliver meaningful work.',
+                        'A calm place for brands and creators to discover each other, agree on the work and build something genuine.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme
@@ -62,19 +62,13 @@ class LandingScreen extends StatelessWidget {
                                   .withValues(alpha: .72),
                             ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 22),
                       FilledButton(
                         onPressed: () => auth(context, AuthMode.register),
-                        child: const Text('Find your next partnership'),
+                        child: const Text('Join Rivera'),
                       ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
                         onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -83,22 +77,22 @@ class LandingScreen extends StatelessWidget {
                           ),
                         ),
                         icon: const Icon(Icons.explore_outlined),
-                        label: const Text('Explore the marketplace'),
+                        label: const Text('Explore opportunities'),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 20),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(26),
                         child: Stack(
                           alignment: Alignment.bottomLeft,
                           children: [
                             Image.asset(
-                              'assets/rivera-hero.png',
-                              height: 330,
+                              'assets/rivera-hero-diverse.png',
+                              height: 265,
                               width: double.infinity,
                               fit: BoxFit.cover,
                             ),
                             Container(
-                              height: 180,
+                              height: 120,
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
@@ -111,7 +105,7 @@ class LandingScreen extends StatelessWidget {
                               ),
                             ),
                             const Padding(
-                              padding: EdgeInsets.all(22),
+                              padding: EdgeInsets.all(18),
                               child: Row(
                                 children: [
                                   Icon(Icons.favorite_rounded,
@@ -119,12 +113,12 @@ class LandingScreen extends StatelessWidget {
                                   SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      'Real partnerships. Clear expectations. Work worth sharing.',
+                                      'Good chemistry matters. Rivera makes room for it.',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontFamily: 'Arial',
                                         fontWeight: FontWeight.w700,
-                                        fontSize: 16,
+                                        fontSize: 14,
                                       ),
                                     ),
                                   ),
@@ -134,93 +128,65 @@ class LandingScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withValues(alpha: .45),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          children: [
+                            Expanded(
+                                child: _TrustPoint(Icons.verified_outlined,
+                                    'Verified profiles')),
+                            SizedBox(width: 8),
+                            Expanded(
+                                child: _TrustPoint(Icons.lock_outline_rounded,
+                                    'Clear payments')),
+                            SizedBox(width: 8),
+                            Expanded(
+                                child: _TrustPoint(Icons.handshake_outlined,
+                                    'Shared workspace')),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 38, 20, 40),
-                sliver: SliverList.list(
-                  children: [
-                    const SectionHeading(
-                      eyebrow: 'Made for both sides',
-                      title: 'One shared place. Two distinct journeys.',
-                      copy:
-                          'Every screen gives each person the context and confidence they need.',
-                    ),
-                    const SizedBox(height: 20),
-                    _story(
-                      context,
-                      Icons.storefront_outlined,
-                      'For brands',
-                      'Turn a clear brief into a partnership. Discover creators, manage applications, fund work and review deliverables.',
-                    ),
-                    const SizedBox(height: 14),
-                    _story(
-                      context,
-                      Icons.auto_awesome_outlined,
-                      'For creators',
-                      'Find opportunities that fit your voice. Apply with confidence, collaborate clearly and track every earning.',
-                    ),
-                    const SizedBox(height: 14),
-                    _story(
-                      context,
-                      Icons.verified_user_outlined,
-                      'Built around trust',
-                      'Profiles, verification, protected workspaces and transparent payment states make every next step understandable.',
-                    ),
-                  ],
                 ),
               ),
             ],
           ),
         ),
       );
+}
 
-  Widget _story(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String copy,
-  ) =>
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+class _TrustPoint extends StatelessWidget {
+  const _TrustPoint(this.icon, this.label);
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontFamily: 'Arial',
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
                 ),
-                child: Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 7),
-                    Text(
-                      copy,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: .7),
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ),
-        ),
+        ],
       );
 }
