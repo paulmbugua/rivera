@@ -57,13 +57,19 @@ export class CampaignsService {
   }
   private scalar(dto: CampaignDto) {
     const omit = new Set(['categoryIds','creatorLocations','platforms','languages','deliverables','applicationDeadline','campaignStartDate','campaignEndDate']);
-    return Object.fromEntries(Object.entries(dto).filter(([key]) => !omit.has(key) && dto[key as keyof CampaignDto] !== undefined));
+    const values = Object.fromEntries(Object.entries(dto).filter(([key]) => !omit.has(key) && dto[key as keyof CampaignDto] !== undefined));
+    if (dto.locationType && ['GLOBAL','REMOTE'].includes(dto.locationType)) {
+      return { ...values, campaignCountryCode: null, campaignCity: null, campaignRegion: null };
+    }
+    return values;
   }
   private nested(dto: CampaignDto, creating = false) {
     const replace = () => creating ? {} : { deleteMany: {} };
+    const creatorLocations = dto.creatorLocations ??
+      (dto.locationType && ['GLOBAL','REMOTE'].includes(dto.locationType) ? [] : undefined);
     return {
       ...(dto.categoryIds ? { categories: { ...replace(), create: dto.categoryIds.map((categoryId, index) => ({ categoryId, isPrimary: index === 0 })) } } : {}),
-      ...(dto.creatorLocations ? { creatorLocations: { ...replace(), create: dto.creatorLocations.map(item => ({ ...item, countryCode: item.countryCode.toUpperCase() })) } } : {}),
+      ...(creatorLocations ? { creatorLocations: { ...replace(), create: creatorLocations.map(item => ({ ...item, countryCode: item.countryCode.toUpperCase() })) } } : {}),
       ...(dto.platforms ? { platforms: { ...replace(), create: dto.platforms } } : {}),
       ...(dto.languages ? { languages: { ...replace(), create: dto.languages.map(item => ({ ...item, languageCode: item.languageCode.toLowerCase() })) } } : {}),
       ...(dto.deliverables ? { deliverables: { ...replace(), create: dto.deliverables.map((item, index) => ({ title: item.title, description: item.description, quantity: item.quantity, platform: item.platform, contentTypeId: item.contentTypeId, dueDate: item.dueDate ? new Date(item.dueDate) : undefined, sortOrder: item.sortOrder ?? index })) } } : {}),

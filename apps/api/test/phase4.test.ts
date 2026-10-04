@@ -27,6 +27,15 @@ test('campaign URLs require an HTTP protocol', async () => {
   assert.ok((await validate(dto)).some(error=>error.property==='productUrl'));
 });
 
+test('optional campaign country codes normalize without rejecting flexible drafts', async () => {
+  const global = plainToInstance(CampaignDto, { locationType: 'GLOBAL', campaignCountryCode: '  ' });
+  assert.equal(global.campaignCountryCode, undefined);
+  assert.equal((await validate(global)).length, 0);
+  const local = plainToInstance(CampaignDto, { locationType: 'LOCAL', campaignCountryCode: 'ke' });
+  assert.equal(local.campaignCountryCode, 'KE');
+  assert.equal((await validate(local)).length, 0);
+});
+
 test('discovery pagination is bounded', async () => {
   const dto=plainToInstance(CampaignQueryDto,{page:0,limit:100});
   const errors=await validate(dto);

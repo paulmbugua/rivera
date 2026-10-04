@@ -3,9 +3,11 @@ import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsEnum, Is
 import { BudgetVisibility, CampaignAttachmentVisibility, CampaignLocationType, CampaignObjective, CampaignStatus, CampaignVisibility, SocialPlatform, UsageRights } from '@prisma/client';
 
 const safeUrl = { protocols: ['http', 'https'], require_protocol: true };
+const normalizeCountryCode = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toUpperCase() || undefined : value;
 
 export class CampaignLocationDto {
-  @IsISO31661Alpha2() countryCode!: string;
+  @Transform(normalizeCountryCode) @IsISO31661Alpha2() countryCode!: string;
   @IsOptional() @IsString() @MaxLength(100) city?: string;
   @IsOptional() @IsString() @MaxLength(100) region?: string;
 }
@@ -53,7 +55,7 @@ export class CampaignDto {
   @IsOptional() @IsDateString() campaignStartDate?: string;
   @IsOptional() @IsDateString() campaignEndDate?: string;
   @IsOptional() @IsEnum(CampaignLocationType) locationType?: CampaignLocationType;
-  @IsOptional() @IsISO31661Alpha2() campaignCountryCode?: string;
+  @Transform(normalizeCountryCode) @IsOptional() @IsISO31661Alpha2() campaignCountryCode?: string;
   @IsOptional() @IsString() @MaxLength(100) campaignCity?: string;
   @IsOptional() @IsString() @MaxLength(100) campaignRegion?: string;
   @IsOptional() @IsString() @MaxLength(500) physicalLocationDescription?: string;
@@ -73,7 +75,7 @@ export class CampaignDto {
 
 export class CampaignQueryDto {
   @IsOptional() @IsString() @MaxLength(100) q?: string;
-  @IsOptional() @IsISO31661Alpha2() country?: string;
+  @Transform(normalizeCountryCode) @IsOptional() @IsISO31661Alpha2() country?: string;
   @IsOptional() @IsString() @MaxLength(100) city?: string;
   @IsOptional() @IsString() category?: string;
   @IsOptional() @IsEnum(SocialPlatform) platform?: SocialPlatform;
