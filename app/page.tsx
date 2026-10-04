@@ -27,7 +27,7 @@ export default function Home() {
       <div className="hero-visual">
         <div className="hero-image-wrap"><Image src="/images/rivera-hero-diverse.png" alt="A diverse group of creators and business owners shaping a campaign together in a sunlit studio" fill priority sizes="(max-width: 900px) 100vw, 48vw" /></div>
         <div className="hero-note"><Sparkles size={17} /><span><strong>Good chemistry matters.</strong><br />Rivera makes room for it.</span></div>
-        <div className="hero-stamp">RIVERA<br /><span>CREATE TOGETHER</span></div>
+        <div className="hero-stamp" aria-label="Rivera — create together"><strong>rivera</strong><span>create together</span></div>
       </div>
     </section>
 
