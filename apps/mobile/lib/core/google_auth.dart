@@ -11,35 +11,44 @@ class RiveraGoogleAuth {
       String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
   static const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
   static const webClientId = String.fromEnvironment('GOOGLE_CLIENT_ID_WEB');
-
-  static bool get configured =>
-      apiKey.isNotEmpty &&
-      appId.isNotEmpty &&
-      senderId.isNotEmpty &&
-      projectId.isNotEmpty &&
-      webClientId.isNotEmpty;
+  static bool _initialized = false;
 
   static Future<void> initialize() async {
-    if (!configured || Firebase.apps.isNotEmpty) return;
-    await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: apiKey,
-        appId: appId,
-        messagingSenderId: senderId,
-        projectId: projectId,
-      ),
+    if (_initialized) return;
+    if (Firebase.apps.isEmpty) {
+      final hasDartDefines = apiKey.isNotEmpty &&
+          appId.isNotEmpty &&
+          senderId.isNotEmpty &&
+          projectId.isNotEmpty;
+      if (hasDartDefines) {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: apiKey,
+            appId: appId,
+            messagingSenderId: senderId,
+            projectId: projectId,
+          ),
+        );
+      } else {
+        // Android reads the generated resources from google-services.json.
+        await Firebase.initializeApp();
+      }
+    }
+    await GoogleSignIn.instance.initialize(
+      serverClientId: webClientId.isEmpty ? null : webClientId,
     );
-    await GoogleSignIn.instance.initialize(serverClientId: webClientId);
+    _initialized = true;
   }
 
   static Future<String> signIn() async {
-    if (!configured) {
+    try {
+      await initialize();
+    } catch (_) {
       throw const ApiException(
-        'Google sign-in needs the Firebase development values. See apps/mobile/README.md.',
+        'Google sign-in is not configured for this Rivera app build.',
         code: 'GOOGLE_AUTH_UNAVAILABLE',
       );
     }
-    await initialize();
     final account = await GoogleSignIn.instance.authenticate();
     final google = account.authentication;
     final credential = GoogleAuthProvider.credential(idToken: google.idToken);

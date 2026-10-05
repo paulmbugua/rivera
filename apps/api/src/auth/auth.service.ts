@@ -55,10 +55,18 @@ export class AuthService {
           clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
           privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
         };
-        if (!account.projectId || !account.clientEmail || !account.privateKey) throw AuthErrors.googleUnavailable();
-        initializeApp({ credential: cert(account), projectId: account.projectId });
+        if (!account.projectId) throw AuthErrors.googleUnavailable();
+        initializeApp({
+          projectId: account.projectId,
+          ...(account.clientEmail && account.privateKey
+            ? { credential: cert(account) }
+            : {}),
+        });
       }
-      const decoded = await getAuth().verifyIdToken(idToken, true);
+      // Signature, issuer, audience and expiry verification only needs the
+      // Firebase project ID. Revocation checks require Admin credentials and
+      // can be enabled later when a service account is configured.
+      const decoded = await getAuth().verifyIdToken(idToken, false);
       const googleSubjects = decoded.firebase?.identities?.['google.com'];
       const subject = Array.isArray(googleSubjects) ? googleSubjects[0] : undefined;
       if (decoded.firebase?.sign_in_provider !== 'google.com' || !subject || !decoded.email || decoded.email_verified !== true) throw AuthErrors.googleFailed();

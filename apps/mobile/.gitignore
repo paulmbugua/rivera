@@ -44,5 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Firebase Android configuration is supplied per developer/environment.
+/android/app/google-services.json
+
 # Widget Preview related
 .widget_preview/
