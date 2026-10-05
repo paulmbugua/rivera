@@ -556,7 +556,19 @@ class _PasswordScreenState extends State<PasswordScreen> {
   final current = TextEditingController(),
       next = TextEditingController(),
       confirm = TextEditingController();
+  bool hideCurrent = true, hideNext = true, hideConfirmation = true;
   Future<void> save() async {
+    if (next.text.length < 8 ||
+        !RegExp('[a-z]').hasMatch(next.text) ||
+        !RegExp('[A-Z]').hasMatch(next.text) ||
+        !RegExp(r'\d').hasMatch(next.text)) {
+      showRiveraMessage(
+        context,
+        'Use 8 or more characters with uppercase, lowercase and a number.',
+        error: true,
+      );
+      return;
+    }
     if (next.text != confirm.text) {
       showRiveraMessage(context, 'New passwords do not match.', error: true);
       return;
@@ -585,19 +597,35 @@ class _PasswordScreenState extends State<PasswordScreen> {
                   'Use 8 or more characters with uppercase, lowercase and a number.',
             ),
             const SizedBox(height: 22),
-            _field(current, 'Current password'),
+            _field(current, 'Current password', hideCurrent,
+                () => setState(() => hideCurrent = !hideCurrent)),
             const SizedBox(height: 12),
-            _field(next, 'New password'),
+            _field(next, 'New password', hideNext,
+                () => setState(() => hideNext = !hideNext)),
             const SizedBox(height: 12),
-            _field(confirm, 'Confirm new password'),
+            _field(confirm, 'Confirm new password', hideConfirmation,
+                () => setState(() => hideConfirmation = !hideConfirmation)),
             const SizedBox(height: 22),
             FilledButton(onPressed: save, child: const Text('Change password')),
           ],
         ),
       );
-  Widget _field(TextEditingController c, String label) => TextField(
+  Widget _field(TextEditingController c, String label, bool hidden,
+          VoidCallback toggle) =>
+      TextField(
         controller: c,
-        obscureText: true,
-        decoration: InputDecoration(labelText: label),
+        obscureText: hidden,
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: IconButton(
+            tooltip: hidden
+                ? 'Show ${label.toLowerCase()}'
+                : 'Hide ${label.toLowerCase()}',
+            icon: Icon(hidden
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined),
+            onPressed: toggle,
+          ),
+        ),
       );
 }

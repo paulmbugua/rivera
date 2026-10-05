@@ -29,7 +29,7 @@ class _AuthScreenState extends State<AuthScreen> {
       token = TextEditingController();
   late AuthMode mode = widget.initialMode;
   String role = 'CREATOR';
-  bool terms = false, hidePassword = true;
+  bool terms = false, hidePassword = true, hideConfirmation = true;
 
   @override
   void dispose() {
@@ -207,9 +207,22 @@ class _AuthScreenState extends State<AuthScreen> {
                     _field(
                       confirm,
                       'Confirm password',
-                      obscure: hidePassword,
+                      obscure: hideConfirmation,
                       validator: (v) =>
                           v == password.text ? null : 'Passwords do not match',
+                      suffix: IconButton(
+                        tooltip: hideConfirmation
+                            ? 'Show password confirmation'
+                            : 'Hide password confirmation',
+                        icon: Icon(
+                          hideConfirmation
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () => setState(
+                          () => hideConfirmation = !hideConfirmation,
+                        ),
+                      ),
                     ),
                   ],
                   if (mode == AuthMode.register) ...[

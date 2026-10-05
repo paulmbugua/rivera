@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { api, destination, User } from '@/lib/api';
 import { useAuth } from './auth-provider';
 import { registerSchema, strongPassword } from '@/lib/auth-validation';
-import { ArrowLeft, BadgeCheck, HeartHandshake, LockKeyhole, MailCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Eye, EyeOff, HeartHandshake, LockKeyhole, MailCheck, Sparkles } from 'lucide-react';
 const login = z.object({ email: z.string().email(), password: z.string().min(1) });
 const email = z.object({ email: z.string().email() });
 const reset = z.object({ password: strongPassword, confirmPassword: z.string() }).refine(x => x.password === x.confirmPassword, { path: ['confirmPassword'], message: 'Passwords do not match' });
@@ -25,8 +25,14 @@ const moments = {
 export function AuthForm({ mode }: { mode: Mode }) {
   const search = useSearchParams()!; const { refresh } = useAuth();
   const [message, setMessage] = useState(''); const [error, setError] = useState('');
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const form = useForm<Record<string,unknown>>({ resolver: zodResolver(schemas[mode] as never) as never, defaultValues: { token: search.get('token') ?? '', firstName: '', lastName: '', email: '', password: '', confirmPassword: '', accountType: '', termsAccepted: false } });
-  const field = (name: string, label: string, type = 'text') => <label className="field" key={name}><span>{label}</span><input type={type} autoComplete={name === 'password' ? (mode === 'login' ? 'current-password' : 'new-password') : name} {...form.register(name)} required/><small role="alert">{form.formState.errors[name]?.message as string}</small></label>;
+  const field = (name: string, label: string, type = 'text') => {
+    const isPassword = type === 'password';
+    const isVisible = Boolean(visiblePasswords[name]);
+    const input = <input id={`${mode}-${name}`} type={isPassword && isVisible ? 'text' : type} autoComplete={name === 'password' ? (mode === 'login' ? 'current-password' : 'new-password') : name === 'confirmPassword' ? 'new-password' : name} aria-describedby={isPassword && name === 'password' && mode !== 'login' ? `${mode}-${name}-guidance` : undefined} {...form.register(name)} required/>;
+    return <div className="field" key={name}><label htmlFor={`${mode}-${name}`}>{label}</label>{isPassword ? <span className="password-field">{input}<button type="button" className="password-toggle" aria-label={`${isVisible ? 'Hide' : 'Show'} ${label.toLowerCase()}`} aria-pressed={isVisible} onClick={() => setVisiblePasswords(current => ({ ...current, [name]: !current[name] }))}>{isVisible ? <EyeOff aria-hidden="true"/> : <Eye aria-hidden="true"/>}</button></span> : input}{isPassword && name === 'password' && mode !== 'login' && <span className="field-guidance" id={`${mode}-${name}-guidance`}>Use 8 or more characters with uppercase, lowercase and a number.</span>}<small role="alert">{form.formState.errors[name]?.message as string}</small></div>;
+  };
   async function submit(data: Record<string,unknown>) {
     setError('');setMessage('');
     try {

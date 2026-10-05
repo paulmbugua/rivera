@@ -10,6 +10,7 @@ import { strongPassword } from "@/lib/auth-validation";
 import { useAuth } from "@/components/rivera/auth-provider";
 import { OperationalSettings } from "@/components/rivera/operations";
 import { ThemePreference } from "@/components/rivera/theme-preference";
+import { Eye, EyeOff } from "lucide-react";
 
 const profileSchema = z.object({
   firstName: z.string().min(1),
@@ -40,6 +41,7 @@ export default function Settings() {
   const { user, refresh, logout } = useAuth();
   const [profileMessage, setProfileMessage] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const profile = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -180,27 +182,45 @@ export default function Settings() {
             {(
               ["currentPassword", "newPassword", "confirmPassword"] as const
             ).map((name) => (
-              <label className="field" key={name}>
-                <span>
+              <div className="field" key={name}>
+                <label htmlFor={`settings-${name}`}>
                   {name === "currentPassword"
                     ? "Current password"
                     : name === "newPassword"
                       ? "New password"
                       : "Confirm new password"}
+                </label>
+                <span className="password-field">
+                  <input
+                    id={`settings-${name}`}
+                    type={visiblePasswords[name] ? "text" : "password"}
+                    autoComplete={
+                      name === "currentPassword"
+                        ? "current-password"
+                        : "new-password"
+                    }
+                    {...password.register(name)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={`${visiblePasswords[name] ? "Hide" : "Show"} ${name === "currentPassword" ? "current password" : name === "newPassword" ? "new password" : "password confirmation"}`}
+                    aria-pressed={Boolean(visiblePasswords[name])}
+                    onClick={() =>
+                      setVisiblePasswords((current) => ({
+                        ...current,
+                        [name]: !current[name],
+                      }))
+                    }
+                  >
+                    {visiblePasswords[name] ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                  </button>
                 </span>
-                <input
-                  type="password"
-                  autoComplete={
-                    name === "currentPassword"
-                      ? "current-password"
-                      : "new-password"
-                  }
-                  {...password.register(name)}
-                />
+                {name === "newPassword" && <span className="field-guidance">Use 8 or more characters with uppercase, lowercase and a number.</span>}
                 <small role="alert">
                   {password.formState.errors[name]?.message}
                 </small>
-              </label>
+              </div>
             ))}
             <button
               className="button primary"
