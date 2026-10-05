@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'api_client.dart';
 import 'models.dart';
+import 'google_auth.dart';
 
 class AppController extends ChangeNotifier {
   AppController({ApiClient? api}) : api = api ?? ApiClient();
@@ -98,6 +99,40 @@ class AppController extends ChangeNotifier {
           'lastName': lastName.trim(),
           'email': email.trim(),
           'password': password,
+          'accountType': accountType,
+          'termsAccepted': true,
+        });
+      });
+
+  Future<Map<String, dynamic>> googleIdentity() async {
+    Map<String, dynamic> result = {};
+    await _run(() async {
+      final idToken = await RiveraGoogleAuth.signIn();
+      result =
+          mapOf(await api.post('/auth/google/firebase', {'idToken': idToken}));
+      if (result['status'] == 'authenticated') {
+        user = RiveraUser.fromJson(mapOf(result['user']));
+        if (user!.onboardingCompleted || user!.isAdmin) {
+          await refreshWorkspace();
+        } else {
+          await loadPublic();
+        }
+      }
+    });
+    return result;
+  }
+
+  Future<void> completeGoogleRegistration({
+    required String token,
+    required String firstName,
+    required String lastName,
+    required String accountType,
+  }) =>
+      _run(() async {
+        await api.post('/auth/google/register', {
+          'token': token,
+          'firstName': firstName.trim(),
+          'lastName': lastName.trim(),
           'accountType': accountType,
           'termsAccepted': true,
         });

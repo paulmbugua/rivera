@@ -1,22 +1,106 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { MailService } from './mail.service';
-import { ChangePasswordDto, LoginDto, RegisterDto, ResetDto, UpdateProfileDto } from './dto';
+import { ChangePasswordDto, GoogleRegisterDto, LoginDto, RegisterDto, ResetDto, UpdateProfileDto } from './dto';
 import { compare, hash } from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Prisma, UserRole } from '@prisma/client';
 import { AuthErrors } from '../common/api-error';
+import { OAuth2Client } from 'google-auth-library';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 const digest = (token: string) => createHash('sha256').update(token).digest('hex');
 const random = () => randomBytes(32).toString('base64url');
 const duration = (value: string | undefined, fallback: number) => { const match = value?.match(/^(\d+)(s|m|h|d)$/); if (!match) return fallback; return Number(match[1]) * ({ s:1000,m:60_000,h:3_600_000,d:86_400_000 }[match[2]] ?? 1); };
 const until = (ms: number) => new Date(Date.now() + ms);
 type PublicUserInput = { id: string; email: string; firstName: string; lastName: string; phone?: string | null; countryCode?: string | null; city?: string | null; profileImageUrl?: string | null; status: string; emailVerifiedAt: Date | null; roles: { role: UserRole }[]; business?: { onboardingCompleted: boolean } | null; creator?: { onboardingCompleted: boolean } | null };
+type SessionUser = Prisma.UserGetPayload<{ include: { roles: true; business: true; creator: true } }>;
 const publicUser = (user: PublicUserInput) => ({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone ?? null, countryCode: user.countryCode ?? null, city: user.city ?? null, profileImageUrl: user.profileImageUrl ?? null, status: user.status, emailVerified: !!user.emailVerifiedAt, roles: user.roles.map(r => r.role), onboardingCompleted: user.roles.some(r => r.role === 'BUSINESS') ? !!user.business?.onboardingCompleted : user.roles.some(r => r.role === 'CREATOR') ? !!user.creator?.onboardingCompleted : true });
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(private db: PrismaService, private mail: MailService) {}
+  private googleClient() {
+    const clientId = process.env.GOOGLE_CLIENT_ID_WEB;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+    if (!clientId || !clientSecret || !redirectUri) throw AuthErrors.googleUnavailable();
+    return new OAuth2Client(clientId, clientSecret, redirectUri);
+  }
+  googleAuthorizationUrl(state: string) {
+    return this.googleClient().generateAuthUrl({ scope: ['openid', 'email', 'profile'], state, prompt: 'select_account', access_type: 'online' });
+  }
+  async googleWebIdentity(code: string) {
+    try {
+      const client = this.googleClient();
+      const { tokens } = await client.getToken(code);
+      if (!tokens.id_token) throw AuthErrors.googleFailed();
+      const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: process.env.GOOGLE_CLIENT_ID_WEB });
+      const payload = ticket.getPayload();
+      if (!payload?.sub || !payload.email || !payload.email_verified) throw AuthErrors.googleFailed();
+      return this.acceptGoogleIdentity({ subject: payload.sub, email: payload.email, firstName: payload.given_name, lastName: payload.family_name, picture: payload.picture });
+    } catch (error) {
+      if (error instanceof Error && 'getStatus' in error) throw error;
+      this.logger.warn('Google web identity verification failed');
+      throw AuthErrors.googleFailed();
+    }
+  }
+  async firebaseGoogleIdentity(idToken: string) {
+    try {
+      if (!getApps().length) {
+        const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        const account = encoded ? JSON.parse(encoded) : {
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        };
+        if (!account.projectId || !account.clientEmail || !account.privateKey) throw AuthErrors.googleUnavailable();
+        initializeApp({ credential: cert(account), projectId: account.projectId });
+      }
+      const decoded = await getAuth().verifyIdToken(idToken, true);
+      const googleSubjects = decoded.firebase?.identities?.['google.com'];
+      const subject = Array.isArray(googleSubjects) ? googleSubjects[0] : undefined;
+      if (decoded.firebase?.sign_in_provider !== 'google.com' || !subject || !decoded.email || decoded.email_verified !== true) throw AuthErrors.googleFailed();
+      const parts = (decoded.name ?? '').trim().split(/\s+/);
+      return this.acceptGoogleIdentity({ subject, email: decoded.email, firstName: parts[0], lastName: parts.slice(1).join(' '), picture: decoded.picture });
+    } catch (error) {
+      if (error instanceof Error && 'getStatus' in error) throw error;
+      this.logger.warn('Firebase Google identity verification failed');
+      throw AuthErrors.googleFailed();
+    }
+  }
+  private async acceptGoogleIdentity(identity: { subject: string; email: string; firstName?: string; lastName?: string; picture?: string }) {
+    const linked = await this.db.authIdentity.findUnique({ where: { provider_providerSubject: { provider: 'GOOGLE', providerSubject: identity.subject } }, include: { user: { include: { roles: true, business: true, creator: true } } } });
+    if (linked) {
+      if (!linked.user.emailVerifiedAt) return { status: 'verification_required' as const, email: linked.user.email };
+      return { status: 'authenticated' as const, user: linked.user };
+    }
+    const email = identity.email.trim().toLowerCase();
+    if (await this.db.user.findUnique({ where: { email } })) throw AuthErrors.emailExists();
+    const token = random();
+    await this.db.oAuthRegistration.create({ data: { tokenHash: digest(token), provider: 'GOOGLE', providerSubject: identity.subject, email, suggestedFirstName: identity.firstName?.slice(0, 80), suggestedLastName: identity.lastName?.slice(0, 80), profileImageUrl: identity.picture, expiresAt: until(10 * 60_000) } });
+    return { status: 'registration_required' as const, token, email, firstName: identity.firstName ?? '', lastName: identity.lastName ?? '', profileImageUrl: identity.picture ?? null };
+  }
+  async oauthPending(token: string) {
+    const pending = await this.db.oAuthRegistration.findUnique({ where: { tokenHash: digest(token) } });
+    if (!pending || pending.usedAt || pending.expiresAt <= new Date()) throw AuthErrors.oauthRegistration();
+    return { email: pending.email, firstName: pending.suggestedFirstName ?? '', lastName: pending.suggestedLastName ?? '', profileImageUrl: pending.profileImageUrl };
+  }
+  async googleRegister(dto: GoogleRegisterDto) {
+    if (dto.accountType === 'ADMIN') throw AuthErrors.forbiddenRole();
+    const pending = await this.db.oAuthRegistration.findUnique({ where: { tokenHash: digest(dto.token) } });
+    if (!pending || pending.usedAt || pending.expiresAt <= new Date()) throw AuthErrors.oauthRegistration();
+    if (await this.db.user.findUnique({ where: { email: pending.email } })) throw AuthErrors.emailExists();
+    const user = await this.db.$transaction(async tx => {
+      const consumed = await tx.oAuthRegistration.updateMany({ where: { id: pending.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+      if (!consumed.count) throw AuthErrors.oauthRegistration();
+      return tx.user.create({ data: { email: pending.email, passwordHash: null, firstName: dto.firstName.trim(), lastName: dto.lastName.trim(), profileImageUrl: pending.profileImageUrl, roles: { create: { role: dto.accountType } }, authIdentities: { create: { provider: pending.provider, providerSubject: pending.providerSubject } } }, include: { roles: true, business: true, creator: true } });
+    });
+    await this.issueEmailToken(user.id, user.email, 'verification');
+    this.logger.log(`Google account created for user ${user.id}`);
+    return { user: publicUser(user), requiresEmailVerification: true, message: 'Account created. Check your email to activate Rivera.' };
+  }
   async register(dto: RegisterDto) {
     if (dto.accountType === 'ADMIN') throw AuthErrors.forbiddenRole();
     const email = dto.email.trim().toLowerCase();
@@ -64,10 +148,19 @@ export class AuthService {
   }
   async login(dto: LoginDto, agent?: string, ip?: string) {
     const user = await this.db.user.findUnique({ where: { email: dto.email.trim().toLowerCase() }, include: { roles: true, business: true, creator: true } });
-    if (!user || !(await compare(dto.password, user.passwordHash))) { this.logger.warn('Failed login attempt'); throw AuthErrors.invalidCredentials(); }
+    if (!user?.passwordHash || !(await compare(dto.password, user.passwordHash))) { this.logger.warn('Failed login attempt'); throw AuthErrors.invalidCredentials(); }
     if (user.status === 'SUSPENDED') { this.logger.warn(`Suspended account login attempt for user ${user.id}`); throw AuthErrors.suspended(); }
     if (user.deletedAt || user.status === 'DEACTIVATED') { this.logger.warn(`Deactivated account login attempt for user ${user.id}`); throw AuthErrors.deactivated(); }
     if (!user.emailVerifiedAt) throw AuthErrors.emailNotVerified();
+    return this.createSession(user, agent, ip);
+  }
+  async googleSession(user: SessionUser, agent?: string, ip?: string) {
+    if (user.status === 'SUSPENDED') throw AuthErrors.suspended();
+    if (user.deletedAt || user.status === 'DEACTIVATED') throw AuthErrors.deactivated();
+    if (!user.emailVerifiedAt) throw AuthErrors.emailNotVerified();
+    return this.createSession(user, agent, ip);
+  }
+  private async createSession(user: SessionUser, agent?: string, ip?: string) {
     const refresh = random();
     const session = await this.db.refreshSession.create({ data: { userId: user.id, tokenHash: digest(refresh), expiresAt: until(duration(process.env.JWT_REFRESH_EXPIRES_IN, 2_592_000_000)), userAgent: agent?.slice(0, 255), ipAddress: ip?.slice(0, 64) } });
     await this.db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
@@ -109,7 +202,7 @@ export class AuthService {
   async changePassword(id: string, dto: ChangePasswordDto) {
     if (dto.newPassword !== dto.confirmPassword) throw AuthErrors.passwordConfirmation();
     const user = await this.db.user.findUniqueOrThrow({ where: { id } });
-    if (!(await compare(dto.currentPassword, user.passwordHash))) throw AuthErrors.currentPassword();
+    if (!user.passwordHash || !(await compare(dto.currentPassword, user.passwordHash))) throw AuthErrors.currentPassword();
     await this.db.$transaction([this.db.user.update({ where: { id }, data: { passwordHash: await hash(dto.newPassword, 12) } }), this.db.refreshSession.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } })]);
     return { message: 'Password changed. Sign in again.' };
   }

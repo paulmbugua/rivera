@@ -9,6 +9,14 @@ export class RegisterDto {
   @ApiProperty({ enum: ['BUSINESS','CREATOR'] }) @IsEnum(UserRole) accountType!: UserRole;
   @ApiProperty({ example: true }) @Equals(true, { message: 'You must agree to the Terms of Service and Privacy Policy' }) termsAccepted!: boolean;
 }
+export class GoogleRegisterDto {
+  @ApiProperty({ writeOnly: true }) @IsString() @IsNotEmpty() token!: string;
+  @ApiProperty() @IsString() @Length(1, 80) firstName!: string;
+  @ApiProperty() @IsString() @Length(1, 80) lastName!: string;
+  @ApiProperty({ enum: ['BUSINESS','CREATOR'] }) @IsEnum(UserRole) accountType!: UserRole;
+  @ApiProperty({ example: true }) @Equals(true, { message: 'You must agree to the Terms of Service and Privacy Policy' }) termsAccepted!: boolean;
+}
+export class FirebaseGoogleDto { @ApiProperty({ writeOnly: true }) @IsString() @IsNotEmpty() idToken!: string; }
 export class LoginDto { @ApiProperty({format:'email'}) @IsEmail() email!: string; @ApiProperty({writeOnly:true}) @IsString() password!: string; }
 export class EmailDto { @ApiProperty({format:'email'}) @IsEmail() email!: string; }
 export class TokenDto { @ApiProperty({description:'Token from the emailed link',writeOnly:true}) @IsString() @IsNotEmpty() token!: string; }

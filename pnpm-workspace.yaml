@@ -8,12 +8,14 @@ overrides:
   deepmerge-ts: 8.0.0
   'miniflare>sharp': 0.35.4
 allowBuilds:
+  '@firebase/util': true
   '@prisma/client': true
   '@prisma/engines': true
   '@scarf/scarf': false
   esbuild: true
   fsevents: false
   prisma: true
+  protobufjs: true
   sharp: true
   unrs-resolver: false
   workerd: true

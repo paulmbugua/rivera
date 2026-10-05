@@ -31,6 +31,9 @@ if (existsSync(wranglerConfigPath) && process.env.API_INTERNAL_URL) {
     ...(config.vars || {}),
     API_INTERNAL_URL: process.env.API_INTERNAL_URL,
     ...(process.env.WEB_ORIGIN ? { WEB_ORIGIN: process.env.WEB_ORIGIN } : {}),
+    ...(process.env.GOOGLE_AUTH_API_URL
+      ? { GOOGLE_AUTH_API_URL: process.env.GOOGLE_AUTH_API_URL }
+      : {}),
   };
   writeFileSync(wranglerConfigPath, `${JSON.stringify(config)}\n`);
 }

@@ -37,6 +37,20 @@ test('registration normalizes email and hashes the password', async () => {
   assert.equal(sent.length, 1);
   assert.equal(result.requiresEmailVerification, true);
 });
+test('Google registration is single-use and still requires Rivera email activation', async () => {
+  const { createHash } = await import('node:crypto');
+  const token = 'short-lived-google-registration';
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  let consumed = false; let created: Record<string, unknown> | undefined; let mailed = false;
+  const pending = { id:'oauth-1',tokenHash,provider:'GOOGLE',providerSubject:'google-123',email:'creator@example.com',profileImageUrl:null,usedAt:null,expiresAt:new Date(Date.now()+60_000) };
+  const tx = { oAuthRegistration:{updateMany:async()=>{if(consumed)return{count:0};consumed=true;return{count:1}}},user:{create:async({data}:{data:Record<string,unknown>})=>{created=data;return{id:'user-1',email:data.email,firstName:data.firstName,lastName:data.lastName,status:'PENDING_VERIFICATION',emailVerifiedAt:null,roles:[{role:'CREATOR'}],business:null,creator:null}}} };
+  const db = { oAuthRegistration:{findUnique:async()=>pending},user:{findUnique:async()=>null},emailVerificationToken:{create:async()=>({})},$transaction:async(fn:(value:typeof tx)=>Promise<unknown>)=>fn(tx) };
+  const mail = { sendVerificationEmail:async()=>{mailed=true} };
+  const service = new AuthService(db as unknown as PrismaService,mail as unknown as MailService);
+  const result = await service.googleRegister({token,firstName:'Amina',lastName:'K',accountType:'CREATOR',termsAccepted:true});
+  assert.equal(result.requiresEmailVerification,true); assert.equal((created?.passwordHash),null); assert.ok(mailed);
+  await assert.rejects(service.googleRegister({token,firstName:'Amina',lastName:'K',accountType:'CREATOR',termsAccepted:true}),error=>codeOf(error)==='OAUTH_REGISTRATION_INVALID');
+});
 test('refresh rejects a revoked token and revokes remaining sessions', async () => {
   let revoked = false;
   const db = { refreshSession: { findUnique: async () => ({ id: 'old', userId: 'user-1', revokedAt: new Date(), expiresAt: new Date(Date.now() + 10000), user: { status: 'ACTIVE' } }), updateMany: async () => { revoked = true; return { count: 1 }; } } };

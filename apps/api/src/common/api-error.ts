@@ -21,4 +21,8 @@ export const AuthErrors = {
   currentPassword: () => new ApiException(HttpStatus.UNAUTHORIZED, 'INVALID_CURRENT_PASSWORD', 'Current password is incorrect.'),
   passwordConfirmation: () => new ApiException(HttpStatus.BAD_REQUEST, 'PASSWORD_CONFIRMATION_MISMATCH', 'New password confirmation does not match.'),
   accountNotVerifiable: () => new ApiException(HttpStatus.BAD_REQUEST, 'ACCOUNT_NOT_VERIFIABLE', 'This account cannot be verified.'),
+  googleUnavailable: () => new ApiException(HttpStatus.SERVICE_UNAVAILABLE, 'GOOGLE_AUTH_UNAVAILABLE', 'Google sign-in is not configured yet.'),
+  googleFailed: () => new ApiException(HttpStatus.UNAUTHORIZED, 'GOOGLE_AUTH_FAILED', 'Google could not verify this sign-in. Please try again.'),
+  googleState: () => new ApiException(HttpStatus.BAD_REQUEST, 'GOOGLE_OAUTH_STATE_INVALID', 'This Google sign-in request expired or is invalid. Please start again.'),
+  oauthRegistration: () => new ApiException(HttpStatus.BAD_REQUEST, 'OAUTH_REGISTRATION_INVALID', 'This social registration has expired or was already used. Please start again.'),
 };

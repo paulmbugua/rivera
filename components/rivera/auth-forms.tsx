@@ -24,7 +24,7 @@ const moments = {
 };
 export function AuthForm({ mode }: { mode: Mode }) {
   const search = useSearchParams()!; const { refresh } = useAuth();
-  const [message, setMessage] = useState(''); const [error, setError] = useState('');
+  const [message, setMessage] = useState(''); const [error, setError] = useState(search.get('googleError') ? 'Google sign-in could not be completed. Please try again.' : '');
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const form = useForm<Record<string,unknown>>({ resolver: zodResolver(schemas[mode] as never) as never, defaultValues: { token: search.get('token') ?? '', firstName: '', lastName: '', email: '', password: '', confirmPassword: '', accountType: '', termsAccepted: false } });
   const field = (name: string, label: string, type = 'text') => {
@@ -54,5 +54,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
     {mode === 'verify' && field('token','Verification token')}
     {error && <p className="form-error" role="alert">{error}</p>}{message && <p className="form-success" role="status">{message}</p>}
     <button className="button primary form-submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? 'Please wait…' : ({ register:'Create account',login:'Log in',forgot:'Send reset link',reset:'Reset password',verify:'Verify email' }[mode])}</button>
+    {(['register','login'] as Mode[]).includes(mode)&&<><div className="auth-divider"><span>or</span></div><a className="google-button" href="/auth/google/start"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14.1a6 6 0 0 1 0-4.1V7.4H3.2a10 10 0 0 0 0 9.3l3.3-2.6Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.4L6.5 10A5.8 5.8 0 0 1 12 6Z"/></svg>Continue with Google</a></>}
   </form><div className="auth-links">{mode !== 'login' && <Link href="/login">Log in</Link>}{mode !== 'register' && <Link href="/register">Create account</Link>}{mode === 'login' && <Link href="/forgot-password">Forgot password?</Link>}{mode === 'verify' && <Link href="/resend-verification">Send a new verification link</Link>}{mode === 'login' && <Link href="/resend-verification">Resend verification</Link>}</div></div></section></div></main>;
 }

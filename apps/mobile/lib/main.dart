@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'core/app_controller.dart';
 import 'core/theme.dart';
+import 'core/google_auth.dart';
 import 'screens/home_shell.dart';
 import 'screens/landing_screen.dart';
 import 'screens/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await RiveraGoogleAuth.initialize();
   runApp(const RiveraApp());
 }
 

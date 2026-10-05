@@ -80,6 +80,13 @@ services:
       CREATOR_SEED_EMAIL: ${CREATOR_SEED_EMAIL:-creator.demo@example.com}
       CREATOR_SEED_PASSWORD: ${CREATOR_SEED_PASSWORD:-RiveraDemo123}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      GOOGLE_CLIENT_ID_WEB: ${GOOGLE_CLIENT_ID_WEB:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:4000/api/v1/auth/google/callback}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
       NODE_ENV: development
     ports: ["127.0.0.1:4000:4000"]
     volumes:
@@ -98,6 +105,7 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
       XDG_CONFIG_HOME: /tmp/rivera-sites-runtime/config
+      GOOGLE_AUTH_API_URL: ${GOOGLE_AUTH_API_URL:-http://localhost:4000/api/v1}
     ports: ["127.0.0.1:3000:3000"]
     depends_on: [api]
 volumes:

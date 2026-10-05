@@ -106,6 +106,32 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> google() async {
+    try {
+      final result = await widget.controller.googleIdentity();
+      if (!mounted) return;
+      if (result['status'] == 'authenticated') {
+        Navigator.pop(context);
+      } else if (result['status'] == 'verification_required') {
+        setState(() => mode = AuthMode.verify);
+        showRiveraMessage(
+            context, 'Activate your Rivera account from the email we sent.');
+      } else {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GoogleRegistrationScreen(
+              controller: widget.controller,
+              pending: result,
+            ),
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) showRiveraMessage(context, e.message, error: true);
+    }
+  }
+
   String? passwordError(String? value) {
     if (value == null || value.length < 8) return 'Use at least 8 characters';
     if (!RegExp('[a-z]').hasMatch(value)) return 'Add a lowercase letter';
@@ -275,6 +301,14 @@ class _AuthScreenState extends State<AuthScreen> {
                             AuthMode.reset => 'Reset password',
                           }),
                   ),
+                  if ([AuthMode.login, AuthMode.register].contains(mode)) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: widget.controller.busy ? null : google,
+                      icon: const Icon(Icons.g_mobiledata_rounded, size: 27),
+                      label: const Text('Continue with Google'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -327,4 +361,93 @@ class _AuthScreenState extends State<AuthScreen> {
             (v) => v == null || v.trim().isEmpty ? '$label is required' : null,
         decoration: InputDecoration(labelText: label, suffixIcon: suffix),
       );
+}
+
+class GoogleRegistrationScreen extends StatefulWidget {
+  const GoogleRegistrationScreen(
+      {super.key, required this.controller, required this.pending});
+  final AppController controller;
+  final Map<String, dynamic> pending;
+  @override
+  State<GoogleRegistrationScreen> createState() =>
+      _GoogleRegistrationScreenState();
+}
+
+class _GoogleRegistrationScreenState extends State<GoogleRegistrationScreen> {
+  late final first = TextEditingController(
+      text: widget.pending['firstName']?.toString() ?? '');
+  late final last =
+      TextEditingController(text: widget.pending['lastName']?.toString() ?? '');
+  String role = 'CREATOR';
+  bool terms = false;
+  Future<void> save() async {
+    if (first.text.trim().isEmpty || last.text.trim().isEmpty) {
+      showRiveraMessage(context, 'Enter your first and last name.',
+          error: true);
+      return;
+    }
+    if (!terms) {
+      showRiveraMessage(context, 'Please accept the Terms and Privacy Policy.',
+          error: true);
+      return;
+    }
+    try {
+      await widget.controller.completeGoogleRegistration(
+          token: widget.pending['token'].toString(),
+          firstName: first.text,
+          lastName: last.text,
+          accountType: role);
+      if (!mounted) return;
+      showRiveraMessage(
+          context, 'Account created. Check your email to activate Rivera.');
+      Navigator.popUntil(context, (route) => route.isFirst);
+    } on ApiException catch (e) {
+      if (mounted) showRiveraMessage(context, e.message, error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Text('Complete your account')),
+      body: ListView(padding: const EdgeInsets.all(22), children: [
+        const Eyebrow('Google, then Rivera'),
+        const SizedBox(height: 12),
+        Text('Choose your Rivera path.',
+            style: Theme.of(context).textTheme.displaySmall),
+        const SizedBox(height: 8),
+        Text(widget.pending['email']?.toString() ?? '',
+            style: Theme.of(context).textTheme.bodyLarge),
+        const SizedBox(height: 24),
+        TextField(
+            controller: first,
+            decoration: const InputDecoration(labelText: 'First name')),
+        const SizedBox(height: 14),
+        TextField(
+            controller: last,
+            decoration: const InputDecoration(labelText: 'Last name')),
+        const SizedBox(height: 18),
+        SegmentedButton<String>(segments: const [
+          ButtonSegment(
+              value: 'CREATOR',
+              label: Text('Creator'),
+              icon: Icon(Icons.auto_awesome_outlined)),
+          ButtonSegment(
+              value: 'BUSINESS',
+              label: Text('Business'),
+              icon: Icon(Icons.storefront_outlined))
+        ], selected: {
+          role
+        }, onSelectionChanged: (value) => setState(() => role = value.first)),
+        CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: terms,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text(
+                'I agree to Rivera’s Terms of Service and Privacy Policy.'),
+            onChanged: (value) => setState(() => terms = value ?? false)),
+        const SizedBox(height: 14),
+        FilledButton(
+            onPressed: widget.controller.busy ? null : save,
+            child: const Text('Create account & send activation'))
+      ]));
 }

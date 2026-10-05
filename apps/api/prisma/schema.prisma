@@ -20,6 +20,10 @@ enum UserStatus {
   DEACTIVATED
 }
 
+enum AuthProvider {
+  GOOGLE
+}
+
 enum CampaignStatus {
   DRAFT
   PENDING_REVIEW
@@ -361,7 +365,7 @@ enum OperationalJobStatus {
 model User {
   id                            String                    @id @default(cuid())
   email                         String                    @unique
-  passwordHash                  String
+  passwordHash                  String?
   firstName                     String
   lastName                      String
   phone                         String?
@@ -398,6 +402,36 @@ model User {
   analyticsEvents               AnalyticsEvent[]
   dataLifecycleRequests         DataLifecycleRequest[]
   adminAuditLogs                AdminAuditLog[]            @relation("AdminAuditActor")
+  authIdentities                AuthIdentity[]
+}
+
+model AuthIdentity {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        AuthProvider
+  providerSubject String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+}
+
+model OAuthRegistration {
+  id                 String       @id @default(cuid())
+  tokenHash          String       @unique
+  provider           AuthProvider
+  providerSubject    String
+  email              String
+  suggestedFirstName String?
+  suggestedLastName  String?
+  profileImageUrl    String?
+  expiresAt          DateTime
+  usedAt             DateTime?
+  createdAt          DateTime     @default(now())
+
+  @@index([expiresAt])
 }
 
 model UserRoleAssignment {
