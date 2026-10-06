@@ -41,6 +41,13 @@ set_env GOOGLE_REDIRECT_URI "https://${domain}/api/v1/auth/google/callback"
 set_env GOOGLE_AUTH_API_URL "https://${domain}/api/v1"
 set_env MEDIA_PUBLIC_URL "https://${domain}/media"
 set_env NEXT_PUBLIC_MEDIA_URL "https://${domain}/media"
+set_env STORAGE_PROVIDER persistent-volume
+
+stripe_secret="$(sed -n 's/^STRIPE_SECRET_KEY=//p' "$env_file" | tail -n 1)"
+stripe_webhook_secret="$(sed -n 's/^STRIPE_WEBHOOK_SECRET=//p' "$env_file" | tail -n 1)"
+if [[ "$stripe_secret" != sk_live_* || -z "$stripe_webhook_secret" ]]; then
+  set_env STRIPE_APPLICATION_FEE_ENABLED false
+fi
 
 chmod 600 "$env_file"
 docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet

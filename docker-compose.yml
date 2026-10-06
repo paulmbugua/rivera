@@ -44,7 +44,7 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
-      STORAGE_PROVIDER: local
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       LOCAL_UPLOAD_DIR: /app/uploads
       PRIVATE_UPLOAD_DIR: /app/private-uploads
       MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-http://localhost:4000/media}
