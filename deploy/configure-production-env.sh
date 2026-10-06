@@ -32,16 +32,16 @@ fi
 set_env POSTGRES_PORT 55432
 set_env API_HOST_PORT 4100
 set_env WEB_HOST_PORT 3100
-set_env WEB_ORIGIN "https://${domain}"
-set_env APP_URL "https://${domain}"
+set_env WEB_ORIGIN "https://www.${domain}"
+set_env WEB_ORIGINS "https://www.${domain},https://${domain}"
+set_env APP_URL "https://www.${domain}"
 set_env NEXT_PUBLIC_API_URL /api/v1
 set_env COOKIE_SECURE true
 set_env NODE_ENV production
-set_env GOOGLE_REDIRECT_URI "https://${domain}/api/v1/auth/google/callback"
-set_env GOOGLE_AUTH_API_URL "https://${domain}/api/v1"
-set_env MEDIA_PUBLIC_URL "https://${domain}/media"
-set_env NEXT_PUBLIC_MEDIA_URL "https://${domain}/media"
-set_env STORAGE_PROVIDER persistent-volume
+set_env GOOGLE_REDIRECT_URI "https://www.${domain}/api/v1/auth/google/callback"
+set_env GOOGLE_AUTH_API_URL "https://www.${domain}/api/v1"
+set_env MEDIA_PUBLIC_URL "https://api.${domain}/media"
+set_env NEXT_PUBLIC_MEDIA_URL "https://api.${domain}/media"
 
 stripe_secret="$(sed -n 's/^STRIPE_SECRET_KEY=//p' "$env_file" | tail -n 1)"
 stripe_webhook_secret="$(sed -n 's/^STRIPE_WEBHOOK_SECRET=//p' "$env_file" | tail -n 1)"

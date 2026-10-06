@@ -23,8 +23,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableShutdownHooks();
   app.setGlobalPrefix("api/v1");
-  const origin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
-  app.enableCors({ origin, credentials: true });
+  const origins = (process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN ?? "http://localhost:3000")
+    .split(",").map(value => value.trim()).filter(Boolean);
+  const origin = origins[0];
+  app.enableCors({ origin: origins, credentials: true });
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(correlationId);
   app.use(cookieParser());
@@ -50,14 +52,14 @@ async function bootstrap() {
       if (
         ["POST", "PUT", "PATCH", "DELETE"].includes(req.method) &&
         req.headers.origin &&
-        req.headers.origin !== origin
+        !origins.includes(req.headers.origin)
       )
         return next(new BadRequestException("Request origin is not allowed"));
       if (
         ["POST", "PUT", "PATCH", "DELETE"].includes(req.method) &&
         !req.headers.origin &&
         req.headers.referer &&
-        !req.headers.referer.startsWith(origin + "/")
+        !origins.some(allowed => req.headers.referer!.startsWith(allowed + "/"))
       )
         return next(new BadRequestException("Request origin is not allowed"));
       if (

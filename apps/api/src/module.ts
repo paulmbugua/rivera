@@ -160,6 +160,19 @@ function validate(config: Record<string, unknown>) {
       "Production requires HTTPS origins, a unique 48+ character JWT secret, secure cookies, SMTP and non-local storage",
     );
   if (
+    value.STORAGE_PROVIDER === "r2" &&
+    (!config.R2_ACCOUNT_ID ||
+      !config.R2_ACCESS_KEY_ID ||
+      !config.R2_SECRET_ACCESS_KEY ||
+      !config.R2_BUCKET_IMAGES ||
+      !config.R2_BUCKET_VIDEOS ||
+      !config.R2_PUBLIC_BASE_URL_IMAGES ||
+      !config.R2_PUBLIC_BASE_URL_VIDEOS)
+  )
+    throw new Error(
+      "R2 storage requires account, credentials, image/video buckets and public base URLs",
+    );
+  if (
     config.NODE_ENV === "production" &&
     value.STRIPE_APPLICATION_FEE_ENABLED === "true" &&
     (!config.STRIPE_SECRET_KEY ||
