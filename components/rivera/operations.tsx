@@ -8,6 +8,7 @@ type Preference = {
   category: string;
   emailEnabled: boolean;
   inAppEnabled: boolean;
+  pushEnabled: boolean;
   critical: boolean;
 };
 const errorText = (error: unknown) =>
@@ -25,7 +26,7 @@ export function OperationalSettings() {
   }, []);
   async function update(
     item: Preference,
-    field: "emailEnabled" | "inAppEnabled",
+    field: "emailEnabled" | "inAppEnabled" | "pushEnabled",
   ) {
     const next = { ...item, [field]: !item[field] };
     setItems((current) =>
@@ -94,6 +95,15 @@ export function OperationalSettings() {
                   onChange={() => void update(item, "emailEnabled")}
                 />{" "}
                 Email
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={item.pushEnabled}
+                  disabled={item.critical}
+                  onChange={() => void update(item, "pushEnabled")}
+                />{" "}
+                Push
               </label>
             </article>
           ))}

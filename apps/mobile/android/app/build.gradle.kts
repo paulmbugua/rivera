@@ -5,6 +5,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+
+val signingPropertiesFile = rootProject.file("key.properties")
+val signingProperties = Properties().apply {
+    if (signingPropertiesFile.exists()) signingPropertiesFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.paulmbugua.rivera"
     compileSdk = flutter.compileSdkVersion
@@ -20,7 +27,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.paulmbugua.rivera"
+        applicationId = "com.paulmbugua1.rivera"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -35,9 +42,21 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            ndk {
+                // Include native symbols for Play Console crash diagnostics where available.
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
+            val storePath = signingProperties.getProperty("storeFile")
+            if (storePath.isNullOrBlank()) {
+                throw GradleException("Release signing is not configured. Add apps/mobile/android/key.properties and the Rivera upload keystore.")
+            }
+            signingConfigs.maybeCreate("release").apply {
+                storeFile = rootProject.file(storePath)
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

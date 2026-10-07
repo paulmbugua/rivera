@@ -99,6 +99,9 @@ export class OperationsService {
         inAppEnabled: critical.has(category)
           ? true
           : (row?.inAppEnabled ?? true),
+        pushEnabled: critical.has(category)
+          ? true
+          : (row?.pushEnabled ?? category !== "MARKETING"),
         critical: critical.has(category),
       };
     });
@@ -113,10 +116,12 @@ export class OperationsService {
         category: dto.category,
         emailEnabled: forced ? true : dto.emailEnabled,
         inAppEnabled: forced ? true : dto.inAppEnabled,
+        pushEnabled: forced ? true : dto.pushEnabled,
       },
       update: {
         emailEnabled: forced ? true : dto.emailEnabled,
         inAppEnabled: forced ? true : dto.inAppEnabled,
+        pushEnabled: forced ? true : dto.pushEnabled,
       },
     });
   }

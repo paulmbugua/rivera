@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'api_client.dart';
 import 'models.dart';
 import 'google_auth.dart';
+import 'notification_service.dart';
 
 class AppController extends ChangeNotifier {
   AppController({ApiClient? api}) : api = api ?? ApiClient();
@@ -18,6 +19,8 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic> dashboard = {};
   List<Map<String, dynamic>> campaigns = [];
   List<Map<String, dynamic>> creators = [];
+  List<Map<String, dynamic>> notifications = [];
+  int notificationUnread = 0;
   ThemeMode themeMode = ThemeMode.system;
 
   Future<void> bootstrap() async {
@@ -30,6 +33,8 @@ class AppController extends ChangeNotifier {
       } else {
         await loadPublic();
       }
+      await RiveraNotifications.instance.register(api);
+      await refreshNotifications();
     } catch (_) {
       user = null;
       await loadPublic();
@@ -84,6 +89,8 @@ class AppController extends ChangeNotifier {
         } else {
           await loadPublic();
         }
+        await RiveraNotifications.instance.register(api);
+        await refreshNotifications();
       });
 
   Future<void> register({
@@ -117,6 +124,8 @@ class AppController extends ChangeNotifier {
         } else {
           await loadPublic();
         }
+        await RiveraNotifications.instance.register(api);
+        await refreshNotifications();
       }
     });
     return result;
@@ -156,6 +165,7 @@ class AppController extends ChangeNotifier {
       );
 
   Future<void> logout() async {
+    await RiveraNotifications.instance.unregister();
     try {
       await api.post('/auth/logout');
     } catch (_) {}
@@ -163,6 +173,8 @@ class AppController extends ChangeNotifier {
     user = null;
     dashboard = {};
     profile = {};
+    notifications = [];
+    notificationUnread = 0;
     notifyListeners();
   }
 
@@ -197,7 +209,42 @@ class AppController extends ChangeNotifier {
           };
         }
         await loadPublic();
+        await refreshNotifications();
       }, quiet: true);
+
+  Future<void> refreshNotifications() async {
+    if (user == null) return;
+    try {
+      final value = mapOf(await api.get('/notifications'));
+      notifications = itemsOf(value);
+      notificationUnread = (value['unread'] as num?)?.toInt() ?? 0;
+      notifyListeners();
+    } catch (_) {
+      // Preserve the last successful notification state while offline.
+    }
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    if (id.isEmpty) return;
+    await api.patch('/notifications/$id/read');
+    notifications = notifications
+        .map((item) => item['id'] == id
+            ? {...item, 'readAt': DateTime.now().toIso8601String()}
+            : item)
+        .toList();
+    notificationUnread = notificationUnread > 0 ? notificationUnread - 1 : 0;
+    notifyListeners();
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await api.patch('/notifications/read-all');
+    final readAt = DateTime.now().toIso8601String();
+    notifications = notifications
+        .map((item) => item['readAt'] == null ? {...item, 'readAt': readAt} : item)
+        .toList();
+    notificationUnread = 0;
+    notifyListeners();
+  }
 
   Future<dynamic> fetch(String path) => api.get(path);
   Future<dynamic> send(

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -29,6 +30,11 @@ import {
   ProposalDto,
   RefundDto,
 } from "./dto";
+import {
+  RegisterPushTokenDto,
+  RemovePushTokenDto,
+} from "../notifications/push-notifications.dto";
+import { PushNotificationsService } from "../notifications/push-notifications.service";
 
 @ApiTags("Creator applications")
 @UseGuards(AuthGuard)
@@ -178,7 +184,10 @@ export class BusinessApplicationsController {
 @ApiCookieAuth("access-cookie")
 @Controller("notifications")
 export class NotificationsController {
-  constructor(private service: ApplicationsService) {}
+  constructor(
+    private service: ApplicationsService,
+    private push: PushNotificationsService,
+  ) {}
   @Get() list(@CurrentUser() user: AuthUser) {
     return this.service.notifications(user.id);
   }
@@ -187,6 +196,23 @@ export class NotificationsController {
     @Param("id") id: string,
   ) {
     return this.service.markNotificationRead(user.id, id);
+  }
+  @Patch("read-all") readAll(@CurrentUser() user: AuthUser) {
+    return this.service.markAllNotificationsRead(user.id);
+  }
+  @Post("devices")
+  registerDevice(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: RegisterPushTokenDto,
+  ) {
+    return this.push.registerDevice(user.id, dto);
+  }
+  @Delete("devices")
+  removeDevice(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: RemovePushTokenDto,
+  ) {
+    return this.push.removeDevice(user.id, dto.token);
   }
 }
 

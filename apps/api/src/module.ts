@@ -82,6 +82,7 @@ import {
   ErrorMonitor,
   RequestLoggingInterceptor,
 } from "./common/observability";
+import { PushNotificationsService } from "./notifications/push-notifications.service";
 const duration = z.string().regex(/^\d+(s|m|h|d)$/);
 const env = z.object({
   DATABASE_URL: z.string().startsWith("postgresql://"),
@@ -133,6 +134,8 @@ const env = z.object({
     .max(720)
     .default(48),
   ERROR_MONITORING_ENABLED: z.enum(["true", "false"]).default("false"),
+  PUSH_NOTIFICATIONS_ENABLED: z.enum(["true", "false"]).default("true"),
+  PUSH_DISPATCH_INTERVAL_MS: z.coerce.number().int().min(5000).default(15000),
 });
 function validate(config: Record<string, unknown>) {
   const value = env.parse(config);
@@ -250,6 +253,7 @@ function validate(config: Record<string, unknown>) {
     AnalyticsInterceptor,
     ErrorMonitor,
     RequestLoggingInterceptor,
+    PushNotificationsService,
     LocalStorageService,
     MailService,
     {

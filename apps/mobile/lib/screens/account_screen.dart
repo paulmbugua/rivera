@@ -4,6 +4,7 @@ import '../core/app_controller.dart';
 import '../core/api_client.dart';
 import '../widgets/common.dart';
 import 'workspace_screen.dart';
+import 'notifications_screen.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key, required this.controller});
@@ -128,10 +129,13 @@ class AccountScreen extends StatelessWidget {
           Icons.notifications_none_rounded,
           'Notification preferences',
           'Choose the updates that deserve your attention',
-          () => _open(
+          () => Navigator.push(
             context,
-            'Notification preferences',
-            '/settings/notification-preferences',
+            MaterialPageRoute(
+              builder: (_) => NotificationPreferencesScreen(
+                controller: controller,
+              ),
+            ),
           ),
         ),
         _tile(

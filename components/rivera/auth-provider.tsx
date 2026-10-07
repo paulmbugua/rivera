@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { api, User } from '@/lib/api';
+import { NotificationCenter } from './notification-center';
 type AuthState = { user: User | null; loading: boolean; refresh: () => Promise<User | null>; logout: () => Promise<void> };
 const Context = createContext<AuthState | null>(null);
 const publicRoutes = new Set([
@@ -29,6 +30,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [pathname, refresh]);
   const logout = async () => { try { await api('/auth/logout', { method: 'POST' }, false); } finally { setUser(null); window.location.replace('/login'); } };
-  return <Context.Provider value={{ user, loading, refresh, logout }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ user, loading, refresh, logout }}>{children}{user && <NotificationCenter user={user} />}</Context.Provider>;
 }
 export function useAuth() { const value = useContext(Context); if (!value) throw new Error('AuthProvider missing'); return value; }

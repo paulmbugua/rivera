@@ -1136,6 +1136,13 @@ export class ApplicationsService {
       );
     return { success: true };
   }
+  async markAllNotificationsRead(userId: string) {
+    const changed = await this.db.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { success: true, updated: changed.count };
+  }
 
   async handleWebhook(rawBody: Buffer, signature?: string) {
     let event: VerifiedWebhook;

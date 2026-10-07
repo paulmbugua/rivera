@@ -18,6 +18,7 @@ export class PreferenceDto {
   @IsEnum(NotificationCategory) category!: NotificationCategory;
   @IsBoolean() emailEnabled!: boolean;
   @IsBoolean() inAppEnabled!: boolean;
+  @IsBoolean() pushEnabled!: boolean;
 }
 export class CreateSafetyReportDto {
   @IsEnum(SafetyReportType) type!: SafetyReportType;

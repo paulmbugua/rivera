@@ -328,6 +328,12 @@ enum NotificationCategory {
   MARKETING
 }
 
+enum PushPlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
 enum SafetyReportType {
   USER
   CAMPAIGN
@@ -387,6 +393,7 @@ model User {
   verificationRequests          VerificationRequest[]     @relation("VerificationOwner")
   verificationReviews           VerificationRequest[]     @relation("VerificationReviewer")
   notifications                 Notification[]
+  pushTokens                    PushDeviceToken[]
   conversationMemberships       ConversationParticipant[]
   messages                      Message[]
   deliverableReviews            DeliverableSubmission[]   @relation("SubmissionReviewer")
@@ -1417,10 +1424,30 @@ model Notification {
   title         String               @db.VarChar(160)
   body          String               @db.VarChar(500)
   readAt        DateTime?
+  pushAttemptedAt DateTime?
+  pushDeliveredAt DateTime?
+  pushAttemptCount Int                @default(0)
+  pushLastError String?               @db.VarChar(500)
   createdAt     DateTime             @default(now())
 
   @@index([userId, createdAt])
   @@index([applicationId])
+  @@index([pushAttemptedAt, createdAt])
+}
+
+model PushDeviceToken {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String       @unique @db.Text
+  platform   PushPlatform
+  deviceName String?      @db.VarChar(160)
+  enabled    Boolean      @default(true)
+  lastSeenAt DateTime     @default(now())
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([userId, enabled])
 }
 
 model NotificationPreference {
@@ -1430,6 +1457,7 @@ model NotificationPreference {
   category     NotificationCategory
   emailEnabled Boolean              @default(true)
   inAppEnabled Boolean              @default(true)
+  pushEnabled  Boolean              @default(true)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 

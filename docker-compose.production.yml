@@ -1,4 +1,11 @@
 services:
+  api:
+    environment:
+      FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-admin.json
+      PUSH_NOTIFICATIONS_ENABLED: "true"
+    volumes:
+      - ./secrets/firebase-admin.json:/run/secrets/firebase-admin.json:ro
+
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped

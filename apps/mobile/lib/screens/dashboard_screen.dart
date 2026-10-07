@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_controller.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
+import 'notifications_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
@@ -31,7 +32,57 @@ class DashboardScreen extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         children: [
-          const RiveraLogo(),
+          Row(
+            children: [
+              const RiveraLogo(),
+              const Spacer(),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton.filledTonal(
+                    tooltip: 'Notifications',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            NotificationsScreen(controller: controller),
+                      ),
+                    ),
+                    icon: const Icon(Icons.notifications_none_rounded),
+                  ),
+                  if (controller.notificationUnread > 0)
+                    Positioned(
+                      right: -4,
+                      top: -5,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 21),
+                        height: 21,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        decoration: BoxDecoration(
+                          color: riveraGold,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.surface,
+                            width: 2,
+                          ),
+                        ),
+                        child: Text(
+                          controller.notificationUnread > 99
+                              ? '99+'
+                              : '${controller.notificationUnread}',
+                          style: const TextStyle(
+                            color: riveraInk,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
           const SizedBox(height: 26),
           Eyebrow('$role dashboard'),
           const SizedBox(height: 9),

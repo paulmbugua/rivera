@@ -4,6 +4,7 @@ import { MailService } from './mail.service';
 import { ChangePasswordDto, GoogleRegisterDto, LoginDto, RegisterDto, ResetDto, UpdateProfileDto } from './dto';
 import { compare, hash } from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Prisma, UserRole } from '@prisma/client';
 import { AuthErrors } from '../common/api-error';
@@ -49,7 +50,9 @@ export class AuthService {
   async firebaseGoogleIdentity(idToken: string) {
     try {
       if (!getApps().length) {
-        const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        const credentialPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim();
+        const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim()
+          || (credentialPath ? readFileSync(credentialPath, 'utf8') : undefined);
         const account = encoded ? JSON.parse(encoded) : {
           projectId: process.env.FIREBASE_PROJECT_ID,
           clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
