@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'api_client.dart';
@@ -49,16 +50,61 @@ class RiveraGoogleAuth {
         code: 'GOOGLE_AUTH_UNAVAILABLE',
       );
     }
-    final account = await GoogleSignIn.instance.authenticate();
-    final google = account.authentication;
-    final credential = GoogleAuthProvider.credential(idToken: google.idToken);
-    final firebase =
-        await FirebaseAuth.instance.signInWithCredential(credential);
-    final token = await firebase.user?.getIdToken(true);
-    if (token == null) {
-      throw const ApiException('Google could not complete sign-in.',
-          code: 'GOOGLE_AUTH_FAILED');
+    try {
+      final account = await _authenticateWithRecovery();
+      final google = account.authentication;
+      final credential = GoogleAuthProvider.credential(idToken: google.idToken);
+      final firebase =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final token = await firebase.user?.getIdToken(true);
+      if (token == null) {
+        throw const ApiException(
+          'Google could not complete sign-in. Please try again.',
+          code: 'GOOGLE_AUTH_FAILED',
+        );
+      }
+      return token;
+    } on GoogleSignInException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Rivera Google sign-in failed: ${error.code} ${error.description}',
+        );
+      }
+      if (error.code == GoogleSignInExceptionCode.canceled &&
+          !(error.description ?? '').toLowerCase().contains('reauth')) {
+        throw const ApiException(
+          'Google sign-in was cancelled.',
+          code: 'GOOGLE_AUTH_CANCELLED',
+        );
+      }
+      throw const ApiException(
+        'Google could not verify this device account. Check Google Play Services and try again.',
+        code: 'GOOGLE_AUTH_FAILED',
+      );
+    } on FirebaseAuthException catch (error) {
+      if (kDebugMode) {
+        debugPrint('Rivera Firebase sign-in failed: ${error.code}');
+      }
+      throw const ApiException(
+        'Google authentication could not be completed. Please try again.',
+        code: 'GOOGLE_AUTH_FAILED',
+      );
     }
-    return token;
+  }
+
+  static Future<GoogleSignInAccount> _authenticateWithRecovery() async {
+    try {
+      return await GoogleSignIn.instance.authenticate();
+    } on GoogleSignInException catch (error) {
+      final staleCredential =
+          error.code == GoogleSignInExceptionCode.canceled &&
+              (error.description ?? '').toLowerCase().contains('reauth');
+      if (!staleCredential) rethrow;
+
+      // Android Credential Manager can retain a stale account grant after an
+      // app-signing certificate changes. Clear it once and reopen the chooser.
+      await GoogleSignIn.instance.signOut();
+      return GoogleSignIn.instance.authenticate();
+    }
   }
 }
