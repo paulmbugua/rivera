@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ApiCookieAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './guard';
 import { ChangePasswordDto, EmailDto, FirebaseGoogleDto, GoogleRegisterDto, LoginDto, RegisterDto, ResetDto, TokenDto, UpdateProfileDto } from './dto';
@@ -42,7 +42,10 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } }) @Post('login') @ApiOperation({ summary: 'Sign in and set rotating HttpOnly session cookies' }) @ApiResponse({ status: 401, schema: { example: { statusCode:401,code:'INVALID_CREDENTIALS',message:'Invalid email or password.' } } }) async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) { const session = await this.auth.login(dto, req.headers['user-agent'], req.ip); setSession(res, session); return { user: session.user }; }
   @Throttle({ default: { limit: 20, ttl: 60_000 } }) @Post('refresh') @ApiCookieAuth('access-cookie') @ApiOperation({ summary: 'Rotate the refresh session and access cookie' }) async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) { const session = await this.auth.refresh(req.cookies?.rivera_refresh); setSession(res, session); return { user: session.user }; }
   @Post('logout') @ApiCookieAuth('access-cookie') @ApiOperation({ summary: 'Revoke the current refresh session and clear cookies' }) async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) { const result = await this.auth.logout(req.cookies?.rivera_refresh); clearSession(res); return result; }
-  @UseGuards(AuthGuard) @Get('me') @ApiCookieAuth('access-cookie') @ApiOperation({ summary: 'Return the authenticated public user' }) me(@CurrentUser() user: { id: string }) { return this.auth.me(user.id); }
+  // Next.js validates protected layouts during route prefetching. Those reads are
+  // authenticated and side-effect free, so they must not consume the anonymous
+  // abuse-prevention budget used by login and account-recovery endpoints.
+  @SkipThrottle() @UseGuards(AuthGuard) @Get('me') @ApiCookieAuth('access-cookie') @ApiOperation({ summary: 'Return the authenticated public user' }) me(@CurrentUser() user: { id: string }) { return this.auth.me(user.id); }
   @UseGuards(AuthGuard) @Patch('profile') @ApiCookieAuth('access-cookie') @ApiOperation({ summary: 'Update name, phone, ISO country code, city and profile image' }) profile(@CurrentUser() user: { id: string }, @Body() dto: UpdateProfileDto) { return this.auth.updateProfile(user.id, dto); }
   @Throttle({ default: { limit: 5, ttl: 60_000 } }) @Post('forgot-password') @ApiOperation({ summary: 'Request password reset without revealing account existence' }) forgot(@Body() dto: EmailDto) { return this.auth.forgot(dto.email); }
   @Post('reset-password') @ApiOperation({ summary: 'Use a single-use reset token and revoke every session' }) @ApiResponse({ status: 400, schema: { example: { statusCode:400,code:'INVALID_RESET_TOKEN',message:'This password reset link is invalid or has already been used.' } } }) reset(@Body() dto: ResetDto) { return this.auth.reset(dto); }

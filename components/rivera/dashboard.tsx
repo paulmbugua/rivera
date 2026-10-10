@@ -172,6 +172,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
               className={index === 0 ? "dashboard-nav-active" : ""}
               key={href}
               href={href}
+              prefetch={false}
             >
               {text}
             </Link>
@@ -183,7 +184,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
           {role === "ADMIN" ? (
             <>
               <p>Help Rivera remain a trusted place for purposeful partnerships.</p>
-              <div className="dashboard-focus"><span><HeartHandshake size={24}/></span><div><small>TODAY’S FOCUS</small><h2>Keep the marketplace healthy.</h2><p>Review the people, campaigns and requests that need a thoughtful human decision.</p></div><Link href="/admin/verifications">Review verifications <ArrowUpRight size={18}/></Link></div>
+              <div className="dashboard-focus"><span><HeartHandshake size={24}/></span><div><small>TODAY’S FOCUS</small><h2>Keep the marketplace healthy.</h2><p>Review the people, campaigns and requests that need a thoughtful human decision.</p></div><Link href="/admin/verifications" prefetch={false}>Review verifications <ArrowUpRight size={18}/></Link></div>
             </>
           ) : (
             <>
@@ -192,7 +193,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
                   ? "Turn a clear idea into a partnership people will remember."
                   : "Find opportunities that value your point of view and respect your craft."}
               </p>
-              <div className="dashboard-focus"><span><Sparkles size={24}/></span><div><small>YOUR NEXT BEST STEP</small><h2>{role === "BUSINESS" ? "Bring the right people into the idea." : "Find the opportunity that feels like you."}</h2><p>{role === "BUSINESS" ? "Share a considered brief or revisit the campaigns already moving." : "Browse fresh opportunities or give your profile one more detail that helps you stand out."}</p></div><Link href={role === "BUSINESS" ? "/dashboard/business/campaigns/new" : "/dashboard/creator/opportunities"}>{role === "BUSINESS" ? "Create a campaign" : "Explore opportunities"} <ArrowUpRight size={18}/></Link></div>
+              <div className="dashboard-focus"><span><Sparkles size={24}/></span><div><small>YOUR NEXT BEST STEP</small><h2>{role === "BUSINESS" ? "Bring the right people into the idea." : "Find the opportunity that feels like you."}</h2><p>{role === "BUSINESS" ? "Share a considered brief or revisit the campaigns already moving." : "Browse fresh opportunities or give your profile one more detail that helps you stand out."}</p></div><Link href={role === "BUSINESS" ? "/dashboard/business/campaigns/new" : "/dashboard/creator/opportunities"} prefetch={false}>{role === "BUSINESS" ? "Create a campaign" : "Explore opportunities"} <ArrowUpRight size={18}/></Link></div>
               <div className="dashboard-stats">
                 <article>
                   <strong>{summary?.profileCompletion ?? 0}%</strong>
@@ -222,6 +223,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
               <div className="dashboard-actions">
                 <Link
                   className="button primary"
+                  prefetch={false}
                   href={
                     role === "BUSINESS"
                       ? "/dashboard/business/campaigns/new"
@@ -235,6 +237,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
                 <Link
                   className="button secondary"
                   href={`/dashboard/${role.toLowerCase()}/profile`}
+                  prefetch={false}
                 >
                   Edit profile
                 </Link>
