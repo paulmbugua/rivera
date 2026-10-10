@@ -38,6 +38,13 @@ set_env APP_URL "https://www.${domain}"
 set_env NEXT_PUBLIC_API_URL /api/v1
 set_env COOKIE_SECURE true
 set_env NODE_ENV production
+set_env MAIL_PROVIDER smtp
+set_env MAIL_FROM_NAME Rivera
+set_env MAIL_FROM_ADDRESS noreply@riveracreators.com
+set_env MAIL_FROM "Rivera <noreply@riveracreators.com>"
+set_env MAIL_REPLY_TO noreply@riveracreators.com
+set_env SMTP_PORT 587
+set_env SMTP_SECURE false
 set_env GOOGLE_REDIRECT_URI "https://www.${domain}/api/v1/auth/google/callback"
 set_env GOOGLE_AUTH_API_URL "https://www.${domain}/api/v1"
 set_env MEDIA_PUBLIC_URL "https://api.${domain}/media"
