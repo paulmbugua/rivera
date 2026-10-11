@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Delete your Rivera account",
+  title: "Delete your account",
   description:
     "How Rivera creators and businesses can request account and personal-data deletion.",
+  alternates: { canonical: "/support/account-deletion" },
 };
 
 export default function AccountDeletionPage() {

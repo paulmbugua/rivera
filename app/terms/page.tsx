@@ -1,4 +1,5 @@
 import Link from "next/link";
+export const metadata={title:'Terms of Service',description:'The terms governing creator and business accounts, campaigns, proposals, fees and collaborations on Rivera.',alternates:{canonical:'/terms'}};
 export default function Terms() {
   return (
     <main className="legal-page">

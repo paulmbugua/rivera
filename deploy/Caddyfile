@@ -1,7 +1,13 @@
-riveracreators.com, www.riveracreators.com {
+riveracreators.com {
+	redir https://www.riveracreators.com{uri} permanent
+}
+
+www.riveracreators.com {
 	encode zstd gzip
 
-	reverse_proxy web:3000
+	# The Caddy container also joins AllShops' edge network, where `web` is
+	# aliased to AllShops. Use Rivera's unique Compose container DNS name.
+	reverse_proxy rivera-web-1:3000
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -13,7 +19,8 @@ riveracreators.com, www.riveracreators.com {
 
 api.riveracreators.com {
 	encode zstd gzip
-	reverse_proxy api:4000
+	# Avoid the shared-network `api` alias resolving to AllShops.
+	reverse_proxy rivera-api-1:4000
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
