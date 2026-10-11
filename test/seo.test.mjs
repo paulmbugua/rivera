@@ -62,3 +62,9 @@ test("the apex domain permanently redirects to the canonical www host", () => {
 test("Docker exposes optional Google Search Console verification to the web runtime", () => {
   assert.match(read("docker-compose.yml"), /GOOGLE_SITE_VERIFICATION: \$\{GOOGLE_SITE_VERIFICATION:-\}/);
 });
+
+test("the shared production edge keeps dependent app networks across restarts", () => {
+  const production = read("docker-compose.production.yml");
+  assert.match(production, /allshops_edge:[\s\S]*external: true/);
+  assert.match(production, /gulfdelivery_default:[\s\S]*external: true/);
+});

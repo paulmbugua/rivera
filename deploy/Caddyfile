@@ -28,3 +28,69 @@ api.riveracreators.com {
 		-Server
 	}
 }
+
+gulfdeliverypro.com {
+	encode zstd gzip
+	reverse_proxy gulfdelivery-web:80
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}
+
+www.gulfdeliverypro.com {
+	redir https://gulfdeliverypro.com{uri} permanent
+}
+
+api.gulfdeliverypro.com {
+	encode zstd gzip
+	reverse_proxy gulfdelivery-api:4000
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}
+
+gulfdelivery.riveracreators.com {
+	redir https://gulfdeliverypro.com{uri} permanent
+}
+
+# BEGIN ALLSHOPS MANAGED ROUTES
+allshopspos.com, www.allshopspos.com {
+	encode zstd gzip
+	@api path /api/*
+	handle @api {
+		reverse_proxy allshops-api:4000
+	}
+	handle {
+		reverse_proxy allshops-web:3000
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+api.allshopspos.com {
+	encode zstd gzip
+	reverse_proxy allshops-api:4000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+# END ALLSHOPS MANAGED ROUTES

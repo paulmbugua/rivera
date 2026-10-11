@@ -22,7 +22,17 @@ services:
         condition: service_started
       api:
         condition: service_healthy
+    networks:
+      - default
+      - allshops_edge
+      - gulfdelivery_default
 
 volumes:
   rivera_caddy_data:
   rivera_caddy_config:
+
+networks:
+  allshops_edge:
+    external: true
+  gulfdelivery_default:
+    external: true
