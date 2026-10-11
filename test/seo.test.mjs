@@ -36,6 +36,16 @@ test("public entities have unique canonical and social metadata", () => {
   }
 });
 
+test("public creator, business and campaign entities emit schema.org JSON-LD", () => {
+  const creator = read("app/creators/[slug]/layout.tsx");
+  const business = read("app/businesses/[slug]/layout.tsx");
+  const campaign = read("app/campaigns/[slug]/layout.tsx");
+  assert.match(creator, /"@type": "Person"/);
+  assert.match(business, /"@type": "Organization"/);
+  assert.match(campaign, /"@type": "JobPosting"/);
+  for (const source of [creator, business, campaign]) assert.match(source, /<JsonLd data=/);
+});
+
 test("private layouts are noindex and the branded social image exists", () => {
   for (const path of ["app/(auth)/layout.tsx", "app/admin/layout.tsx", "app/dashboard/layout.tsx", "app/onboarding/layout.tsx", "app/register/layout.tsx", "app/settings/layout.tsx"]) {
     assert.match(read(path), /index:\s*false/);
