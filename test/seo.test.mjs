@@ -48,3 +48,7 @@ test("the apex domain permanently redirects to the canonical www host", () => {
   assert.match(caddy, /riveracreators\.com \{/);
   assert.match(caddy, /redir https:\/\/www\.riveracreators\.com\{uri\} permanent/);
 });
+
+test("Docker exposes optional Google Search Console verification to the web runtime", () => {
+  assert.match(read("docker-compose.yml"), /GOOGLE_SITE_VERIFICATION: \$\{GOOGLE_SITE_VERIFICATION:-\}/);
+});
