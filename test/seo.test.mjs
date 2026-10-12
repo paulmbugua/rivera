@@ -46,6 +46,19 @@ test("public creator, business and campaign entities emit schema.org JSON-LD", (
   for (const source of [creator, business, campaign]) assert.match(source, /<JsonLd data=/);
 });
 
+test("public directories remain useful and indexable before listings are published", () => {
+  const creators = read("app/creators/page.tsx");
+  const campaigns = read("app/campaigns/page.tsx");
+  for (const source of [creators, campaigns]) {
+    assert.match(source, /"@type": "CollectionPage"/);
+    assert.match(source, /"@type": "ItemList"/);
+    assert.match(source, /SOCIAL_IMAGE/);
+    assert.match(source, /directory-intro/);
+  }
+  assert.match(creators, /The Rivera creator community is opening/);
+  assert.match(campaigns, /New creator opportunities are on the way/);
+});
+
 test("private layouts are noindex and the branded social image exists", () => {
   for (const path of ["app/(auth)/layout.tsx", "app/admin/layout.tsx", "app/dashboard/layout.tsx", "app/onboarding/layout.tsx", "app/register/layout.tsx", "app/settings/layout.tsx"]) {
     assert.match(read(path), /index:\s*false/);
