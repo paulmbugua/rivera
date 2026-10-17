@@ -11,6 +11,7 @@ import {
 import {
   FeeSettingsDto,
   OpenPaymentIssueDto,
+  PayoutAccountOnboardDto,
   RefundCollaborationDto,
   ResolvePaymentIssueDto,
 } from "./marketplace-payment.dto";
@@ -103,16 +104,18 @@ export class MarketplacePaymentService {
         "CREATOR_PROFILE_REQUIRED",
         "Creator profile required.",
       );
-    return (
-      creator.payoutAccount ?? {
+    return creator.payoutAccount
+      ? { ...creator.payoutAccount, setupMode: this.provider.payoutOnboardingMode }
+      : {
+        provider: this.provider.providerName,
+        setupMode: this.provider.payoutOnboardingMode,
         onboardingStatus: "NOT_STARTED",
         chargesEnabled: false,
         payoutsEnabled: false,
         detailsSubmitted: false,
-      }
-    );
+      };
   }
-  async onboard(userId: string) {
+  async onboard(userId: string, dto: PayoutAccountOnboardDto) {
     const creator = await this.db.creatorProfile.findUnique({
       where: { userId },
       include: { user: true, payoutAccount: true },
@@ -129,10 +132,13 @@ export class MarketplacePaymentService {
         creatorId: creator.id,
         countryCode: creator.country,
         email: creator.user.email,
+        displayName: creator.displayName,
+        phoneNumber: dto.phoneNumber ?? creator.user.phone ?? creator.professionalPhone ?? undefined,
       });
       row = await this.db.creatorPayoutAccount.create({
         data: {
           creatorId: creator.id,
+          provider: this.provider.providerName,
           providerAccountId: connected.accountId,
           countryCode: connected.countryCode,
           defaultCurrencyCode: connected.defaultCurrencyCode,
@@ -145,6 +151,14 @@ export class MarketplacePaymentService {
         },
       });
     }
+    if (row.provider !== this.provider.providerName)
+      this.fail(
+        HttpStatus.CONFLICT,
+        "PAYOUT_PROVIDER_MIGRATION_REQUIRED",
+        "This payout account belongs to a different provider. Contact Rivera support to migrate it safely.",
+      );
+    if (this.provider.payoutOnboardingMode === "MPESA")
+      return { url: null, account: { ...row, setupMode: "MPESA" } };
     const app = process.env.APP_URL ?? "http://localhost:3000";
     return this.provider.createAccountOnboardingLink(
       row.providerAccountId,
@@ -185,7 +199,7 @@ export class MarketplacePaymentService {
       where: { id, business: { userId } },
       include: {
         campaign: true,
-        business: true,
+        business: { include: { user: true } },
         creator: { include: { user: true, payoutAccount: true } },
         offer: true,
         workItems: true,
@@ -229,11 +243,12 @@ export class MarketplacePaymentService {
         campaignId: p.campaignId,
         businessId: p.businessId,
         creatorId: p.creatorId,
+        provider: this.provider.providerName,
         currencyCode: p.currencyCode,
         ...money,
         status: "NOT_FUNDED",
       },
-      update: { currencyCode: p.currencyCode, ...money, status: "NOT_FUNDED" },
+      update: { provider: this.provider.providerName, currencyCode: p.currencyCode, ...money, status: "NOT_FUNDED" },
     });
     const checkout = await this.provider.createCollaborationPayment({
       collaborationPaymentId: payment.id,
@@ -241,6 +256,7 @@ export class MarketplacePaymentService {
       businessId: p.businessId,
       campaignTitle: p.campaign.title,
       creatorName: p.creator.displayName,
+      payerEmail: p.business.user.email,
       amountMinor: money.grossAmountMinor,
       currencyCode: p.currencyCode,
       expiresAt: new Date(Date.now() + 30 * 60_000),
@@ -459,10 +475,16 @@ export class MarketplacePaymentService {
           data: {
             collaborationPaymentId: payment.id,
             creatorId: payment.creatorId,
+            provider: this.provider.providerName,
             providerTransferId: transfer.transferId,
             amountMinor: payment.creatorNetMinor,
             currencyCode: payment.currencyCode,
-            status: transfer.status === "failed" ? "FAILED" : "PENDING",
+            status:
+              transfer.status === "failed"
+                ? "FAILED"
+                : transfer.status === "reversed"
+                  ? "REVERSED"
+                  : "PENDING",
             failureCode: transfer.failureCode,
             failureMessage: transfer.failureMessage,
           },
@@ -966,7 +988,7 @@ export class MarketplacePaymentService {
   }
   private async applyTransferState(
     id: string,
-    status: "pending" | "succeeded" | "failed",
+    status: "pending" | "succeeded" | "failed" | "reversed",
     failureCode?: string,
     failureMessage?: string,
   ) {
@@ -980,7 +1002,11 @@ export class MarketplacePaymentService {
       this.db.creatorTransfer.update({
         where: { id },
         data: {
-          status: succeeded ? "SUCCEEDED" : "FAILED",
+          status: succeeded
+            ? "SUCCEEDED"
+            : status === "reversed"
+              ? "REVERSED"
+              : "FAILED",
           failureCode,
           failureMessage,
           releasedAt: succeeded ? new Date() : null,
@@ -1139,8 +1165,10 @@ export class MarketplacePaymentService {
       if (transfer) {
         await this.applyTransferState(
           transfer.id,
-          event.type === "transfer.failed"
-            ? "failed"
+          event.type === "transfer.reversed"
+            ? "reversed"
+            : event.type === "transfer.failed"
+              ? "failed"
             : event.type === "transfer.created"
               ? "pending"
               : "succeeded",
@@ -1172,7 +1200,7 @@ export class MarketplacePaymentService {
             openedByUserId: business.userId,
             type: "PROVIDER_DISPUTE",
             description:
-              "Stripe reported a charge dispute. Admin review is required.",
+              "The payment provider reported a charge dispute. Admin review is required.",
             providerDisputeId: o.id,
           },
           update: { status: "UNDER_REVIEW" },

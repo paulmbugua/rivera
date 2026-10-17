@@ -46,6 +46,7 @@ import {
   PAYMENT_PROVIDER,
   StripePaymentProvider,
 } from "./applications/payment.provider";
+import { PaystackPaymentProvider } from "./applications/paystack-payment.provider";
 import {
   BusinessCollaborationController,
   CampaignParticipantsController,
@@ -108,6 +109,8 @@ const env = z.object({
   MAX_CAMPAIGN_ATTACHMENTS: z.coerce.number().int().min(0).max(20).default(5),
   MAX_CAMPAIGN_ATTACHMENT_MB: z.coerce.number().positive().max(25).default(10),
   STRIPE_APPLICATION_FEE_ENABLED: z.enum(["true", "false"]).default("true"),
+  PAYMENTS_PROVIDER: z.enum(["stripe", "paystack"]).default("stripe"),
+  PAYSTACK_CURRENCY: z.string().regex(/^[A-Za-z]{3}$/).default("KES"),
   DEFAULT_APPLICATION_FEE_MINOR: z.coerce.number().int().min(0).default(300),
   DEFAULT_APPLICATION_FEE_CURRENCY: z
     .string()
@@ -177,6 +180,7 @@ function validate(config: Record<string, unknown>) {
     );
   if (
     config.NODE_ENV === "production" &&
+    value.PAYMENTS_PROVIDER === "stripe" &&
     value.STRIPE_APPLICATION_FEE_ENABLED === "true" &&
     (!config.STRIPE_SECRET_KEY ||
       !config.STRIPE_WEBHOOK_SECRET ||
@@ -184,6 +188,15 @@ function validate(config: Record<string, unknown>) {
   )
     throw new Error(
       "Production Stripe payments require live secret and webhook keys",
+    );
+  if (
+    config.NODE_ENV === "production" &&
+    value.PAYMENTS_PROVIDER === "paystack" &&
+    (!config.PAYSTACK_SECRET_KEY ||
+      !String(config.PAYSTACK_SECRET_KEY).startsWith("sk_live_"))
+  )
+    throw new Error(
+      "Production Paystack payments require a live secret key",
     );
   if (
     config.NODE_ENV === "production" &&
@@ -265,7 +278,10 @@ function validate(config: Record<string, unknown>) {
     },
     {
       provide: PAYMENT_PROVIDER,
-      useFactory: () => new StripePaymentProvider(),
+      useFactory: () =>
+        process.env.PAYMENTS_PROVIDER === "paystack"
+          ? new PaystackPaymentProvider()
+          : new StripePaymentProvider(),
     },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],

@@ -2,21 +2,24 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { HttpStatus } from '@nestjs/common';
 import { ApiException } from '../common/api-error';
 
-export type CheckoutInput = { paymentId:string; applicationId:string; creatorId:string; campaignId:string; campaignTitle:string; amountMinor:number; currencyCode:string; expiresAt:Date };
+export type PaymentProviderName = 'STRIPE'|'PAYSTACK';
+export type CheckoutInput = { paymentId:string; applicationId:string; creatorId:string; campaignId:string; campaignTitle:string; payerEmail:string; amountMinor:number; currencyCode:string; expiresAt:Date };
 export type CheckoutResult = { checkoutSessionId:string; paymentId?:string; url:string };
 export type ProviderPayment = { paymentId?:string; checkoutSessionId?:string; status:'paid'|'pending'|'failed'|'refunded'; amountMinor:number; currencyCode:string };
 export type ProviderRefund = { refundId:string; status:'pending'|'succeeded'|'failed' };
 export type VerifiedWebhook = { id:string; type:string; object:Record<string,unknown> };
 export type ConnectedAccount = { accountId:string; countryCode:string; defaultCurrencyCode?:string; chargesEnabled:boolean; payoutsEnabled:boolean; detailsSubmitted:boolean; requirementsDue:string[] };
-export type CollaborationCheckoutInput = { collaborationPaymentId:string; participantId:string; businessId:string; campaignTitle:string; creatorName:string; amountMinor:number; currencyCode:string; expiresAt:Date; attemptKey:string };
-export type ProviderTransfer = { transferId:string; status:'pending'|'succeeded'|'failed'; failureCode?:string; failureMessage?:string };
+export type CollaborationCheckoutInput = { collaborationPaymentId:string; participantId:string; businessId:string; campaignTitle:string; creatorName:string; payerEmail:string; amountMinor:number; currencyCode:string; expiresAt:Date; attemptKey:string };
+export type ProviderTransfer = { transferId:string; status:'pending'|'succeeded'|'failed'|'reversed'; failureCode?:string; failureMessage?:string };
 export interface PaymentProviderAdapter {
+  readonly providerName:PaymentProviderName;
+  readonly payoutOnboardingMode:'HOSTED'|'MPESA';
   createCheckout(input:CheckoutInput):Promise<CheckoutResult>;
   retrievePayment(reference:{paymentId?:string|null;checkoutSessionId?:string|null}):Promise<ProviderPayment>;
   refund(paymentId:string,amountMinor:number,idempotencyKey:string):Promise<ProviderRefund>;
   retrieveRefund(refundId:string):Promise<ProviderRefund>;
   verifyWebhook(rawBody:Buffer,signature?:string):VerifiedWebhook;
-  createConnectedAccount(input:{creatorId:string;countryCode:string;email:string}):Promise<ConnectedAccount>;
+  createConnectedAccount(input:{creatorId:string;countryCode:string;email:string;displayName:string;phoneNumber?:string}):Promise<ConnectedAccount>;
   createAccountOnboardingLink(accountId:string,returnUrl:string,refreshUrl:string):Promise<{url:string}>;
   retrieveConnectedAccount(accountId:string):Promise<ConnectedAccount>;
   createCollaborationPayment(input:CollaborationCheckoutInput):Promise<CheckoutResult>;
@@ -26,6 +29,8 @@ export interface PaymentProviderAdapter {
 export const PAYMENT_PROVIDER = Symbol('APPLICATION_PAYMENT_PROVIDER');
 
 export class StripePaymentProvider implements PaymentProviderAdapter {
+  readonly providerName = 'STRIPE' as const;
+  readonly payoutOnboardingMode = 'HOSTED' as const;
   private secret(){
     const key=process.env.STRIPE_SECRET_KEY?.trim();
     if(!key)throw new ApiException(
@@ -41,11 +46,11 @@ export class StripePaymentProvider implements PaymentProviderAdapter {
   async refund(paymentId:string,amountMinor:number,idempotencyKey:string):Promise<ProviderRefund>{const value=await this.request('refunds',new URLSearchParams({payment_intent:paymentId,amount:String(amountMinor)}),idempotencyKey);const status:ProviderRefund['status']=String(value.status)==='succeeded'?'succeeded':String(value.status)==='failed'?'failed':'pending';return{refundId:String(value.id),status};}
   async retrieveRefund(refundId:string):Promise<ProviderRefund>{const value=await this.request(`refunds/${encodeURIComponent(refundId)}`);const status:ProviderRefund['status']=String(value.status)==='succeeded'?'succeeded':String(value.status)==='failed'||String(value.status)==='canceled'?'failed':'pending';return{refundId:String(value.id),status};}
   private account(value:Record<string,unknown>):ConnectedAccount{const requirements=(value.requirements??{}) as Record<string,unknown>;return{accountId:String(value.id),countryCode:String(value.country??'').toUpperCase(),defaultCurrencyCode:typeof value.default_currency==='string'?value.default_currency.toUpperCase():undefined,chargesEnabled:Boolean(value.charges_enabled),payoutsEnabled:Boolean(value.payouts_enabled),detailsSubmitted:Boolean(value.details_submitted),requirementsDue:Array.isArray(requirements.currently_due)?requirements.currently_due.map(String):[]};}
-  async createConnectedAccount(input:{creatorId:string;countryCode:string;email:string}){return this.account(await this.request('accounts',new URLSearchParams({type:'express',country:input.countryCode.toUpperCase(),email:input.email,'capabilities[transfers][requested]':'true','metadata[creatorId]':input.creatorId}),`rivera-connect-${input.creatorId}`));}
+  async createConnectedAccount(input:{creatorId:string;countryCode:string;email:string;displayName:string;phoneNumber?:string}){return this.account(await this.request('accounts',new URLSearchParams({type:'express',country:input.countryCode.toUpperCase(),email:input.email,'capabilities[transfers][requested]':'true','metadata[creatorId]':input.creatorId}),`rivera-connect-${input.creatorId}`));}
   async createAccountOnboardingLink(accountId:string,returnUrl:string,refreshUrl:string){const value=await this.request('account_links',new URLSearchParams({account:accountId,type:'account_onboarding',return_url:returnUrl,refresh_url:refreshUrl}));return{url:String(value.url)};}
   async retrieveConnectedAccount(accountId:string){return this.account(await this.request(`accounts/${encodeURIComponent(accountId)}`));}
   async createCollaborationPayment(input:CollaborationCheckoutInput){const app=process.env.APP_URL??'http://localhost:3000';const body=new URLSearchParams({mode:'payment',success_url:`${app}/dashboard/business/payments?funding=processing`,cancel_url:`${app}/dashboard/business/payments?funding=cancelled`,expires_at:String(Math.floor(input.expiresAt.getTime()/1000)),'line_items[0][price_data][currency]':input.currencyCode.toLowerCase(),'line_items[0][price_data][unit_amount]':String(input.amountMinor),'line_items[0][price_data][product_data][name]':`Fund ${input.campaignTitle}`,'line_items[0][price_data][product_data][description]':`Creator collaboration with ${input.creatorName}`,'line_items[0][quantity]':'1','metadata[collaborationPaymentId]':input.collaborationPaymentId,'metadata[participantId]':input.participantId,'payment_intent_data[metadata][collaborationPaymentId]':input.collaborationPaymentId,'payment_intent_data[metadata][participantId]':input.participantId});const value=await this.request('checkout/sessions',body,`rivera-collaboration-checkout-${input.collaborationPaymentId}-${input.attemptKey}`);return{checkoutSessionId:String(value.id),paymentId:typeof value.payment_intent==='string'?value.payment_intent:undefined,url:String(value.url)};}
   async createTransfer(input:{collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string}){const value=await this.request('transfers',new URLSearchParams({destination:input.accountId,amount:String(input.amountMinor),currency:input.currencyCode.toLowerCase(),'metadata[collaborationPaymentId]':input.collaborationPaymentId}),input.idempotencyKey);return{transferId:String(value.id),status:'pending' as const};}
-  async retrieveTransfer(transferId:string){const value=await this.request(`transfers/${encodeURIComponent(transferId)}`);return{transferId:String(value.id),status:Boolean(value.reversed)?'failed':'succeeded'} as ProviderTransfer;}
+  async retrieveTransfer(transferId:string){const value=await this.request(`transfers/${encodeURIComponent(transferId)}`);return{transferId:String(value.id),status:Boolean(value.reversed)?'reversed':'succeeded'} as ProviderTransfer;}
   verifyWebhook(rawBody:Buffer,signature?:string){const secret=process.env.STRIPE_WEBHOOK_SECRET;if(!secret||!signature)throw new Error('INVALID_WEBHOOK_SIGNATURE');const parts=Object.fromEntries(signature.split(',').map(item=>item.split('=',2)));const timestamp=Number(parts.t),provided=parts.v1;if(!timestamp||!provided||Math.abs(Date.now()/1000-timestamp)>300)throw new Error('INVALID_WEBHOOK_SIGNATURE');const expected=createHmac('sha256',secret).update(`${timestamp}.${rawBody.toString('utf8')}`).digest('hex');const a=Buffer.from(expected),b=Buffer.from(provided);if(a.length!==b.length||!timingSafeEqual(a,b))throw new Error('INVALID_WEBHOOK_SIGNATURE');const event=JSON.parse(rawBody.toString('utf8')) as {id:string;type:string;data:{object:Record<string,unknown>}};return{id:event.id,type:event.type,object:event.data.object};}
 }

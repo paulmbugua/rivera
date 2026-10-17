@@ -249,7 +249,7 @@ export function AdminPaymentDetail({ id }: { id: string }) {
     void load();
   }, [id]);
   async function refund() {
-    if (!confirm("Issue a full refund through Stripe?")) return;
+    if (!confirm("Issue a full refund through the configured payment provider?")) return;
     setBusy(true);
     try {
       await api(`/admin/payments/${id}/refund`, {

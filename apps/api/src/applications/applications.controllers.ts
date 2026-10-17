@@ -112,7 +112,7 @@ export class CreatorApplicationsController {
   @Post("creators/me/applications/:id/checkout")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary: "Create Stripe-hosted Checkout for the backend-calculated fee",
+    summary: "Create provider-hosted checkout for the backend-calculated fee",
   })
   checkout(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.service.checkout(user.id, id);
@@ -225,9 +225,23 @@ export class PaymentWebhookController {
     summary:
       "Stripe signature-authenticated webhook; no user cookie authentication",
   })
-  webhook(
+  stripeWebhook(
     @Req() req: RawBodyRequest<Request>,
     @Headers("stripe-signature") signature?: string,
+  ) {
+    return this.service.handleWebhook(
+      req.rawBody ?? Buffer.from(""),
+      signature,
+    );
+  }
+  @Post("webhooks/paystack")
+  @ApiOperation({
+    summary:
+      "Paystack signature-authenticated webhook; no user cookie authentication",
+  })
+  paystackWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers("x-paystack-signature") signature?: string,
   ) {
     return this.service.handleWebhook(
       req.rawBody ?? Buffer.from(""),

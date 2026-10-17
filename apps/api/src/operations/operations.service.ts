@@ -65,14 +65,15 @@ export class OperationsService {
           ? "failed"
           : "ok",
     };
+    const paymentProvider = process.env.PAYMENTS_PROVIDER === "paystack" ? "Paystack" : "Stripe";
+    const paymentsConfigured = paymentProvider === "Paystack"
+      ? Boolean(process.env.PAYSTACK_SECRET_KEY)
+      : Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
     checks.payments = {
-      status:
-        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
-          ? "ok"
-          : "degraded",
-      detail: process.env.STRIPE_SECRET_KEY
+      status: paymentsConfigured ? "ok" : "degraded",
+      detail: paymentsConfigured
         ? undefined
-        : "Stripe operations are disabled until configured.",
+        : `${paymentProvider} operations are disabled until configured.`,
     };
     const notReady = Object.values(checks).some((x) => x.status === "failed");
     const degraded = Object.values(checks).some((x) => x.status === "degraded");

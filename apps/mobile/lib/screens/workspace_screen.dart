@@ -360,8 +360,9 @@ class WorkspaceScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => CollectionScreen(
-                        controller: controller, feature: feature),
+                    builder: (_) => feature.path == '/creators/me/payout-account'
+                        ? PayoutSetupScreen(controller: controller)
+                        : CollectionScreen(controller: controller, feature: feature),
                   ),
                 ),
               ),
@@ -369,6 +370,102 @@ class WorkspaceScreen extends StatelessWidget {
           ),
         ],
       );
+}
+
+class PayoutSetupScreen extends StatefulWidget {
+  const PayoutSetupScreen({super.key, required this.controller});
+  final AppController controller;
+  @override
+  State<PayoutSetupScreen> createState() => _PayoutSetupScreenState();
+}
+
+class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
+  final phone = TextEditingController();
+  Map<String, dynamic> account = {};
+  String? error;
+  bool loading = true;
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      account = mapOf(await widget.controller.fetch('/creators/me/payout-account'));
+      error = null;
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> connect() async {
+    if (phone.text.trim().isEmpty) {
+      setState(() => error = 'Enter the Kenyan M-Pesa number that should receive your earnings.');
+      return;
+    }
+    setState(() { saving = true; error = null; });
+    try {
+      await widget.controller.send('POST', '/creators/me/payout-account/onboard', {'phoneNumber': phone.text.trim()});
+      phone.clear();
+      await load();
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    phone.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = account['payoutsEnabled'] == true;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Payout account')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Eyebrow('RIVERA EARNINGS'),
+                const SizedBox(height: 12),
+                Text(active ? 'Ready for payouts' : 'Connect M-Pesa', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 10),
+                Text(active
+                    ? 'Your Paystack recipient is ready to receive approved Rivera earnings in KES.'
+                    : 'Use the Kenyan M-Pesa number registered to the person receiving creator earnings.'),
+                const SizedBox(height: 22),
+                if (!active) ...[
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    decoration: const InputDecoration(labelText: 'M-Pesa number', hintText: '+254712345678', prefixIcon: Icon(Icons.phone_android_rounded)),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: saving ? null : connect,
+                    icon: saving ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.verified_user_outlined),
+                    label: Text(saving ? 'Connecting…' : 'Connect M-Pesa'),
+                  ),
+                ],
+                if (error != null) ...[
+                  const SizedBox(height: 16),
+                  Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ],
+              ],
+            ),
+    );
+  }
 }
 
 class CollectionScreen extends StatefulWidget {

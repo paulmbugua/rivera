@@ -177,6 +177,7 @@ enum ApplicationPaymentStatus {
 
 enum PaymentProvider {
   STRIPE
+  PAYSTACK
 }
 
 enum CreditTransactionType {

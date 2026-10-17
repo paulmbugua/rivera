@@ -4,9 +4,13 @@ Rivera is launch-capable code, not a production environment by itself. A staging
 
 ## Environments and secrets
 
-Maintain separate development, test, staging and production credentials. Production startup rejects HTTP origins, insecure cookies, short/placeholder JWT secrets, console mail, local storage and Stripe test keys. Store secrets in the deployment platform, never Git or Docker images.
+Maintain separate development, test, staging and production credentials. Production startup rejects HTTP origins, insecure cookies, short/placeholder JWT secrets, console mail, local storage and test payment keys. Store secrets in the deployment platform, never Git or Docker images.
 
-Required secret groups: PostgreSQL URL, JWT/session secret, SMTP credentials and sender, object-storage credentials, Stripe live and webhook secrets, monitoring DSN, application URLs and one-time Admin bootstrap credentials. Rotate credentials after staff changes and suspected disclosure.
+Required secret groups: PostgreSQL URL, JWT/session secret, SMTP credentials and sender, object-storage credentials, payment-provider credentials, monitoring DSN, application URLs and one-time Admin bootstrap credentials. Rotate credentials after staff changes and suspected disclosure.
+
+For Kenya, set `PAYMENTS_PROVIDER=paystack`, `PAYSTACK_SECRET_KEY=sk_live_...`, and `PAYSTACK_CURRENCY=KES`. Rivera initializes hosted Paystack checkout from the API, so a browser-side Paystack public key is not required. Configure the Paystack dashboard webhook URL as `https://api.riveracreators.com/api/v1/payments/webhooks/paystack`; webhook authenticity is checked with the secret key and the `x-paystack-signature` header.
+
+Activate Transfers for the Paystack business and disable Transfers OTP only for the Rivera server integration after the Paystack account and operational controls are approved. Automated release remains server-authorized, idempotent, webhook-confirmed, and gated by funded, completed work.
 
 Email launch requires verified sending domains with SPF, DKIM and DMARC. Confirm alignment and delivery with the chosen mail provider before opening registration.
 
@@ -18,7 +22,7 @@ Email launch requires verified sending domains with SPF, DKIM and DMARC. Confirm
 4. Run `pnpm --dir apps/api prisma:deploy` as a one-off migration job.
 5. Deploy the API, then verify `/api/v1/health` and `/api/v1/health/ready`.
 6. Deploy the web application behind HTTPS and a trusted reverse proxy.
-7. Verify the Stripe webhook endpoint, signature secret and test event processing.
+7. Verify the selected provider's webhook endpoint, signature and test event processing.
 8. Exercise registration, campaign, proposal, hiring, funding, delivery and payout paths.
 9. Monitor structured logs, error rates, failed jobs and provider dashboards.
 
@@ -62,4 +66,4 @@ Recommended policy starting points: inactive profiles may be unpublished after 2
 
 ## External launch gates
 
-Production domain and HTTPS, Stripe/Connect approval and country capability review, object storage, backup automation, monitoring credentials, SMTP domain authentication, Terms/Privacy legal review, tax/accounting review, support staffing and a successful staging smoke test are mandatory external launch gates.
+Production domain and HTTPS, Paystack business activation and transfer capability review, object storage, backup automation, monitoring credentials, SMTP domain authentication, Terms/Privacy legal review, tax/accounting review, support staffing and a successful staging smoke test are mandatory external launch gates.

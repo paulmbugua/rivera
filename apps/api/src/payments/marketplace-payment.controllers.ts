@@ -14,6 +14,7 @@ import { AuthGuard, AuthUser, Roles } from "../auth/guard";
 import {
   FeeSettingsDto,
   OpenPaymentIssueDto,
+  PayoutAccountOnboardDto,
   RefundCollaborationDto,
   ResolvePaymentIssueDto,
 } from "./marketplace-payment.dto";
@@ -32,18 +33,18 @@ export class CreatorPayoutController {
   @Post("payout-account/onboard")
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({
-    summary: "Create or continue Stripe-hosted Connect onboarding",
+    summary: "Create or continue the configured provider payout setup",
   })
   @ApiResponse({
     status: 201,
     description:
-      "Provider-hosted checkout for the server-calculated Creator compensation plus Rivera fee.",
+      "Returns provider-hosted onboarding or activates a verified Kenyan M-Pesa recipient.",
   })
   @ApiResponse({ status: 403, description: "COLLABORATION_PAYMENT_ACCESS_DENIED" })
   @ApiResponse({ status: 409, description: "COLLABORATION_NOT_AWAITING_FUNDING" })
   @ApiResponse({ status: 503, description: "PAYMENT_PROVIDER_UNAVAILABLE" })
-  onboard(@CurrentUser() u: AuthUser) {
-    return this.service.onboard(u.id);
+  onboard(@CurrentUser() u: AuthUser, @Body() dto: PayoutAccountOnboardDto) {
+    return this.service.onboard(u.id, dto);
   }
   @Post("payout-account/sync") sync(@CurrentUser() u: AuthUser) {
     return this.service.syncPayoutAccount(u.id);
@@ -67,7 +68,7 @@ export class BusinessPaymentController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary:
-      "Create Stripe-hosted funding checkout using server-calculated compensation and fee",
+      "Create provider-hosted funding checkout using server-calculated compensation and fee",
   })
   fund(@CurrentUser() u: AuthUser, @Param("id") id: string) {
     return this.service.fund(u.id, id);

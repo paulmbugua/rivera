@@ -15,6 +15,9 @@ export class ApplicationFeeService {
     const score = (rule: {countryCode:string|null;categoryId:string|null}) => rule.countryCode && rule.categoryId ? 4 : rule.countryCode ? 3 : rule.categoryId ? 2 : 1;
     const rule = rules.sort((a,b)=>score(b)-score(a)||b.priority-a.priority)[0];
     if (rule) return { amountMinor: rule.amountMinor, currencyCode: rule.currencyCode, ruleId: rule.id };
-    return { amountMinor: Number(process.env.DEFAULT_APPLICATION_FEE_MINOR ?? 300), currencyCode: (process.env.DEFAULT_APPLICATION_FEE_CURRENCY ?? 'USD').toUpperCase(), ruleId: null };
+    const providerCurrency = process.env.PAYMENTS_PROVIDER === 'paystack'
+      ? (process.env.PAYSTACK_CURRENCY ?? 'KES')
+      : (process.env.DEFAULT_APPLICATION_FEE_CURRENCY ?? 'USD');
+    return { amountMinor: Number(process.env.DEFAULT_APPLICATION_FEE_MINOR ?? 300), currencyCode: providerCurrency.toUpperCase(), ruleId: null };
   }
 }

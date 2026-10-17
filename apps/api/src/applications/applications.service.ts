@@ -22,6 +22,7 @@ import {
 import { MarketplacePaymentService } from "../payments/marketplace-payment.service";
 
 const creatorProfileInclude = {
+  user: { select: { email: true } },
   categories: { include: { category: true } },
   socialAccounts: { orderBy: { followers: "desc" as const } },
   portfolio: {
@@ -610,6 +611,7 @@ export class ApplicationsService {
               applicationId: id,
               creatorId: app.creatorId,
               campaignId: app.campaignId,
+              provider: this.provider.providerName,
               amountMinor: fee.amountMinor,
               currencyCode: fee.currencyCode,
               status: "PENDING",
@@ -653,6 +655,7 @@ export class ApplicationsService {
         creatorId: app.creatorId,
         campaignId: app.campaignId,
         campaignTitle: app.campaign.title,
+        payerEmail: app.creator.user.email,
         amountMinor: fee.amountMinor,
         currencyCode: fee.currencyCode,
         expiresAt,
@@ -670,14 +673,14 @@ export class ApplicationsService {
         applicationFeeMinor: fee.amountMinor,
         applicationFeeCurrencyCode: fee.currencyCode,
       };
-    } catch {
+    } catch (error) {
       await this.db.$transaction([
         this.db.applicationPayment.update({
           where: { id: payment.id },
           data: {
             status: "FAILED",
             failureCode: "PAYMENT_CREATION_FAILED",
-            failureMessage: "Stripe Checkout could not be created.",
+            failureMessage: "Provider-hosted checkout could not be created.",
           },
         }),
         this.db.campaignApplication.update({
@@ -692,6 +695,7 @@ export class ApplicationsService {
           },
         }),
       ]);
+      if (error instanceof ApiException) throw error;
       this.fail(
         HttpStatus.BAD_GATEWAY,
         "PAYMENT_CREATION_FAILED",
@@ -1158,7 +1162,7 @@ export class ApplicationsService {
     try {
       await this.db.paymentWebhookEvent.create({
         data: {
-          provider: "STRIPE",
+          provider: this.provider.providerName,
           providerEventId: event.id,
           eventType: event.type,
           status: "PROCESSING",
@@ -1178,7 +1182,7 @@ export class ApplicationsService {
       await this.db.paymentWebhookEvent.update({
         where: {
           provider_providerEventId: {
-            provider: "STRIPE",
+            provider: this.provider.providerName,
             providerEventId: event.id,
           },
         },
@@ -1195,7 +1199,7 @@ export class ApplicationsService {
       await this.db.paymentWebhookEvent.update({
         where: {
           provider_providerEventId: {
-            provider: "STRIPE",
+            provider: this.provider.providerName,
             providerEventId: event.id,
           },
         },
@@ -1254,7 +1258,7 @@ export class ApplicationsService {
         ),
         currencyCode: String(object.currency).toUpperCase(),
       };
-      await this.activatePayment(payment.id, state, "stripe-webhook");
+      await this.activatePayment(payment.id, state, `${this.provider.providerName.toLowerCase()}-webhook`);
       return;
     }
     if (
@@ -1634,7 +1638,7 @@ export class ApplicationsService {
         "Payment not found.",
       );
     const events = await this.db.paymentWebhookEvent.findMany({
-      where: { provider: "STRIPE" },
+      where: { provider: this.provider.providerName },
       orderBy: { createdAt: "desc" },
       take: 20,
     });
@@ -1683,7 +1687,7 @@ export class ApplicationsService {
       this.fail(
         HttpStatus.BAD_GATEWAY,
         "REFUND_FAILED",
-        "Stripe could not complete this refund.",
+        "The payment provider could not complete this refund.",
       );
     }
     return this.db.$transaction(async (tx) => {

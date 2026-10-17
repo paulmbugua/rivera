@@ -25,6 +25,8 @@ type Payment = {
   refunds?: { id: string; status: string; amountMinor: number }[];
 };
 type PayoutAccount = {
+  provider: "STRIPE" | "PAYSTACK";
+  setupMode: "HOSTED" | "MPESA";
   onboardingStatus: string;
   payoutsEnabled: boolean;
 };
@@ -161,6 +163,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
   const [items, setItems] = useState<Payment[]>([]),
     [account, setAccount] = useState<PayoutAccount>(),
     [transfers, setTransfers] = useState<Transfer[]>([]),
+    [payoutPhone, setPayoutPhone] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -177,13 +180,26 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
       .catch((e) => setError(errorText(e)));
   }, []);
   async function onboard() {
+    if (account?.setupMode === "MPESA" && !payoutPhone.trim()) {
+      setError("Enter the Kenyan M-Pesa number that should receive your Rivera earnings.");
+      return;
+    }
     setBusy(true);
+    setError("");
     try {
-      const x = await api<{ url: string }>(
+      const x = await api<{ url: string | null; account?: PayoutAccount }>(
         "/creators/me/payout-account/onboard",
-        { method: "POST" },
+        {
+          method: "POST",
+          body: JSON.stringify(account?.setupMode === "MPESA" ? { phoneNumber: payoutPhone.trim() } : {}),
+        },
       );
-      window.location.assign(x.url);
+      if (x.url) window.location.assign(x.url);
+      else if (x.account) {
+        setAccount(x.account);
+        setPayoutPhone("");
+        setBusy(false);
+      }
     } catch (e) {
       setError(errorText(e));
       setBusy(false);
@@ -199,19 +215,43 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
         <h2>{statusLabel(account?.onboardingStatus ?? "NOT_STARTED")}</h2>
         <p>
           {account?.payoutsEnabled
-            ? "Your provider account can receive Rivera transfers."
-            : "Complete provider-hosted onboarding before Rivera can release funds."}
+            ? account.provider === "PAYSTACK"
+              ? "Your verified M-Pesa recipient can receive Rivera earnings in KES."
+              : "Your provider account can receive Rivera transfers."
+            : account?.setupMode === "MPESA"
+              ? "Connect the Kenyan M-Pesa number where Rivera should send approved earnings."
+              : "Complete provider-hosted onboarding before Rivera can release funds."}
         </p>
         {!account?.payoutsEnabled && (
-          <button
-            className="button primary"
-            disabled={busy}
-            onClick={() => void onboard()}
-          >
-            {account?.onboardingStatus === "NOT_STARTED"
-              ? "Set up payouts"
-              : "Continue payout setup"}
-          </button>
+          <div className="dashboard-actions">
+            {account?.setupMode === "MPESA" && (
+              <label className="field">
+                M-Pesa number
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+254712345678"
+                  value={payoutPhone}
+                  onChange={(event) => setPayoutPhone(event.target.value)}
+                />
+                <small>Use the number registered to the person receiving creator earnings.</small>
+              </label>
+            )}
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() => void onboard()}
+            >
+              {busy
+                ? "Connecting…"
+                : account?.setupMode === "MPESA"
+                  ? "Connect M-Pesa"
+                  : account?.onboardingStatus === "NOT_STARTED"
+                    ? "Set up payouts"
+                    : "Continue payout setup"}
+            </button>
+          </div>
         )}
       </section>
       {error && <p className="form-error">{error}</p>}

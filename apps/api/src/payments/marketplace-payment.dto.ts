@@ -8,6 +8,7 @@ import {
   Max,
   Min,
   MinLength,
+  Matches,
 } from "class-validator";
 import { PaymentIssueStatus, PaymentIssueType } from "@prisma/client";
 
@@ -30,4 +31,13 @@ export class FeeSettingsDto {
   @IsOptional()
   @IsIn(["BUSINESS_PAYS_ON_TOP"])
   policy?: "BUSINESS_PAYS_ON_TOP";
+}
+
+export class PayoutAccountOnboardDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^(?:\+?254|0)(?:1|7)\d{8}$/, {
+    message: "Enter a valid Kenyan M-Pesa number.",
+  })
+  phoneNumber?: string;
 }
