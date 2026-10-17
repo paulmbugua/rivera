@@ -112,7 +112,10 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
         'INVALID_PAYOUT_PHONE',
         'Enter a valid Kenyan M-Pesa number, for example +254712345678.',
       );
-    return normalized;
+    // Paystack validates Kenyan mobile-money account numbers as numeric-only.
+    // Keep accepting the user-friendly E.164 form, but omit the leading plus
+    // when creating the transfer recipient (for example, 254712345678).
+    return normalized.slice(1);
   }
 
   private paymentState(data: Record<string, unknown>): ProviderPayment {

@@ -62,6 +62,38 @@ test('Paystack payout recipients enforce Kenyan M-Pesa numbers before provider c
   );
 });
 
+test('Paystack payout recipients send Kenyan M-Pesa numbers as numeric-only account numbers', async () => {
+  process.env.PAYSTACK_SECRET_KEY = 'sk_test_rivera_paystack';
+  process.env.PAYSTACK_CURRENCY = 'KES';
+  const originalFetch = global.fetch;
+  let submitted: Record<string, unknown> = {};
+  global.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    submitted = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      status: true,
+      data: {
+        recipient_code: 'RCP_rivera_creator',
+        active: true,
+      },
+    }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    await new PaystackPaymentProvider().createConnectedAccount({
+      creatorId: 'creator-1',
+      countryCode: 'KE',
+      email: 'creator@example.com',
+      displayName: 'Creator',
+      phoneNumber: '+254712345678',
+    });
+    assert.equal(submitted.type, 'mobile_money');
+    assert.equal(submitted.bank_code, 'MPESA');
+    assert.equal(submitted.currency, 'KES');
+    assert.equal(submitted.account_number, '254712345678');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('Paystack is represented in the database, deployment and webhook contracts', () => {
   assert.match(source('prisma/schema.prisma'), /enum PaymentProvider\s*\{[\s\S]*PAYSTACK/);
   assert.match(source('prisma/schema.prisma'), /providerPaymentId\s+String\?\s+@unique/);
