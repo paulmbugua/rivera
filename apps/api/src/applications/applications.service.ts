@@ -1264,6 +1264,15 @@ export class ApplicationsService {
   }
   private async processWebhook(event: VerifiedWebhook) {
     const object = event.object;
+    const applicationPaymentEvents = new Set([
+      "checkout.session.completed",
+      "payment_intent.succeeded",
+      "payment_intent.payment_failed",
+      "checkout.session.expired",
+      "charge.refunded",
+      "refund.updated",
+    ]);
+    if (!applicationPaymentEvents.has(event.type)) return;
     let payment =
       typeof object.id === "string"
         ? await this.db.applicationPayment.findFirst({

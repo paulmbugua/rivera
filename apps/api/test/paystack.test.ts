@@ -82,4 +82,5 @@ test('Rivera rejects amount or currency mismatches and retries failed webhook ev
   assert.match(applications, /existing\?\.status !== "FAILED"/);
   assert.match(applications, /status: "PROCESSING", processedAt: null, errorCode: null/);
   assert.match(applications, /WEBHOOK_PROCESSING_FAILED/);
+  assert.match(applications, /applicationPaymentEvents\.has\(event\.type\)/);
 });
