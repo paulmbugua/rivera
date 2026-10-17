@@ -41,6 +41,7 @@ export class CreatorPayoutController {
   })
   @ApiResponse({ status: 403, description: "COLLABORATION_PAYMENT_ACCESS_DENIED" })
   @ApiResponse({ status: 409, description: "COLLABORATION_NOT_AWAITING_FUNDING" })
+  @ApiResponse({ status: 503, description: "PAYMENT_PROVIDER_UNAVAILABLE" })
   onboard(@CurrentUser() u: AuthUser) {
     return this.service.onboard(u.id);
   }

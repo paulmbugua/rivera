@@ -63,6 +63,25 @@ test('Stripe webhook verification accepts a current HMAC signature and rejects t
   assert.throws(() => provider.verifyWebhook(body, `t=${timestamp - 301},v1=${digest}`));
 });
 
+test('Stripe operations fail safely when the payment provider is not configured', async () => {
+  const previous = process.env.STRIPE_SECRET_KEY;
+  delete process.env.STRIPE_SECRET_KEY;
+  try {
+    const provider = new StripePaymentProvider();
+    await assert.rejects(
+      provider.createConnectedAccount({ creatorId: 'creator-1', countryCode: 'KE', email: 'creator@example.com' }),
+      (error: unknown) => {
+        const response = (error as { getResponse?: () => unknown }).getResponse?.() as { code?: string } | undefined;
+        const status = (error as { getStatus?: () => number }).getStatus?.();
+        return status === 503 && response?.code === 'PAYMENT_PROVIDER_UNAVAILABLE';
+      },
+    );
+  } finally {
+    if (previous === undefined) delete process.env.STRIPE_SECRET_KEY;
+    else process.env.STRIPE_SECRET_KEY = previous;
+  }
+});
+
 test('payment activation verifies amount and currency and webhook events are idempotent', () => {
   const service = source('src/applications/applications.service.ts');
   assert.match(service, /state\.amountMinor\s*!==\s*payment\.amountMinor/);
