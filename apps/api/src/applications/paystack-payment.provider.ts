@@ -38,6 +38,18 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
     return (process.env.PAYSTACK_CURRENCY ?? 'KES').trim().toUpperCase();
   }
 
+  private referencePrefix() {
+    const value = (process.env.PAYSTACK_REFERENCE_PREFIX ?? 'RIVERA-')
+      .trim()
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      .toUpperCase();
+    return value.endsWith('-') ? value : `${value}-`;
+  }
+
+  private productName() {
+    return (process.env.PAYSTACK_PRODUCT_NAME ?? 'Rivera').trim();
+  }
+
   private ensureCurrency(currencyCode: string) {
     const configured = this.currency();
     if (currencyCode.toUpperCase() !== configured)
@@ -117,14 +129,14 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     this.ensureCurrency(input.currencyCode);
     const app = process.env.APP_URL ?? 'http://localhost:3000';
-    const reference = `rivera-app-${input.paymentId}`;
+    const reference = `${this.referencePrefix()}APP-${input.paymentId}`.slice(0, 100);
     const data = await this.request('transaction/initialize', 'POST', {
       email: input.payerEmail,
       amount: String(input.amountMinor),
       currency: input.currencyCode.toUpperCase(),
       reference,
       callback_url: `${app}/dashboard/creator/applications/${input.applicationId}?payment=processing`,
-      metadata: JSON.stringify({ paymentId: input.paymentId, applicationId: input.applicationId, creatorId: input.creatorId, campaignId: input.campaignId }),
+      metadata: JSON.stringify({ product: this.productName(), paymentId: input.paymentId, applicationId: input.applicationId, creatorId: input.creatorId, campaignId: input.campaignId }),
     });
     return {
       checkoutSessionId: String(data.reference ?? reference),
@@ -209,14 +221,14 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
   async createCollaborationPayment(input: CollaborationCheckoutInput): Promise<CheckoutResult> {
     this.ensureCurrency(input.currencyCode);
     const app = process.env.APP_URL ?? 'http://localhost:3000';
-    const reference = `rivera-collab-${input.collaborationPaymentId}-${input.attemptKey}`.slice(0, 50);
+    const reference = `${this.referencePrefix()}COLLAB-${input.collaborationPaymentId}-${input.attemptKey}`.slice(0, 100);
     const data = await this.request('transaction/initialize', 'POST', {
       email: input.payerEmail,
       amount: String(input.amountMinor),
       currency: input.currencyCode.toUpperCase(),
       reference,
       callback_url: `${app}/dashboard/business/payments?funding=processing`,
-      metadata: JSON.stringify({ collaborationPaymentId: input.collaborationPaymentId, participantId: input.participantId, businessId: input.businessId }),
+      metadata: JSON.stringify({ product: this.productName(), collaborationPaymentId: input.collaborationPaymentId, participantId: input.participantId, businessId: input.businessId }),
     });
     return {
       checkoutSessionId: String(data.reference ?? reference),
@@ -226,7 +238,7 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
 
   async createTransfer(input: {collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string}): Promise<ProviderTransfer> {
     this.ensureCurrency(input.currencyCode);
-    const normalizedReference = input.idempotencyKey
+    const normalizedReference = `${this.referencePrefix()}TRANSFER-${input.idempotencyKey}`
       .toLowerCase()
       .replace(/[^a-z0-9_-]/g, '-')
       .slice(0, 50);

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Headers,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -235,6 +236,7 @@ export class PaymentWebhookController {
     );
   }
   @Post("webhooks/paystack")
+  @HttpCode(200)
   @ApiOperation({
     summary:
       "Paystack signature-authenticated webhook; no user cookie authentication",

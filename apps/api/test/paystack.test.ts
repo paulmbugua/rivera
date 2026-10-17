@@ -46,7 +46,9 @@ test('Paystack hosted checkout needs only the secret key and preserves server me
     assert.equal(checkout.url, 'https://checkout.paystack.com/test');
     assert.equal(submitted.email, 'creator@example.com');
     assert.equal(submitted.amount, '30000');
+    assert.match(String(submitted.reference), /^RIVERA-APP-/);
     assert.match(String(submitted.metadata), /payment-1/);
+    assert.equal(JSON.parse(String(submitted.metadata)).product, 'Rivera');
   } finally {
     global.fetch = originalFetch;
   }
@@ -62,7 +64,22 @@ test('Paystack payout recipients enforce Kenyan M-Pesa numbers before provider c
 
 test('Paystack is represented in the database, deployment and webhook contracts', () => {
   assert.match(source('prisma/schema.prisma'), /enum PaymentProvider\s*\{[\s\S]*PAYSTACK/);
+  assert.match(source('prisma/schema.prisma'), /providerPaymentId\s+String\?\s+@unique/);
+  assert.match(source('prisma/schema.prisma'), /providerCheckoutSessionId\s+String\?\s+@unique/);
   assert.match(source('../../docker-compose.yml'), /PAYSTACK_SECRET_KEY/);
+  assert.match(source('../../docker-compose.yml'), /PAYSTACK_REFERENCE_PREFIX/);
   assert.match(source('src/applications/applications.controllers.ts'), /webhooks\/paystack/);
   assert.match(source('src/module.ts'), /new PaystackPaymentProvider/);
+});
+
+test('Rivera rejects amount or currency mismatches and retries failed webhook events safely', () => {
+  const applications = source('src/applications/applications.service.ts');
+  const collaboration = source('src/payments/marketplace-payment.service.ts');
+  assert.match(applications, /PAYMENT_AMOUNT_MISMATCH/);
+  assert.match(applications, /PAYMENT_CURRENCY_MISMATCH/);
+  assert.match(collaboration, /PAYMENT_AMOUNT_MISMATCH/);
+  assert.match(collaboration, /PAYMENT_CURRENCY_MISMATCH/);
+  assert.match(applications, /existing\?\.status !== "FAILED"/);
+  assert.match(applications, /status: "PROCESSING", processedAt: null, errorCode: null/);
+  assert.match(applications, /WEBHOOK_PROCESSING_FAILED/);
 });

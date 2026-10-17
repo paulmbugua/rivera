@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { HttpStatus, Inject, Injectable } from "@nestjs/common";
+import { HttpStatus, Inject, Injectable, Logger } from "@nestjs/common";
 import { ApplicationStatus, Prisma } from "@prisma/client";
 import { ApiException } from "../common/api-error";
 import { PrismaService } from "../common/prisma.service";
@@ -65,6 +65,8 @@ const applicationInclude = {
 
 @Injectable()
 export class ApplicationsService {
+  private readonly logger = new Logger(ApplicationsService.name);
+
   constructor(
     private db: PrismaService,
     private eligibility: CampaignEligibilityService,
@@ -1153,6 +1155,10 @@ export class ApplicationsService {
     try {
       event = this.provider.verifyWebhook(rawBody, signature);
     } catch {
+      this.logger.warn(JSON.stringify({
+        event: "payment_webhook_signature_rejected",
+        provider: this.provider.providerName,
+      }));
       this.fail(
         HttpStatus.BAD_REQUEST,
         "INVALID_WEBHOOK_SIGNATURE",
@@ -1172,9 +1178,41 @@ export class ApplicationsService {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
-      )
-        return { received: true, duplicate: true };
-      throw error;
+      ) {
+        const existing = await this.db.paymentWebhookEvent.findUnique({
+          where: {
+            provider_providerEventId: {
+              provider: this.provider.providerName,
+              providerEventId: event.id,
+            },
+          },
+        });
+        if (existing?.status !== "FAILED") {
+          this.logger.log(JSON.stringify({
+            event: "payment_webhook_duplicate",
+            provider: this.provider.providerName,
+            eventType: event.type,
+            status: existing?.status ?? "UNKNOWN",
+          }));
+          return { received: true, duplicate: true };
+        }
+        const retry = await this.db.paymentWebhookEvent.updateMany({
+          where: {
+            provider: this.provider.providerName,
+            providerEventId: event.id,
+            status: "FAILED",
+          },
+          data: { status: "PROCESSING", processedAt: null, errorCode: null },
+        });
+        if (retry.count === 0) return { received: true, duplicate: true };
+        this.logger.log(JSON.stringify({
+          event: "payment_webhook_retry",
+          provider: this.provider.providerName,
+          eventType: event.type,
+        }));
+      } else {
+        throw error;
+      }
     }
     try {
       const marketplaceHandled = await this.marketplacePayments.processWebhook(event);
@@ -1188,6 +1226,11 @@ export class ApplicationsService {
         },
         data: { status: "PROCESSED", processedAt: new Date() },
       });
+      this.logger.log(JSON.stringify({
+        event: "payment_webhook_processed",
+        provider: this.provider.providerName,
+        eventType: event.type,
+      }));
       return { received: true };
     } catch (error) {
       const response =
@@ -1205,7 +1248,18 @@ export class ApplicationsService {
         },
         data: { status: "FAILED", errorCode: code, processedAt: new Date() },
       });
-      return { received: true, handled: false, code };
+      this.logger.error(JSON.stringify({
+        event: "payment_webhook_processing_failed",
+        provider: this.provider.providerName,
+        eventType: event.type,
+        code,
+      }));
+      if (error instanceof ApiException) throw error;
+      this.fail(
+        HttpStatus.BAD_GATEWAY,
+        "WEBHOOK_PROCESSING_FAILED",
+        "The payment webhook could not be processed and will be retried.",
+      );
     }
   }
   private async processWebhook(event: VerifiedWebhook) {
