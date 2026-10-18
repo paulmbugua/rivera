@@ -95,6 +95,7 @@ const env = z.object({
   JWT_REFRESH_EXPIRES_IN: duration.default("30d"),
   EMAIL_VERIFICATION_EXPIRES_IN: duration.default("24h"),
   PASSWORD_RESET_EXPIRES_IN: duration.default("1h"),
+  ACCOUNT_REACTIVATION_EXPIRES_IN: duration.default("1h"),
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   MAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
   SMTP_SECURE: z.enum(["true", "false"]).optional(),

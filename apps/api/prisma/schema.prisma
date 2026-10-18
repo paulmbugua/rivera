@@ -389,6 +389,7 @@ model User {
   sessions                      RefreshSession[]
   verificationTokens            EmailVerificationToken[]
   resetTokens                   PasswordResetToken[]
+  reactivationTokens            AccountReactivationToken[]
   business                      BusinessProfile?
   creator                       CreatorProfile?
   verificationRequests          VerificationRequest[]     @relation("VerificationOwner")
@@ -489,6 +490,19 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+model AccountReactivationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model BusinessProfile {

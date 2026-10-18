@@ -126,6 +126,35 @@ export class MailService {
       developmentUrl: url,
     });
   }
+  sendAccountReactivationEmail(email: string, token: string) {
+    const url = this.link("/reactivate", token);
+    return this.provider.send({
+      to: email,
+      subject: "Reactivate your Rivera account",
+      text: `Reactivate your Rivera account using this single-use link. It expires in one hour: ${url}`,
+      html: template(
+        "Reactivate your account",
+        "You asked to restore your Rivera account. This secure, single-use link expires in one hour. If you did not make this request, you can ignore this email.",
+        "Reactivate Account",
+        url,
+      ),
+      developmentUrl: url,
+    });
+  }
+  sendAccountReactivatedEmail(email: string, firstName: string) {
+    const loginUrl = `${process.env.APP_URL ?? "http://localhost:3000"}/login`;
+    return this.provider.send({
+      to: email,
+      subject: "Your Rivera account is active again",
+      text: `Hi ${firstName}, your Rivera account has been reactivated. Sign in again: ${loginUrl}`,
+      html: template(
+        "Your account is active again",
+        `Hi ${firstName}, your Rivera account has been reactivated. For your security, previous sessions remain signed out. Please log in again.`,
+        "Log In to Rivera",
+        loginUrl,
+      ),
+    });
+  }
   sendWelcomeEmail(email: string, firstName: string) {
     return this.provider.send({
       to: email,

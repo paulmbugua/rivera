@@ -195,6 +195,45 @@ export class AuthService {
   async logout(raw?: string) { if (raw) await this.db.refreshSession.updateMany({ where: { tokenHash: digest(raw), revokedAt: null }, data: { revokedAt: new Date() } }); return { message: 'Signed out' }; }
   async me(id: string) { const user = await this.db.user.findUniqueOrThrow({ where: { id }, include: { roles: true, business: true, creator: true } }); return publicUser(user); }
   async forgot(email: string) { const user = await this.db.user.findUnique({ where: { email: email.trim().toLowerCase() } }); if (user?.status === 'ACTIVE' && !user.deletedAt) { await this.issueEmailToken(user.id, user.email, 'reset'); this.logger.log(`Password reset requested for user ${user.id}`); } return { message: 'If an account exists for this email, password reset instructions have been sent.' }; }
+  async requestReactivation(email: string) {
+    const message = 'If a deactivated account exists for this email, reactivation instructions have been sent.';
+    const user = await this.db.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!user || user.status !== 'DEACTIVATED' || !user.deletedAt || !user.emailVerifiedAt) return { message };
+    const recent = await this.db.accountReactivationToken.findFirst({ where: { userId: user.id, usedAt: null, createdAt: { gt: new Date(Date.now() - 60_000) } } });
+    if (recent) return { message };
+    const token = random();
+    await this.db.$transaction(async tx => {
+      await tx.accountReactivationToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
+      await tx.accountReactivationToken.create({ data: { userId: user.id, tokenHash: digest(token), expiresAt: until(duration(process.env.ACCOUNT_REACTIVATION_EXPIRES_IN, 3_600_000)) } });
+    });
+    try {
+      await this.mail.sendAccountReactivationEmail(user.email, token);
+      this.logger.log(`Account reactivation requested for user ${user.id}`);
+    } catch {
+      this.logger.error(`Account reactivation email delivery failed for user ${user.id}`);
+    }
+    return { message };
+  }
+  async confirmReactivation(token: string) {
+    const record = await this.db.accountReactivationToken.findUnique({ where: { tokenHash: digest(token) } });
+    if (!record || record.usedAt) throw AuthErrors.invalidReactivation();
+    if (record.expiresAt <= new Date()) throw AuthErrors.expiredReactivation();
+    const now = new Date();
+    await this.db.$transaction(async tx => {
+      const consumed = await tx.accountReactivationToken.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
+      if (!consumed.count) throw AuthErrors.invalidReactivation();
+      const restored = await tx.user.updateMany({ where: { id: record.userId, status: 'DEACTIVATED', deletedAt: { not: null }, emailVerifiedAt: { not: null } }, data: { status: 'ACTIVE', deletedAt: null } });
+      if (!restored.count) throw AuthErrors.accountNotReactivatable();
+      await tx.refreshSession.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: now } });
+      await tx.accountReactivationToken.updateMany({ where: { userId: record.userId, id: { not: record.id }, usedAt: null }, data: { usedAt: now } });
+      await tx.adminAuditLog.create({ data: { actorId: record.userId, action: 'ACCOUNT_REACTIVATED', targetType: 'User', targetId: record.userId, metadata: { method: 'EMAIL_LINK', previousSessionsPreservedAsRevoked: true } } });
+    });
+    const user = await this.db.user.findUniqueOrThrow({ where: { id: record.userId }, select: { email: true, firstName: true } });
+    try { await this.mail.sendAccountReactivatedEmail(user.email, user.firstName); }
+    catch { this.logger.error(`Account reactivation confirmation email delivery failed for user ${record.userId}`); }
+    this.logger.log(`Account reactivated for user ${record.userId}`);
+    return { message: 'Your Rivera account has been reactivated. Please log in again.' };
+  }
   async reset(dto: ResetDto) {
     const record = await this.db.passwordResetToken.findUnique({ where: { tokenHash: digest(dto.token) } });
     if (!record || record.usedAt) throw AuthErrors.invalidReset();

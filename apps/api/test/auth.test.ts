@@ -85,3 +85,29 @@ test('password reset changes the hash and revokes active sessions', async () => 
   assert.ok(await compare('a-new-strong-password', nextHash));
   assert.ok(revoked);
 });
+test('reactivation request is neutral and only emails an eligible deactivated account', async () => {
+  const created: Record<string, unknown>[] = []; let sent = 0;
+  const user = { id:'user-1',email:'return@example.com',firstName:'A',status:'DEACTIVATED',deletedAt:new Date(),emailVerifiedAt:new Date() };
+  const tx = { accountReactivationToken:{updateMany:async()=>({count:0}),create:async({data}:{data:Record<string,unknown>})=>{created.push(data);return{id:'token-1'}}} };
+  const db = { user:{findUnique:async({where}:{where:{email:string}})=>where.email==='return@example.com'?user:null},accountReactivationToken:{findFirst:async()=>null},$transaction:async(fn:(value:typeof tx)=>Promise<unknown>)=>fn(tx) };
+  const mail = { sendAccountReactivationEmail:async()=>{sent++} };
+  const service = new AuthService(db as unknown as PrismaService,mail as unknown as MailService);
+  const eligible = await service.requestReactivation(' RETURN@example.com ');
+  const unknown = await service.requestReactivation('unknown@example.com');
+  assert.equal(eligible.message,unknown.message); assert.equal(sent,1); assert.equal(created.length,1);
+  assert.notEqual(created[0].tokenHash,undefined); assert.equal(String(created[0].tokenHash).includes('return@example.com'),false);
+});
+test('reactivation atomically restores the account, consumes links, preserves revoked sessions and audits the event', async () => {
+  const { createHash } = await import('node:crypto'); const token='single-use-reactivation'; const tokenHash=createHash('sha256').update(token).digest('hex');
+  let status='DEACTIVATED'; let deletedAt:Date|null=new Date(); let consumed=false; let revoked=false; let audited=false; let confirmed=false;
+  const record={id:'reactivation-1',userId:'user-1',usedAt:null,expiresAt:new Date(Date.now()+60_000)};
+  const tx={accountReactivationToken:{updateMany:async({where}:{where:{id?:string}})=>{if(where.id==='reactivation-1'){if(consumed)return{count:0};consumed=true;}return{count:1}}},user:{updateMany:async()=>{status='ACTIVE';deletedAt=null;return{count:1}}},refreshSession:{updateMany:async()=>{revoked=true;return{count:0}}},adminAuditLog:{create:async()=>{audited=true;return{id:'audit-1'}}}};
+  const db={accountReactivationToken:{findUnique:async({where}:{where:{tokenHash:string}})=>where.tokenHash===tokenHash?record:null},$transaction:async(fn:(value:typeof tx)=>Promise<unknown>)=>fn(tx),user:{findUniqueOrThrow:async()=>({email:'return@example.com',firstName:'Amina'})}};
+  const mail={sendAccountReactivatedEmail:async()=>{confirmed=true}};
+  const result=await new AuthService(db as unknown as PrismaService,mail as unknown as MailService).confirmReactivation(token);
+  assert.equal(status,'ACTIVE');assert.equal(deletedAt,null);assert.ok(consumed);assert.ok(revoked);assert.ok(audited);assert.ok(confirmed);assert.match(result.message,/log in again/i);
+});
+test('expired reactivation tokens cannot restore an account', async () => {
+  const db={accountReactivationToken:{findUnique:async()=>({id:'old',userId:'user-1',usedAt:null,expiresAt:new Date(0)})}};
+  await assert.rejects(new AuthService(db as unknown as PrismaService,{} as MailService).confirmReactivation('expired'),error=>codeOf(error)==='REACTIVATION_TOKEN_EXPIRED');
+});

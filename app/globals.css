@@ -452,3 +452,5 @@ button:disabled,.button:disabled{opacity:.62}
 @media(max-width:760px){.notification-center{top:76px;right:14px}.notification-panel{max-height:calc(100vh - 145px);border-radius:22px}}
 @media(max-width:760px){.directory-intro{grid-template-columns:1fr;padding:24px;gap:25px}.directory-guide-grid{grid-template-columns:1fr}.directory-guide-grid article{min-height:auto}.directory-actions .button{flex:1 1 150px;text-align:center}}
 .form-error .support-link{display:inline-block;margin-top:8px;font-weight:800;text-decoration:underline;text-underline-offset:3px}.form-error .support-link:focus-visible{outline:2px solid currentColor;outline-offset:3px}.form-error>p{margin:0}
+.form-error .deactivated-actions{display:flex;flex-wrap:wrap;gap:6px 18px}
+.reactivation-login{display:flex;justify-content:center;text-decoration:none}
