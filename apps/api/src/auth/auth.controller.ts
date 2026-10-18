@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { CookieOptions, Request, Response } from 'express';
 import { ApiCookieAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
@@ -35,7 +35,12 @@ export class AuthController {
       const role = session.user.roles[0];
       const destination = role === 'ADMIN' ? '/admin' : session.user.onboardingCompleted ? `/dashboard/${role.toLowerCase()}` : `/onboarding/${role.toLowerCase()}`;
       return res.redirect(`${appUrl}${destination}`);
-    } catch { return res.redirect(`${appUrl}/login?googleError=failed`); }
+    } catch (error) {
+      const response = error instanceof HttpException ? error.getResponse() : undefined;
+      const code = typeof response === 'object' && response && 'code' in response ? response.code : undefined;
+      const reason = code === 'ACCOUNT_DEACTIVATED' ? 'deactivated' : 'failed';
+      return res.redirect(`${appUrl}/login?googleError=${reason}`);
+    }
   }
   @Get('google/pending') @ApiOperation({ summary: 'Read a short-lived Google onboarding identity' }) googlePending(@Query('token') token: string) { return this.auth.oauthPending(token); }
   @Post('google/register') @ApiOperation({ summary: 'Finish Google registration and send Rivera activation email' }) googleRegister(@Body() dto: GoogleRegisterDto) { return this.auth.googleRegister(dto); }

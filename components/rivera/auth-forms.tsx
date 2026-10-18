@@ -15,6 +15,11 @@ const reset = z.object({ password: strongPassword, confirmPassword: z.string() }
 type Mode = 'register'|'login'|'forgot'|'reset'|'verify';
 const schemas = { register: registerSchema, login, forgot: email, reset, verify: z.object({ token: z.string().min(1) }) };
 const titles = { register: 'Create your account', login: 'Welcome back', forgot: 'Reset your password', reset: 'Choose a new password', verify: 'Verify your email' };
+const googleErrorMessages: Record<string, string> = {
+  deactivated: 'This Rivera account is deactivated. Contact support or reactivate your account to continue.',
+  state: 'This Google sign-in request expired or is invalid. Please start again.',
+  failed: 'Google sign-in could not be completed. Please try again.',
+};
 const moments = {
   register: { icon: HeartHandshake, kicker: 'A GOOD PLACE TO BEGIN', title: 'Your next partnership could start here.', copy: 'Create a profile that feels like you. We’ll keep the process clear, considered and human.' },
   login: { icon: Sparkles, kicker: 'WELCOME BACK', title: 'There is good work waiting to move forward.', copy: 'Return to your campaigns, conversations and opportunities without losing the thread.' },
@@ -24,7 +29,8 @@ const moments = {
 };
 export function AuthForm({ mode }: { mode: Mode }) {
   const search = useSearchParams()!; const { refresh } = useAuth();
-  const [message, setMessage] = useState(''); const [error, setError] = useState(search.get('googleError') ? 'Google sign-in could not be completed. Please try again.' : '');
+  const googleError = search.get('googleError');
+  const [message, setMessage] = useState(''); const [error, setError] = useState(googleError ? (googleErrorMessages[googleError] ?? googleErrorMessages.failed) : '');
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const form = useForm<Record<string,unknown>>({ resolver: zodResolver(schemas[mode] as never) as never, defaultValues: { token: search.get('token') ?? '', firstName: '', lastName: '', email: '', password: '', confirmPassword: '', accountType: '', termsAccepted: false } });
   const field = (name: string, label: string, type = 'text') => {
