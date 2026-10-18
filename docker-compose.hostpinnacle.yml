@@ -1,10 +1,72 @@
 services:
   api:
     environment:
+      BUILD_SHA: ${BUILD_SHA:-unknown}
       FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-admin.json
       PUSH_NOTIFICATIONS_ENABLED: "true"
     volumes:
       - ./secrets/firebase-admin.json:/run/secrets/firebase-admin.json:ro
+    networks:
+      - default
+      - edge
+
+  web:
+    networks:
+      - default
+      - edge
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  cloudflared:
+    profiles: [cloudflare-tunnel]
+    image: cloudflare/cloudflared:2026.10.0
+    user: "65532:65532"
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --protocol
+      - quic
+      - --metrics
+      - 0.0.0.0:2000
+      - run
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 192m
+    cpus: 0.25
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    networks:
+      - edge
+      - egress
+    healthcheck:
+      test:
+        - CMD
+        - cloudflared
+        - tunnel
+        - --metrics
+        - 127.0.0.1:2000
+        - ready
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   caddy:
     image: caddy:2.10-alpine
@@ -26,3 +88,10 @@ services:
 volumes:
   rivera_caddy_data:
   rivera_caddy_config:
+
+networks:
+  edge:
+    name: rivera_edge
+    internal: true
+  egress:
+    name: rivera_egress

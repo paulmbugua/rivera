@@ -35,6 +35,14 @@ export class HealthController {
       uptimeSeconds: Math.floor(process.uptime()),
     };
   }
+  @Get("version")
+  @ApiOperation({ summary: "Deployment identity for release verification" })
+  version() {
+    return {
+      service: "rivera-api",
+      buildSha: process.env.BUILD_SHA ?? "unknown",
+    };
+  }
   @Get("ready")
   @ApiOperation({
     summary: "Lightweight database and required-configuration readiness",

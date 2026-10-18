@@ -11,6 +11,8 @@ const schema = source("../prisma/schema.prisma"),
   main = source("../src/main.ts"),
   docker = source("../../../docker-compose.yml"),
   apiDocker = source("../Dockerfile");
+const hostCompose = source("../../../docker-compose.hostpinnacle.yml"),
+  deployment = source("../../../deploy/deploy-production.sh");
 
 test("private operational resources are guarded by roles", () => {
   assert.match(controllers, /@UseGuards\(AuthGuard\)/);
@@ -41,6 +43,28 @@ test("readiness checks database and safe configuration", () => {
   assert.match(controllers, /health\/ready|@Get\("ready"\)/);
   assert.match(ops, /SELECT 1/);
   assert.match(ops, /not_ready/);
+});
+test("deployment identity exposes the immutable build SHA", () => {
+  assert.match(controllers, /@Get\("version"\)/);
+  assert.match(controllers, /process\.env\.BUILD_SHA/);
+  assert.match(hostCompose, /BUILD_SHA:/);
+  assert.match(deployment, /health\/version/);
+});
+test("HostPinnacle tunnel is isolated, pinned and hardened", () => {
+  const tunnelBlock = hostCompose.slice(
+    hostCompose.indexOf("  cloudflared:"),
+    hostCompose.indexOf("  caddy:"),
+  );
+  assert.match(hostCompose, /cloudflare\/cloudflared:2026\.10\.0/);
+  assert.match(hostCompose, /profiles: \[cloudflare-tunnel\]/);
+  assert.match(hostCompose, /--no-autoupdate/);
+  assert.match(hostCompose, /--protocol[\s\S]*quic/);
+  assert.match(hostCompose, /read_only: true/);
+  assert.match(hostCompose, /cap_drop: \[ALL\]/);
+  assert.match(hostCompose, /no-new-privileges:true/);
+  assert.match(hostCompose, /internal: true/);
+  assert.match(hostCompose, /127\.0\.0\.1:2000[\s\S]*ready/);
+  assert.doesNotMatch(tunnelBlock, /ports:/);
 });
 test("production rejects unsafe defaults", () => {
   assert.match(moduleSource, /JWT_ACCESS_SECRET\.length < 48/);
