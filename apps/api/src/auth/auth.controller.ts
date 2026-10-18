@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
-import { Request, Response } from 'express';
+import type { CookieOptions, Request, Response } from 'express';
 import { ApiCookieAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -8,11 +8,14 @@ import { ChangePasswordDto, EmailDto, FirebaseGoogleDto, GoogleRegisterDto, Logi
 import { CurrentUser } from './current-user.decorator';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 const duration = (value: string | undefined, fallback: number) => { const match=value?.match(/^(\d+)(s|m|h|d)$/); return match ? Number(match[1])*({s:1000,m:60_000,h:3_600_000,d:86_400_000}[match[2]]??1) : fallback };
-const accessCookie = { httpOnly: true, secure: process.env.COOKIE_SECURE === 'true', sameSite: 'lax' as const, path: '/', maxAge: duration(process.env.JWT_ACCESS_EXPIRES_IN, 900_000) };
+const cookieDomain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+const cookieBase: CookieOptions = { httpOnly: true, secure: process.env.COOKIE_SECURE === 'true', sameSite: 'lax', ...(cookieDomain ? { domain: cookieDomain } : {}) };
+const accessCookie: CookieOptions = { ...cookieBase, path: '/', maxAge: duration(process.env.JWT_ACCESS_EXPIRES_IN, 900_000) };
 const refreshCookie = { ...accessCookie, path: '/api/v1/auth', maxAge: duration(process.env.JWT_REFRESH_EXPIRES_IN, 2_592_000_000) };
 function setSession(res: Response, session: { access: string; refresh: string }) { res.cookie('rivera_access', session.access, accessCookie); res.cookie('rivera_refresh', session.refresh, refreshCookie); }
-function clearSession(res: Response) { res.clearCookie('rivera_access', { path: '/' }); res.clearCookie('rivera_refresh', { path: '/api/v1/auth' }); }
-const googleStateCookie = { httpOnly: true, secure: process.env.COOKIE_SECURE === 'true', sameSite: 'lax' as const, path: '/api/v1/auth/google', maxAge: 10 * 60_000 };
+function clearSession(res: Response) { res.clearCookie('rivera_access', { ...cookieBase, path: '/' }); res.clearCookie('rivera_refresh', { ...cookieBase, path: '/api/v1/auth' }); }
+const googleStateCookie: CookieOptions = { ...cookieBase, path: '/api/v1/auth/google', maxAge: 10 * 60_000 };
+const googleStateClearCookie: CookieOptions = { ...cookieBase, path: '/api/v1/auth/google' };
 const same = (left?: string, right?: string) => !!left && !!right && left.length === right.length && timingSafeEqual(Buffer.from(left), Buffer.from(right));
 @ApiTags('Authentication')
 @Controller('auth')
@@ -22,8 +25,8 @@ export class AuthController {
   @Get('google/start') @ApiOperation({ summary: 'Begin secure Google OAuth for web' }) googleStart(@Res() res: Response) { const state = randomBytes(32).toString('base64url'); res.cookie('rivera_google_state', state, googleStateCookie); return res.redirect(this.auth.googleAuthorizationUrl(state)); }
   @Get('google/callback') @ApiOperation({ summary: 'Complete Google OAuth callback' }) async googleCallback(@Query('code') code: string, @Query('state') state: string, @Req() req: Request, @Res() res: Response) {
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
-    if (!code || !same(state, req.cookies?.rivera_google_state)) { res.clearCookie('rivera_google_state', { path: '/api/v1/auth/google' }); return res.redirect(`${appUrl}/login?googleError=state`); }
-    res.clearCookie('rivera_google_state', { path: '/api/v1/auth/google' });
+    if (!code || !same(state, req.cookies?.rivera_google_state)) { res.clearCookie('rivera_google_state', googleStateClearCookie); return res.redirect(`${appUrl}/login?googleError=state`); }
+    res.clearCookie('rivera_google_state', googleStateClearCookie);
     try {
       const result = await this.auth.googleWebIdentity(code);
       if (result.status === 'registration_required') return res.redirect(`${appUrl}/register/google?token=${encodeURIComponent(result.token)}`);
