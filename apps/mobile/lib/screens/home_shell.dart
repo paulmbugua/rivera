@@ -34,6 +34,7 @@ class _HomeShellState extends State<HomeShell> {
         child: Row(children: [
           if (wide)
             NavigationRail(
+              scrollable: true,
               selectedIndex: index,
               onDestinationSelected: (value) => setState(() => index = value),
               labelType: NavigationRailLabelType.all,
