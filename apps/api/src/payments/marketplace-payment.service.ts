@@ -6,9 +6,11 @@ import { ApiException } from "../common/api-error";
 import { convertMinor, settlementQuote, USD_KES_RATE } from '../applications/currency-policy';
 import { WisePayoutService } from './wise-payout.service';
 import { wiseReady, wisePayoutQuote } from './wise-payout.policy';
+import { nextPayoutMonday, paystackTransferReference, payoutDateLabel } from './payout-schedule';
 import {
   PAYMENT_PROVIDER,
   PaymentProviderAdapter,
+  ProviderTransfer,
   VerifiedWebhook,
 } from "../applications/payment.provider";
 import {
@@ -304,6 +306,7 @@ export class MarketplacePaymentService {
   }
   private safePayment(x: any) {
     return {
+      nextPayoutAt: nextPayoutMonday(),
       id: x.id,
       campaignParticipantId: x.campaignParticipantId,
       grossAmountMinor: x.grossAmountMinor,
@@ -328,7 +331,7 @@ export class MarketplacePaymentService {
       campaign: x.campaign,
       creator: x.creator,
       business: x.business,
-      transfers: x.transfers?.map((t:any)=>({id:t.id,provider:t.provider,status:t.status,amountMinor:t.amountMinor,currencyCode:t.currencyCode,wiseAmountUsdMinor:t.wiseAmountUsdMinor,createdAt:t.createdAt,settledAt:t.settledAt})),
+      transfers: x.transfers?.map((t:any)=>({id:t.id,provider:t.provider,status:t.status,amountMinor:t.amountMinor,currencyCode:t.currencyCode,wiseAmountUsdMinor:t.wiseAmountUsdMinor,createdAt:t.createdAt,settledAt:t.settledAt,scheduledFor:t.scheduledFor,failureCode:t.failureCode})),
       refunds: x.refunds,
     };
   }
@@ -451,6 +454,7 @@ export class MarketplacePaymentService {
             },
             transfers: true,
             refunds: true,
+            issues: true,
           },
         });
         if (!payment)
@@ -485,6 +489,8 @@ export class MarketplacePaymentService {
             "Complete the collaboration and approve all required work first.",
           );
         const account = payment.campaignParticipant.creator.payoutAccount;
+        if(payment.issues.some(issue=>['OPEN','UNDER_REVIEW'].includes(issue.status)))
+          this.fail(HttpStatus.CONFLICT,'PAYOUT_ISSUE_HOLD','Resolve the payment issue before scheduling this payout.');
         if (!account?.payoutsEnabled || account.onboardingStatus !== "ACTIVE")
           this.fail(
             HttpStatus.CONFLICT,
@@ -492,55 +498,109 @@ export class MarketplacePaymentService {
             "Creator payout account is not ready.",
           );
         if(account.provider==='WISE')return this.wise!.queue(tx,payment,userId);
-        const transfer = await this.provider.createTransfer({
-          collaborationPaymentId: payment.id,
-          accountId: account.providerAccountId,
-          amountMinor: payment.creatorNetMinor,
-          currencyCode: payment.currencyCode,
-          idempotencyKey: `rivera-release-${payment.id}`,
-        });
+        const scheduledFor = nextPayoutMonday();
         const row = await tx.creatorTransfer.create({
           data: {
             collaborationPaymentId: payment.id,
             creatorId: payment.creatorId,
             provider: this.provider.providerName,
-            providerTransferId: transfer.transferId,
+            providerTransferId: this.provider.providerName==='PAYSTACK'?paystackTransferReference(`rivera-release-${payment.id}`):`scheduled:${payment.id}`,
+            recipientAccountId: account.providerAccountId,
+            scheduledFor,
             amountMinor: payment.creatorNetMinor,
             currencyCode: payment.currencyCode,
-            status:
-              transfer.status === "failed"
-                ? "FAILED"
-                : transfer.status === "reversed"
-                  ? "REVERSED"
-                  : "PENDING",
-            failureCode: transfer.failureCode,
-            failureMessage: transfer.failureMessage,
+            status: 'SCHEDULED',
           },
         });
         await tx.collaborationPayment.update({
           where: { id: payment.id },
           data: {
-            status: transfer.status === "failed" ? "FUNDED" : "RELEASE_PENDING",
-            eligibleForReleaseAt: payment.eligibleForReleaseAt ?? new Date(),
+            status: 'PAYOUT_PENDING',
+            eligibleForReleaseAt: scheduledFor,
           },
         });
         await tx.applicationAuditLog.create({
           data: {
             applicationId: payment.campaignParticipant.applicationId,
             actorUserId: userId,
-            action: "CREATOR_PAYMENT_RELEASE_STARTED",
+            action: "CREATOR_PAYOUT_SCHEDULED",
             metadata: {
               paymentId: payment.id,
               transferId: row.id,
               amountMinor: row.amountMinor,
               currencyCode: row.currencyCode,
+              scheduledFor: scheduledFor.toISOString(),
             },
           },
         });
-        return row;
+        await tx.notification.create({data:{userId:payment.campaignParticipant.creator.userId,creatorId:payment.creatorId,
+          type:'PAYOUT_SCHEDULED',title:'Your payout is scheduled',body:`Business release approved. Your payout enters the ${payoutDateLabel(scheduledFor)} batch, subject to payment and account checks. Scheduled does not mean paid.`}});
+        return {id:row.id,provider:row.provider,status:row.status,amountMinor:row.amountMinor,currencyCode:row.currencyCode,scheduledFor};
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+  }
+  /** Durable outbox: reserve once before any network call; ambiguous sends are verify-only. */
+  private verifyScheduledTransfer(transfer:any,state:ProviderTransfer){
+    if(!transfer.scheduledFor||transfer.provider!=='PAYSTACK')return;
+    const expected=settlementQuote(transfer.amountMinor,transfer.currencyCode,'PAYSTACK');
+    if(state.transferId!==transfer.providerTransferId||state.amountMinor!==expected.amountMinor||state.currencyCode!==expected.currencyCode||state.recipientAccountId!==transfer.recipientAccountId)
+      this.fail(HttpStatus.CONFLICT,'PAYOUT_PROVIDER_MISMATCH','Provider transfer does not match the reserved recipient, reference, amount or currency.');
+  }
+  async dispatchScheduledPayout(id:string, now=new Date()) {
+    const dispatch = await this.db.$transaction(async tx=>{
+      const found=await tx.creatorTransfer.findUnique({where:{id},select:{collaborationPaymentId:true}});
+      if(!found)return null;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${found.collaborationPaymentId}))::text`;
+      const row=await tx.creatorTransfer.findUnique({where:{id},include:{creator:{include:{user:{select:{status:true}},payoutAccount:true}},collaborationPayment:{include:{issues:true,refunds:true,campaignParticipant:{include:{workItems:true}}}}}});
+      if(!row||!row.scheduledFor||row.scheduledFor>now)return null;
+      if(row.status==='PROCESSING'&&row.provider!=='WISE')return {...row,verifyOnly:true};
+      if(row.status!=='SCHEDULED')return null;
+      const p=row.collaborationPayment,account=row.creator.payoutAccount;
+      const hold=(row.provider!=='WISE'&&row.provider!==this.provider.providerName)||p.status!=='PAYOUT_PENDING'||p.refundedAmountMinor>0||p.releasedAmountMinor>0||p.fundedAmountMinor<p.grossAmountMinor||p.creatorNetMinor!==row.amountMinor||p.currencyCode!==row.currencyCode||
+        p.issues.some(x=>['OPEN','UNDER_REVIEW'].includes(x.status))||p.refunds.some(x=>x.status==='PENDING')||!(await this.eligible(p.campaignParticipant))||
+        row.creator.user.status!=='ACTIVE'||!account?.payoutsEnabled||account.onboardingStatus!=='ACTIVE'||account.provider!==row.provider||
+        (row.provider==='WISE'?(!wiseReady(account)||account.wiseEmail!==row.wiseEmail||account.wiseLegalName!==row.wiseLegalName):account.providerAccountId!==row.recipientAccountId);
+      if(hold){
+        await tx.creatorTransfer.update({where:{id},data:{lastCheckedAt:now,failureCode:'PAYOUT_SAFETY_HOLD',failureMessage:'Payment, approved work, recipient or account requires review.'}});
+        if(row.failureCode!=='PAYOUT_SAFETY_HOLD'){
+          await tx.notification.create({data:{userId:row.creator.userId,creatorId:row.creatorId,type:'PAYOUT_HELD',title:'Your scheduled payout needs review',body:'Your funds remain reserved. Resolve open payment issues or contact support; no payout has been sent.'}});
+          const admins=await tx.user.findMany({where:{status:'ACTIVE',roles:{some:{role:'ADMIN'}}},select:{id:true},take:100});
+          if(admins.length)await tx.notification.createMany({data:admins.map(a=>({userId:a.id,type:'PAYOUT_HELD',title:'Scheduled payout held',body:`Review transfer ${id} in the finance desk. No payment was dispatched.`}))});
+        }
+        return null;
+      }
+      // Compare-and-set protects concurrent workers even under READ COMMITTED snapshots.
+      const claimed=await tx.creatorTransfer.updateMany({where:{id,status:'SCHEDULED'},data:{status:row.provider==='WISE'?'PENDING':'PROCESSING',lastCheckedAt:now,dispatchAttemptedAt:row.provider==='WISE'?null:now,failureCode:null,failureMessage:null}});
+      if(!claimed.count)return null;
+      await tx.notification.create({data:{userId:row.creator.userId,creatorId:row.creatorId,type:row.provider==='WISE'?'WISE_PAYOUT_READY':'PAYOUT_PROCESSING',title:row.provider==='WISE'?'Wise payout ready for admin processing':'Your payout is processing',body:row.provider==='WISE'?'Your Monday batch is ready. An administrator must still send and confirm the Wise transfer.':'Rivera is submitting your reserved earnings to the payout provider. Processing does not mean paid.'}});
+      if(row.provider==='WISE'){
+        const admins=await tx.user.findMany({where:{status:'ACTIVE',roles:{some:{role:'ADMIN'}}},select:{id:true},take:100});
+        if(admins.length)await tx.notification.createMany({data:admins.map(a=>({userId:a.id,type:'WISE_PAYOUT_READY',title:'Monday Wise batch ready',body:'A scheduled payout is ready at the Wise payout desk. Claim it before sending manually.'}))});
+        return null;
+      }
+      return {...row,verifyOnly:false};
+    });
+    if(!dispatch)return;
+    if(dispatch.provider!==this.provider.providerName)return;
+    try{
+      let state=dispatch.verifyOnly?await this.provider.retrieveTransfer(dispatch.providerTransferId):await this.provider.createTransfer({
+        collaborationPaymentId:dispatch.collaborationPaymentId,accountId:dispatch.recipientAccountId!,amountMinor:dispatch.amountMinor,currencyCode:dispatch.currencyCode,idempotencyKey:`rivera-release-${dispatch.collaborationPaymentId}`,reference:dispatch.provider==='PAYSTACK'?dispatch.providerTransferId:undefined});
+      if(dispatch.provider==='PAYSTACK'){
+        if(state.transferId!==dispatch.providerTransferId)this.fail(HttpStatus.CONFLICT,'PAYOUT_REFERENCE_MISMATCH','Provider transfer reference did not match.');
+        if(!dispatch.verifyOnly)state=await this.provider.retrieveTransfer(dispatch.providerTransferId);
+        this.verifyScheduledTransfer(dispatch,state);
+      }
+      await this.db.creatorTransfer.updateMany({where:{id,status:'PROCESSING'},data:{providerTransferId:state.transferId,status:'PENDING',lastCheckedAt:now,failureCode:null,failureMessage:null}});
+      await this.db.collaborationPayment.updateMany({where:{id:dispatch.collaborationPaymentId,status:'PAYOUT_PENDING'},data:{status:'RELEASE_PENDING'}});
+      await this.applyTransferState(id,state.status,state.failureCode,state.failureMessage);
+    }catch{
+      await this.db.creatorTransfer.updateMany({where:{id,status:'PROCESSING'},data:{lastCheckedAt:now,failureCode:'PAYOUT_VERIFICATION_REQUIRED',failureMessage:'Provider outcome is uncertain. Verify the existing reference; do not send again.'}});
+      if(!dispatch.verifyOnly){
+        const admins=await this.db.user.findMany({where:{status:'ACTIVE',roles:{some:{role:'ADMIN'}}},select:{id:true},take:100});
+        if(admins.length)await this.db.notification.createMany({data:admins.map(a=>({userId:a.id,type:'PAYOUT_VERIFICATION_REQUIRED',title:'Payout needs provider verification',body:`Check transfer ${id}. Do not resend: its outcome is uncertain.`}))});
+      }
+    }
   }
   async openIssue(userId: string, dto: OpenPaymentIssueDto) {
     const p = await this.db.campaignParticipant.findFirst({
@@ -847,6 +907,7 @@ export class MarketplacePaymentService {
       const state = await this.provider.retrieveTransfer(
         transfer.providerTransferId,
       );
+      this.verifyScheduledTransfer(transfer,state);
       await this.applyTransferState(
         transfer.id,
         state.status,
@@ -1027,15 +1088,14 @@ export class MarketplacePaymentService {
     failureCode?: string,
     failureMessage?: string,
   ) {
-    const transfer = await this.db.creatorTransfer.findUnique({
-      where: { id },
-    });
-    if (!transfer) return;
-    if (transfer.provider === 'WISE') return; // Only the admin-assisted Wise flow can settle these records.
     if (status === "pending") return;
-    const succeeded = status === "succeeded";
-    await this.db.$transaction([
-      this.db.creatorTransfer.update({
+    await this.db.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`payout-settle:${id}`}))::text`;
+      const transfer=await tx.creatorTransfer.findUnique({where:{id},include:{creator:{select:{userId:true}},collaborationPayment:{include:{business:{select:{userId:true}}}}}});
+      if(!transfer||transfer.provider==='WISE'||transfer.status==='SCHEDULED')return;
+      const succeeded=status==='succeeded',next=succeeded?'SUCCEEDED':status==='reversed'?'REVERSED':'FAILED';
+      if(transfer.status===next||(transfer.status==='SUCCEEDED'&&status!=='reversed')||transfer.status==='REVERSED')return;
+      await tx.creatorTransfer.update({
         where: { id },
         data: {
           status: succeeded
@@ -1048,8 +1108,8 @@ export class MarketplacePaymentService {
           releasedAt: succeeded ? new Date() : null,
           settledAt: succeeded ? new Date() : null,
         },
-      }),
-      this.db.collaborationPayment.update({
+      });
+      await tx.collaborationPayment.update({
         where: { id: transfer.collaborationPaymentId },
         data: succeeded
           ? {
@@ -1059,8 +1119,12 @@ export class MarketplacePaymentService {
               settledAt: new Date(),
             }
           : { status: "FUNDED" },
-      }),
-    ]);
+      });
+      await tx.notification.createMany({data:[
+        {userId:transfer.creator.userId,creatorId:transfer.creatorId,type:succeeded?'PAYOUT_COMPLETED':'PAYOUT_NEEDS_REVIEW',title:succeeded?'Payout confirmed by provider':'Payout needs review',body:succeeded?'The provider confirmed your earnings transfer. Check your payout account. Contact support if it has not arrived.':'The provider reported a failed or reversed payout. Rivera must reconcile it before another transfer; do not request a duplicate.'},
+        {userId:transfer.collaborationPayment.business.userId,businessId:transfer.collaborationPayment.businessId,type:succeeded?'PAYOUT_COMPLETED':'PAYOUT_NEEDS_REVIEW',title:succeeded?'Creator payout completed':'Creator payout needs review',body:succeeded?'The payout provider confirmed the creator transfer.':'The payout provider reported a failed or reversed transfer. Contact support; do not fund or release this payment again.'},
+      ]});
+    });
   }
   private async completeRefund(id: string, providerRefundId?: string) {
     const refund = await this.db.collaborationRefund.findUnique({
@@ -1209,6 +1273,13 @@ export class MarketplacePaymentService {
         where: { providerTransferId: o.id },
       });
       if (transfer && transfer.provider === this.provider.providerName) {
+        if(transfer.scheduledFor&&transfer.provider==='PAYSTACK'){
+          const state=await this.provider.retrieveTransfer(transfer.providerTransferId);
+          this.verifyScheduledTransfer(transfer,state);
+          await this.applyTransferState(transfer.id,state.status,state.failureCode,state.failureMessage);
+          return true;
+        }
+        if(!['transfer.succeeded','transfer.failed','transfer.reversed','transfer.created'].includes(event.type))return true;
         await this.applyTransferState(
           transfer.id,
           event.type === "transfer.reversed"

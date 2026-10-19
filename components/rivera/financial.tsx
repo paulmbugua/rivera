@@ -6,8 +6,10 @@ import { money, money as contractMoney, statusLabel } from "@/lib/applications";
 import { PaymentCurrencyNote, useDisplayMoney } from './payment-currency';
 import { SettlementQuote } from '@/lib/currency';
 import { WisePayoutSetup } from './wise-payouts';
+import { payoutDate } from '@/lib/payout-schedule';
 
 type Payment = {
+  nextPayoutAt?:string;
   payoutMethod?: string;
   platformFeeUsdMinor?: number;
   payoutCountrySupported?: boolean;
@@ -29,7 +31,7 @@ type Payment = {
   campaign: { title: string; slug?: string };
   creator?: { displayName: string };
   business?: { name: string };
-  transfers?: { id: string; status: string; amountMinor: number }[];
+  transfers?: { id: string; status: string; amountMinor: number;scheduledFor?:string;failureCode?:string }[];
   refunds?: { id: string; status: string; amountMinor: number }[];
 };
 type PayoutAccount = {
@@ -45,6 +47,8 @@ type PayoutAccount = {
   payoutsEnabled: boolean;
 };
 type Transfer = {
+  scheduledFor?:string;
+  failureCode?:string;
   provider?:string;
   wiseTransferReference?:string;
   id: string;
@@ -54,6 +58,9 @@ type Transfer = {
   collaborationPayment: { campaign: { title: string } };
 };
 type AdminRecord = {
+  scheduledFor?:string;
+  failureCode?:string;
+  failureMessage?:string;
   id: string;
   status?: string;
   onboardingStatus?: string;
@@ -91,7 +98,7 @@ export function BusinessPayments() {
       !window.confirm(
         kind === "fund"
           ? `Fund this collaboration for ${money(item.grossAmountMinor, item.currencyCode)}?`
-          : `Release ${money(item.creatorNetMinor, item.currencyCode)} to the Creator?`,
+          : `Approve ${money(item.creatorNetMinor, item.currencyCode)} for ${item.nextPayoutAt?payoutDate(item.nextPayoutAt):'the following Monday payout batch'}? Funds remain reserved until payout checks pass. Wise still requires an admin to send.`,
       )
     )
       return;
@@ -122,7 +129,7 @@ export function BusinessPayments() {
     <FinancialShell title="Collaboration payments" back="/dashboard/business">
       <p>
         Fund accepted Creator compensation, then release it only after approved
-        completion.
+        completion. Approved releases enter the following Monday’s 09:00 Kenya-time batch—not an immediate withdrawal.
       </p>
       {error && (
         <p className="form-error" role="alert">
@@ -149,6 +156,7 @@ export function BusinessPayments() {
                 <dd>{money(x.releasedAmountMinor, x.currencyCode)}</dd>
               </dl>
               <PaymentCurrencyNote quote={x.settlement} />
+              {x.transfers?.map(t=>t.scheduledFor&&<p key={t.id}>Payout batch: <strong>{payoutDate(t.scheduledFor)}</strong> · {t.failureCode?'Needs review':statusLabel(t.status)}</p>)}
               {x.payoutMethod==='WISE_MANUAL'&&<p>After approved completion and release, Rivera queues an admin-assisted Wise payout in USD. This is not an automatic Paystack transfer.</p>}
               {x.payoutCountrySupported === false && <p className="form-warning">Before funding, the international creator must verify their Wise email and complete Rivera’s payout review.</p>}
             </div>
@@ -168,7 +176,7 @@ export function BusinessPayments() {
                   disabled={!!busy}
                   onClick={() => void action(x, "release")}
                 >
-                  Release Creator payment
+                  Approve Monday payout
                 </button>
               )}
             </div>
@@ -231,6 +239,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
       title={payouts ? "Payout account" : "Creator earnings"}
       back="/dashboard/creator"
     >
+      <section className="application-panel"><p className="eyebrow">YOUR WEEKLY PAYDAY</p><h2>Monday payouts, clear milestones</h2><p>Approved work → Business release → following Monday at 09:00 EAT → processing → paid.</p><small>Funds stay reserved until checks pass. M-Pesa is sent through Paystack; Wise requires an administrator to send it manually. Holds or provider delays can postpone arrival. There is no instant withdrawal.</small></section>
       <section className="application-panel">
         {account?.setupMode==='WISE_MANUAL'?<WisePayoutSetup account={account} onUpdate={setAccount}/>:<>
         <p className="eyebrow">PAYOUT READINESS</p>
@@ -292,6 +301,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
                   {money(x.releasedAmountMinor, x.currencyCode)} released
                 </p>
                 {x.status === "FUNDED" && <p>Funded by the Business and held for approved completion. This is not yet money received.</p>}
+                {x.transfers?.map(t=>t.scheduledFor&&<p key={t.id}>Payout batch: <strong>{payoutDate(t.scheduledFor)}</strong>{t.failureCode?' · On hold / needs review':''}</p>)}
                 <PaymentCurrencyNote quote={x.payoutSettlement} payout />
                 {x.payoutMethod==='WISE_MANUAL'&&<p>Wise payouts are sent in USD by a Rivera administrator after Business release. Queued or claimed does not mean paid.</p>}
               </div>
@@ -307,7 +317,9 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
                 <p className="eyebrow">{statusLabel(x.status)}</p>
                 <h2>{x.collaborationPayment.campaign.title}</h2>
                 <p>{money(x.amountMinor, x.currencyCode)}</p>
-                {x.provider==='WISE'&&<p>Wise · {x.status==='PENDING'?'Queued — not sent':x.status==='PROCESSING'?'Claimed by admin — not confirmed paid':'Admin-confirmed completed'}{x.wiseTransferReference?` · Transfer ID ${x.wiseTransferReference}`:''}</p>}
+                {x.scheduledFor&&<p>Monday batch: <strong>{payoutDate(x.scheduledFor)}</strong></p>}
+                {x.failureCode&&<p className="form-warning">This payout needs review. Funds are not confirmed received. <a href="mailto:support@riveracreators.com">Contact support</a>.</p>}
+                {x.provider==='WISE'&&<p>Wise · {x.status==='SCHEDULED'?'Scheduled — not sent':x.status==='PENDING'?'Ready for admin — not sent':x.status==='PROCESSING'?'Claimed by admin — not confirmed paid':x.status==='SUCCEEDED'?'Admin-confirmed completed':statusLabel(x.status)}{x.wiseTransferReference?` · Transfer ID ${x.wiseTransferReference}`:''}</p>}
               </div>
             </article>
           ))}
@@ -373,6 +385,8 @@ export function AdminFinance({
                   ? money(x.amountMinor, x.currencyCode)
                   : (x.providerAccountId ?? x.description)}
               </p>
+              {x.scheduledFor&&<p>Monday batch: {payoutDate(x.scheduledFor)}</p>}
+              {x.failureCode&&<p className="form-warning">{x.failureMessage??x.failureCode}</p>}
             </div>
           </article>
         ))}

@@ -23,6 +23,7 @@ type NotificationResponse = {
 function routeFor(item: RiveraNotification, user: User) {
   const role = user.roles.includes("BUSINESS") ? "business" : "creator";
   const type = item.type.toUpperCase();
+    if(type.startsWith('PAYOUT_')&&user.roles.includes('ADMIN'))return '/admin/transfers';
   if (type.startsWith('WISE_')) {
     if (user.roles.includes('ADMIN')) return '/admin/wise-payouts';
     return role === 'business' ? '/dashboard/business/payments' : '/dashboard/creator/payouts';

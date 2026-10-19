@@ -8,6 +8,7 @@ import { MailService } from '../auth/mail.service';
 import { convertMinor } from '../applications/currency-policy';
 import { WiseAccountDto, WiseApproveDto, WiseCompleteDto } from './wise-payout.dto';
 import { wiseReady } from './wise-payout.policy';
+import { nextPayoutMonday, payoutDateLabel } from './payout-schedule';
 
 const digest = (creatorId:string,code:string) => createHash('sha256').update(`wise-email:${creatorId}:${code}`).digest('hex');
 @Injectable()
@@ -103,33 +104,36 @@ export class WisePayoutService {
     if(!wiseReady(account))this.fail('WISE_ACCOUNT_NOT_READY','Verify your Wise email and complete the admin review first.');
     const usd=convertMinor(payment.creatorNetMinor,payment.currencyCode,'USD');
     if(usd<1)this.fail('WISE_PAYOUT_TOO_SMALL','Wise payouts must be at least USD 0.01.');
+    const scheduledFor=nextPayoutMonday();
     const row=await tx.creatorTransfer.create({data:{collaborationPaymentId:payment.id,creatorId:payment.creatorId,provider:'WISE',
-      providerTransferId:`wise-queue:${payment.id}`,amountMinor:payment.creatorNetMinor,currencyCode:payment.currencyCode,status:'PENDING',
+      providerTransferId:`wise-queue:${payment.id}`,amountMinor:payment.creatorNetMinor,currencyCode:payment.currencyCode,status:'SCHEDULED',scheduledFor,
       wiseEmail:account.wiseEmail,wiseLegalName:account.wiseLegalName,wiseAmountUsdMinor:usd}});
-    await tx.collaborationPayment.update({where:{id:payment.id},data:{status:'PAYOUT_PENDING',eligibleForReleaseAt:new Date()}});
-    await this.audit(tx,actorId,'WISE_PAYOUT_QUEUED','CreatorTransfer',row.id,{paymentId:payment.id,amountUsdMinor:usd});
+    await tx.collaborationPayment.update({where:{id:payment.id},data:{status:'PAYOUT_PENDING',eligibleForReleaseAt:scheduledFor}});
+    await this.audit(tx,actorId,'WISE_PAYOUT_SCHEDULED','CreatorTransfer',row.id,{paymentId:payment.id,amountUsdMinor:usd,scheduledFor:scheduledFor.toISOString()});
     await tx.notification.create({data:{userId:payment.campaignParticipant.creator.userId,creatorId:payment.creatorId,
-      type:'WISE_PAYOUT_QUEUED',title:'Your Wise payout is queued',body:'The Business approved release. A Rivera administrator will send your USD earnings through Wise. This is not yet money received.'}});
-    await this.notifyAdmins(tx,'WISE_PAYOUT_QUEUED','Wise payout ready to process','A Business released creator compensation. Open the Wise payout desk and claim the payout before sending money.');
-    return {id:row.id,provider:row.provider,status:row.status,amountMinor:row.amountMinor,currencyCode:row.currencyCode,wiseAmountUsdMinor:usd};
+      type:'WISE_PAYOUT_SCHEDULED',title:'Your Wise payout is scheduled',body:`Approved earnings enter the ${payoutDateLabel(scheduledFor)} batch. An administrator must then send and confirm the Wise transfer. Scheduled does not mean paid.`}});
+    return {id:row.id,provider:row.provider,status:row.status,amountMinor:row.amountMinor,currencyCode:row.currencyCode,wiseAmountUsdMinor:usd,scheduledFor};
   }
   async dashboard() {
     const include={creator:{select:{displayName:true}},collaborationPayment:{select:{campaign:{select:{title:true}}}}};
-    const [accounts,processing,pending,recent]=await Promise.all([
+    const [accounts,processing,pending,recent,scheduled]=await Promise.all([
       this.db.creatorPayoutAccount.findMany({where:{provider:'WISE',onboardingStatus:{in:['PENDING','RESTRICTED']}},include:{creator:{select:{displayName:true,country:true}}},orderBy:{updatedAt:'asc'},take:100}),
       this.db.creatorTransfer.findMany({where:{provider:'WISE',status:'PROCESSING'},include,orderBy:{createdAt:'asc'},take:100}),
       this.db.creatorTransfer.findMany({where:{provider:'WISE',status:'PENDING'},include,orderBy:{createdAt:'asc'},take:100}),
       this.db.creatorTransfer.findMany({where:{provider:'WISE',status:'SUCCEEDED'},include,orderBy:{settledAt:'desc'},take:20}),
+      this.db.creatorTransfer.findMany({where:{provider:'WISE',status:'SCHEDULED'},include,orderBy:{scheduledFor:'asc'},take:100}),
     ]);
-    return {accounts:accounts.map(row=>({...this.safeAccount(row),creator:row.creator})),transfers:[...processing,...pending,...recent]};
+    return {accounts:accounts.map(row=>({...this.safeAccount(row),creator:row.creator})),transfers:[...processing,...pending,...scheduled,...recent]};
   }
   async claim(adminId:string,id:string) {
     return this.transaction(async tx=>{
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`wise-operator:${adminId}`}))::text`;
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`wise-transfer:${id}`}))::text`;
-      const row=await tx.creatorTransfer.findUnique({where:{id}});
+      const row=await tx.creatorTransfer.findUnique({where:{id},include:{collaborationPayment:{include:{issues:true,refunds:true}},creator:{include:{payoutAccount:true,user:{select:{status:true}}}}}});
       if(!row||row.provider!=='WISE')this.fail('WISE_TRANSFER_NOT_FOUND','Wise payout not found.',HttpStatus.NOT_FOUND);
-      if(row.status==='PROCESSING'&&row.wiseClaimedBy===adminId)return row;
+      if(row.status==='SCHEDULED'||(row.scheduledFor&&row.scheduledFor>new Date()))this.fail('PAYOUT_NOT_DUE','This payout is scheduled for the next Monday batch. Wait for the worker to release it.');
+      if(row.collaborationPayment.status!=='PAYOUT_PENDING'||row.collaborationPayment.refundedAmountMinor>0||row.collaborationPayment.releasedAmountMinor>0||row.collaborationPayment.issues.some(x=>['OPEN','UNDER_REVIEW'].includes(x.status))||row.collaborationPayment.refunds.some(x=>x.status==='PENDING')||row.creator.user.status!=='ACTIVE'||!wiseReady(row.creator.payoutAccount)||row.creator.payoutAccount?.wiseEmail!==row.wiseEmail||row.creator.payoutAccount?.wiseLegalName!==row.wiseLegalName)this.fail('PAYOUT_SAFETY_HOLD','Resolve the payment or account hold before sending this payout.');
+      if(row.status==='PROCESSING'&&row.wiseClaimedBy===adminId)return tx.creatorTransfer.findUniqueOrThrow({where:{id}});
       if(row.status!=='PENDING')this.fail('WISE_PAYOUT_ALREADY_CLAIMED','This payout is completed or already claimed by another admin. Do not send another payment.');
       if(await tx.creatorTransfer.findFirst({where:{provider:'WISE',status:'PROCESSING',wiseClaimedBy:adminId,id:{not:id}}}))
         this.fail('WISE_FINISH_CURRENT_PAYOUT','Finish your already-claimed Wise payout before claiming another. If its outcome is uncertain, contact support; do not send again.');

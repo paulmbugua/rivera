@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { HttpStatus } from '@nestjs/common';
 import { ApiException } from '../common/api-error';
 import { settlementQuote } from './currency-policy';
+import { paystackTransferReference } from '../payments/payout-schedule';
 import {
   CheckoutInput,
   CheckoutResult,
@@ -249,16 +250,11 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
     };
   }
 
-  async createTransfer(input: {collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string}): Promise<ProviderTransfer> {
+  async createTransfer(input: {collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string;reference?:string}): Promise<ProviderTransfer> {
     this.ensureCurrency(input.currencyCode);
     const settlement = settlementQuote(input.amountMinor, input.currencyCode, this.providerName);
-    const normalizedReference = `${this.referencePrefix()}TRANSFER-${input.idempotencyKey}`
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '-')
-      .slice(0, 50);
-    const reference = normalizedReference.length >= 16
-      ? normalizedReference
-      : `${normalizedReference}-${createHash('sha256').update(input.idempotencyKey).digest('hex')}`.slice(0, 16);
+    const reference = input.reference ?? paystackTransferReference(input.idempotencyKey);
+    if(!/^[a-zA-Z0-9_-]{16,50}$/.test(reference))throw new ApiException(HttpStatus.BAD_REQUEST,'PAYOUT_REFERENCE_INVALID','Payout reference is invalid.');
     const data = await this.request('transfer', 'POST', {
       source: 'balance',
       amount: settlement.amountMinor,
@@ -276,9 +272,13 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
 
   async retrieveTransfer(reference: string): Promise<ProviderTransfer> {
     const data = await this.request(`transfer/verify/${encodeURIComponent(reference)}`);
+    const mode=this.secret().startsWith('sk_live_')?'live':'test';
+    if(data.domain&&data.domain!==mode)throw new ApiException(HttpStatus.CONFLICT,'PAYMENT_ENVIRONMENT_MISMATCH','Provider transfer environment does not match this deployment.');
+    const recipient=data.recipient&&typeof data.recipient==='object'?data.recipient as Record<string,unknown>:{};
     const status = String(data.status ?? '').toLowerCase();
     return {
       transferId: String(data.reference ?? reference),
+      amountMinor:Number(data.amount),currencyCode:String(data.currency??'').toUpperCase(),recipientAccountId:String(recipient.recipient_code??''),
       status: status === 'success' ? 'succeeded' : status === 'reversed' ? 'reversed' : status === 'failed' ? 'failed' : 'pending',
       failureCode: status === 'reversed' ? 'TRANSFER_REVERSED' : undefined,
       failureMessage: typeof data.reason === 'string' ? data.reason : undefined,

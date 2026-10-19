@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PayoutWorker } from './payments/payout-worker.service';
 import { ConfigModule } from "@nestjs/config";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
@@ -131,6 +132,7 @@ const env = z.object({
     .max(1440)
     .default(30),
   JOBS_ENABLED: z.enum(["true", "false"]).default("false"),
+  PAYOUT_WORKER_ENABLED: z.enum(["true", "false"]).default("true"),
   RECONCILIATION_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
   COLLABORATION_FUNDING_DEADLINE_HOURS: z.coerce
     .number()
@@ -264,6 +266,7 @@ function validate(config: Record<string, unknown>) {
     WorkspaceService,
     MarketplacePaymentService,
     WisePayoutService,
+    PayoutWorker,
     OperationsService,
     ReconciliationScheduler,
     AnalyticsInterceptor,

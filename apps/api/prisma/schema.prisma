@@ -231,6 +231,7 @@ enum CollaborationPaymentStatus {
 }
 
 enum CreatorTransferStatus {
+  SCHEDULED
   PENDING
   PROCESSING
   SUCCEEDED
@@ -1284,9 +1285,14 @@ model CreatorTransfer {
   wiseClaimedAt          DateTime?
   wiseTransferReference  String?               @unique @db.VarChar(30)
   wiseCompletedBy        String?
+  scheduledFor           DateTime?
+  recipientAccountId     String?
+  dispatchAttemptedAt    DateTime?
+  lastCheckedAt          DateTime?
 
   @@unique([collaborationPaymentId, amountMinor])
   @@index([creatorId, status])
+  @@index([status, scheduledFor])
 }
 
 model CollaborationRefund {

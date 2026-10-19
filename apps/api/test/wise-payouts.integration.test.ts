@@ -61,6 +61,15 @@ test('Wise manual payouts: real PostgreSQL lifecycle and concurrency',{skip:!pro
       await assert.rejects(market.release(businessUser.id,payment.id),code('PAYMENT_ALREADY_RELEASED'));
       await market.reconcile(payment.id);assert.equal(providerTransferCalls,0);
       await assert.rejects(market.adminRefund(admin.id,payment.id,{amountMinor:100,reason:'This payout is already queued'}),code('PAYMENT_NOT_REFUNDABLE'));
+      assert.equal(queued.status,'SCHEDULED');assert.ok(queued.scheduledFor!>new Date());
+      await assert.rejects(wise.claim(admin.id,transferId),code('PAYOUT_NOT_DUE'));
+      await market.dispatchScheduledPayout(transferId,new Date(queued.scheduledFor!.getTime()-1));
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:transferId}})).status,'SCHEDULED');
+      // Simulate Monday on disposable test data only. The claim endpoint uses the real clock.
+      await db.creatorTransfer.update({where:{id:transferId},data:{scheduledFor:new Date(Date.now()-1000)}});
+      await Promise.all([market.dispatchScheduledPayout(transferId),market.dispatchScheduledPayout(transferId)]);
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:transferId}})).status,'PENDING');
+      assert.equal(await db.notification.count({where:{userId:creatorUser.id,type:'WISE_PAYOUT_READY'}}),1);
     });
     await t.test('two administrators cannot both claim one payout',async()=>{
       const outcomes=await Promise.allSettled([wise.claim(admin.id,transferId),wise.claim(otherAdmin.id,transferId)]);
@@ -84,7 +93,8 @@ test('Wise manual payouts: real PostgreSQL lifecycle and concurrency',{skip:!pro
       const state=await db.collaborationPayment.findUniqueOrThrow({where:{id:payment.id}});assert.equal(state.status,'SETTLED');assert.equal(state.releasedAmountMinor,10000);
     });
     await t.test('a Wise transfer ID cannot settle two payouts; collision rolls back',async()=>{
-      const second=await paymentFixture();const queued=await market.release(businessUser.id,second.id);await wise.claim(admin.id,queued.id);
+      const second=await paymentFixture();const queued=await market.release(businessUser.id,second.id);
+      await db.creatorTransfer.update({where:{id:queued.id},data:{scheduledFor:new Date(Date.now()-1000)}});await market.dispatchScheduledPayout(queued.id);await wise.claim(admin.id,queued.id);
       await assert.rejects(wise.complete(admin.id,queued.id,confirmation),code('WISE_REFERENCE_ALREADY_USED'));
       assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).status,'PROCESSING');
       assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:second.id}})).releasedAmountMinor,0);
@@ -93,6 +103,68 @@ test('Wise manual payouts: real PostgreSQL lifecycle and concurrency',{skip:!pro
     await t.test('Wise verification codes and private recipient details do not leak to Business responses',async()=>{
       const dashboard=await wise.dashboard();assert.equal(JSON.stringify(dashboard).includes('wiseCodeHash'),false);
       const rows=await market.businessPayments(businessUser.id);assert.equal(JSON.stringify(rows).includes(details.email),false);
+    });
+    await t.test('weekly safety holds retain funds, notify once, and recover without rescheduling',async()=>{
+      const p=await paymentFixture();const queued=await market.release(businessUser.id,p.id);
+      await db.creatorTransfer.update({where:{id:queued.id},data:{scheduledFor:new Date(Date.now()-1000)}});
+      const issue=await db.paymentIssue.create({data:{campaignParticipantId:p.campaignParticipantId,collaborationPaymentId:p.id,openedByUserId:businessUser.id,type:'REFUND_REQUEST',description:'Synthetic disputed payout'}});
+      const before=await db.notification.count({where:{userId:creatorUser.id,type:'PAYOUT_HELD'}});
+      await market.dispatchScheduledPayout(queued.id);await market.dispatchScheduledPayout(queued.id);
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).status,'SCHEDULED');
+      assert.equal(await db.notification.count({where:{userId:creatorUser.id,type:'PAYOUT_HELD'}}),before+1);
+      await assert.rejects(wise.claim(admin.id,queued.id),code('PAYOUT_NOT_DUE'));
+      await db.paymentIssue.update({where:{id:issue.id},data:{status:'RESOLVED'}});await market.dispatchScheduledPayout(queued.id);
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).status,'PENDING');assert.equal(providerTransferCalls,0);
+    });
+    await t.test('M-Pesa dispatch is reserved once; uncertain outcomes are verified without another send',async()=>{
+      const p=await paymentFixture();
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'PAYSTACK',providerAccountId:'RCP_TEST_ONLY'}});
+      let sends=0,verifies=0;const mpesa={providerName:'PAYSTACK',createTransfer:async()=>{sends++;throw new Error('Synthetic timeout');},retrieveTransfer:async(reference:string)=>{verifies++;return {transferId:reference,status:'succeeded',amountMinor:1300000,currencyCode:'KES',recipientAccountId:'RCP_TEST_ONLY'};}};
+      const payments=new MarketplacePaymentService(db as never,mpesa as never,wise);
+      const queued=await payments.release(businessUser.id,p.id);assert.equal(sends,0);
+      await db.creatorTransfer.update({where:{id:queued.id},data:{scheduledFor:new Date(Date.now()-1000)}});
+      await payments.dispatchScheduledPayout(queued.id);assert.equal(sends,1);
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).failureCode,'PAYOUT_VERIFICATION_REQUIRED');
+      await Promise.all([payments.dispatchScheduledPayout(queued.id),payments.dispatchScheduledPayout(queued.id)]);
+      assert.equal(sends,1);assert.ok(verifies>=1);
+      assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).releasedAmountMinor,10000);
+      assert.equal(await db.notification.count({where:{userId:creatorUser.id,type:'PAYOUT_COMPLETED'}}),1);
+      await payments.dispatchScheduledPayout(queued.id);assert.equal(sends,1);
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'WISE',providerAccountId:`wise-manual:${creator.id}`}});
+    });
+    await t.test('provider amount, currency, reference and recipient mismatches cannot settle a scheduled payout',async()=>{
+      const p=await paymentFixture();await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'PAYSTACK',providerAccountId:'RCP_TEST_ONLY'}});
+      let response:any={};let sends=0;
+      const provider={providerName:'PAYSTACK',createTransfer:async()=>{sends++;throw new Error('Synthetic timeout');},retrieveTransfer:async()=>response};
+      const payments=new MarketplacePaymentService(db as never,provider as never,wise);
+      const queued=await payments.release(businessUser.id,p.id);
+      await db.creatorTransfer.update({where:{id:queued.id},data:{scheduledFor:new Date(Date.now()-1000)}});await payments.dispatchScheduledPayout(queued.id);
+      const stored=await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}});
+      const valid={transferId:stored.providerTransferId,status:'succeeded',amountMinor:1300000,currencyCode:'KES',recipientAccountId:'RCP_TEST_ONLY'};
+      for(const bad of [{amountMinor:1299999},{currencyCode:'USD'},{recipientAccountId:'RCP_OTHER'},{transferId:'wrong-reference'}]){
+        response={...valid,...bad};await payments.dispatchScheduledPayout(queued.id);
+        assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).releasedAmountMinor,0);
+      }
+      assert.equal(sends,1);response=valid;await payments.dispatchScheduledPayout(queued.id);
+      assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).status,'SETTLED');
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'WISE',providerAccountId:`wise-manual:${creator.id}`}});
+    });
+    await t.test('two M-Pesa workers send once, use the saved reference and notify settlement once',async()=>{
+      const p=await paymentFixture();await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'PAYSTACK',providerAccountId:'RCP_TEST_ONLY'}});
+      let sends=0;let reference='';
+      const provider={providerName:'PAYSTACK',createTransfer:async(input:any)=>{sends++;assert.equal(input.reference,reference);return {transferId:reference,status:'pending'};},retrieveTransfer:async()=>({transferId:reference,status:'succeeded',amountMinor:1300000,currencyCode:'KES',recipientAccountId:'RCP_TEST_ONLY'})};
+      const payments=new MarketplacePaymentService(db as never,provider as never,wise);const queued=await payments.release(businessUser.id,p.id);
+      reference=(await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).providerTransferId;
+      await db.creatorTransfer.update({where:{id:queued.id},data:{scheduledFor:new Date(Date.now()-1000)}});
+      // Recipient mutation after approval must hold rather than send to a new recipient.
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{providerAccountId:'RCP_CHANGED'}});await payments.dispatchScheduledPayout(queued.id);assert.equal(sends,0);
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{providerAccountId:'RCP_TEST_ONLY'}});
+      const before=await db.notification.count({where:{userId:creatorUser.id,type:'PAYOUT_COMPLETED'}});
+      await Promise.all([payments.dispatchScheduledPayout(queued.id),payments.dispatchScheduledPayout(queued.id)]);
+      await payments.dispatchScheduledPayout(queued.id);
+      assert.equal(sends,1);assert.equal(await db.notification.count({where:{userId:creatorUser.id,type:'PAYOUT_COMPLETED'}}),before+1);
+      assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).status,'SETTLED');
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'WISE',providerAccountId:`wise-manual:${creator.id}`}});
     });
     await t.test('Kenyan creators retain the M-Pesa setup',async()=>{
       const kenyanUser=await user('CREATOR');await db.creatorProfile.create({data:{userId:kenyanUser.id,slug:`kenyan-${suffix}`,displayName:'Kenyan Creator',country:'KE',bio:'Test'}});

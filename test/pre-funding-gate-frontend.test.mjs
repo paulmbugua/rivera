@@ -20,7 +20,7 @@ test("Business sees compensation fee total and funding CTA", () => {
 test("funded is distinguished from Creator receipt and release", () => {
   assert.match(collaborations, /Funded compensation is not the same as money received/);
   assert.match(finance, /This is not yet money received/);
-  assert.match(finance, /Release Creator payment/);
+  assert.match(finance, /Approve Monday payout/);
 });
 test("failed payment and unfunded cancellation have clear recovery actions", () => {
   assert.match(finance, /last funding attempt failed/);

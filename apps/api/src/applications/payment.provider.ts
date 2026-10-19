@@ -10,7 +10,7 @@ export type ProviderRefund = { refundId:string; status:'pending'|'succeeded'|'fa
 export type VerifiedWebhook = { id:string; type:string; object:Record<string,unknown> };
 export type ConnectedAccount = { accountId:string; countryCode:string; defaultCurrencyCode?:string; chargesEnabled:boolean; payoutsEnabled:boolean; detailsSubmitted:boolean; requirementsDue:string[] };
 export type CollaborationCheckoutInput = { collaborationPaymentId:string; participantId:string; businessId:string; campaignTitle:string; creatorName:string; payerEmail:string; amountMinor:number; currencyCode:string; expiresAt:Date; attemptKey:string };
-export type ProviderTransfer = { transferId:string; status:'pending'|'succeeded'|'failed'|'reversed'; failureCode?:string; failureMessage?:string };
+export type ProviderTransfer = { transferId:string; status:'pending'|'succeeded'|'failed'|'reversed'; failureCode?:string; failureMessage?:string; amountMinor?:number;currencyCode?:string;recipientAccountId?:string };
 export interface PaymentProviderAdapter {
   readonly providerName:PaymentProviderName;
   readonly payoutOnboardingMode:'HOSTED'|'MPESA';
@@ -23,7 +23,7 @@ export interface PaymentProviderAdapter {
   createAccountOnboardingLink(accountId:string,returnUrl:string,refreshUrl:string):Promise<{url:string}>;
   retrieveConnectedAccount(accountId:string):Promise<ConnectedAccount>;
   createCollaborationPayment(input:CollaborationCheckoutInput):Promise<CheckoutResult>;
-  createTransfer(input:{collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string}):Promise<ProviderTransfer>;
+  createTransfer(input:{collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string;reference?:string}):Promise<ProviderTransfer>;
   retrieveTransfer(transferId:string):Promise<ProviderTransfer>;
 }
 export const PAYMENT_PROVIDER = Symbol('APPLICATION_PAYMENT_PROVIDER');
