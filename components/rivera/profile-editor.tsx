@@ -1,8 +1,9 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { Camera, ImagePlus, LoaderCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Protected } from "./protected";
 
@@ -96,17 +97,27 @@ function MediaUpload({
   endpoint,
   label,
   onDone,
+  currentUrl,
 }: {
   endpoint: string;
   label: string;
   onDone: () => void;
+  currentUrl?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [failed, setFailed] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
+  const id = useId();
+  const isCover = endpoint.endsWith("cover-image");
+  const isLogo = endpoint.endsWith("logo");
+  const subject = isCover ? "cover image" : isLogo ? "business logo" : "profile photo";
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
     setBusy(true);
+    setFailed(false);
     setFeedback("");
     try {
       const body = new FormData();
@@ -115,22 +126,42 @@ function MediaUpload({
       setFeedback(`${label} uploaded.`);
       onDone();
     } catch (error) {
+      setFailed(true);
       setFeedback(message(error));
     } finally {
       setBusy(false);
     }
   }
   return (
-    <label className="media-upload">
-      <span>{label}</span>
+    <div className={"media-upload media-picker" + (isCover ? " media-picker-cover" : "")} aria-busy={busy}>
       <input
+        ref={picker}
+        id={id}
+        className="media-picker-input"
         type="file"
         accept="image/jpeg,image/png,image/webp"
+        aria-label={"Choose " + subject}
+        tabIndex={-1}
         onChange={(event) => void upload(event)}
         disabled={busy}
       />
-      <small>{busy ? "Uploading…" : feedback}</small>
-    </label>
+      <button
+        type="button"
+        className="media-picker-target"
+        onClick={() => picker.current?.click()}
+        disabled={busy}
+        aria-label={(currentUrl ? "Change " : "Choose ") + subject}
+        aria-describedby={id + "-help"}
+      >
+        <span className="media-picker-preview" aria-hidden="true">
+          {currentUrl ? <Image unoptimized width={160} height={100} src={currentUrl} alt=""/> : isCover ? <ImagePlus size={26}/> : <Camera size={25}/>}
+          {currentUrl&&<span className="media-picker-camera"><Camera size={14}/></span>}
+        </span>
+        <span className="media-picker-copy"><strong>{label}</strong><span>{busy ? "Uploading your image…" : "Click here to browse your device"}</span><small id={id + "-help"}>JPG, PNG or WebP · {isCover ? "A wide image works best" : isLogo ? "Use a square logo" : "Use a clear photo of yourself"}</small></span>
+        <span className="media-picker-action">{busy ? <><LoaderCircle size={16} className="media-picker-spinner"/>Uploading…</> : <><ImagePlus size={16}/>{currentUrl ? "Change image" : isCover ? "Choose cover" : isLogo ? "Choose logo" : "Choose photo"}</>}</span>
+      </button>
+      {feedback&&<p className={"media-picker-feedback"+(failed?" is-error":"")} role={failed?"alert":"status"}>{feedback}</p>}
+    </div>
   );
 }
 
@@ -534,29 +565,16 @@ function CreatorEditor() {
         </section>
         <section className="profile-panel">
           <h2>Media</h2>
-          <div className="media-row">
-            {profile.profileImageUrl ? (
-              <Image
-                unoptimized
-                width={84}
-                height={84}
-                src={profile.profileImageUrl}
-                alt="Current profile"
-              />
-            ) : (
-              <span className="avatar-fallback">
-                {profile.displayName.slice(0, 1)}
-              </span>
-            )}
             <MediaUpload
               endpoint="/uploads/profile-image"
               label="Profile image"
+              currentUrl={profile.profileImageUrl}
               onDone={() => void load()}
             />
-          </div>
           <MediaUpload
             endpoint="/uploads/cover-image"
             label="Cover image"
+            currentUrl={profile.coverImageUrl}
             onDone={() => void load()}
           />
         </section>
@@ -1159,11 +1177,13 @@ function BusinessEditor() {
           <MediaUpload
             endpoint="/uploads/logo"
             label="Business logo"
+            currentUrl={profile.logoUrl}
             onDone={() => void load()}
           />
           <MediaUpload
             endpoint="/uploads/cover-image"
             label="Cover image"
+            currentUrl={profile.coverImageUrl}
             onDone={() => void load()}
           />
           <label className="field">
