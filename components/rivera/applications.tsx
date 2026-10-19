@@ -230,7 +230,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
       </main>
     );
   return (
-    <main className="application-shell">
+    <main className="application-shell proposal-studio">
       <header>
         <Link href={`/campaigns/${campaign.slug}`}>← Campaign</Link>
         <p className="eyebrow">PROPOSAL · STEP {stage} OF 3</p>
@@ -248,7 +248,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
       )}
       {stage === 1 && (
         <section className="application-panel">
-          <h2>Create Proposal</h2>
+          <h2>Create your proposal</h2>
           <div className="settings-grid">
             <label className="field">
               Your proposed price ({campaign.currencyCode})
@@ -282,11 +282,11 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
               required
               minLength={40}
               maxLength={1500}
-              rows={7}
+              rows={3}
               value={form.pitch}
               onChange={(e) => setForm({ ...form, pitch: e.target.value })}
             />
-            <small>
+            <small className="proposal-hint">
               Tell the Business about your audience, content style and approach.
             </small>
           </label>
@@ -294,7 +294,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
             Proposed deliverables
             <textarea
               maxLength={3000}
-              rows={5}
+              rows={2}
               value={form.proposedDeliverables}
               onChange={(e) =>
                 setForm({ ...form, proposedDeliverables: e.target.value })
@@ -302,10 +302,10 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
             />
           </label>
           <label className="field">
-            Additional notes
+            Additional notes (optional)
             <textarea
               maxLength={1500}
-              rows={3}
+              rows={2}
               value={form.additionalNotes}
               onChange={(e) =>
                 setForm({ ...form, additionalNotes: e.target.value })
