@@ -361,7 +361,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
           </dl>
           <p className="proposal-hint">Application fee: {contractMoney(review.fee.amountMinor, review.fee.currencyCode)}. Your proposal is recorded in {campaign.currencyCode}.</p>
           <PaymentCurrencyNote quote={review.fee.settlement} />
-          {review.payoutCountrySupported === false && <p className="form-warning">Before paying an application fee: automatic creator payouts currently support Kenyan M-Pesa accounts only. International payouts are not enabled. <a href="mailto:support@riveracreators.com">Contact support</a> about payout availability.</p>}
+          {review.payoutCountrySupported === false && <p className="form-warning">Before paying an application fee: international payouts use admin-assisted Wise. <Link href="/dashboard/creator/payouts">Verify your Wise payout email</Link> and complete Rivera’s review before Business funding can begin.</p>}
           {review.outsideBudget && (
             <p className="form-warning">
               Your proposed price is outside the Business’s stated budget range.

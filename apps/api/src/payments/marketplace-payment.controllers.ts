@@ -19,6 +19,8 @@ import {
   ResolvePaymentIssueDto,
 } from "./marketplace-payment.dto";
 import { MarketplacePaymentService } from "./marketplace-payment.service";
+import { WisePayoutService } from './wise-payout.service';
+import { WiseAccountDto, WiseApproveDto, WiseCompleteDto, WiseVerifyDto } from './wise-payout.dto';
 
 @ApiTags("Creator payouts")
 @UseGuards(AuthGuard)
@@ -26,7 +28,13 @@ import { MarketplacePaymentService } from "./marketplace-payment.service";
 @ApiCookieAuth("access-cookie")
 @Controller("creators/me")
 export class CreatorPayoutController {
-  constructor(private service: MarketplacePaymentService) {}
+  constructor(private service: MarketplacePaymentService, private wise:WisePayoutService) {}
+  @Post('payout-account/wise')
+  @Throttle({default:{limit:2,ttl:60_000}})
+  saveWise(@CurrentUser() u:AuthUser,@Body() dto:WiseAccountDto){return this.wise.save(u.id,dto);}
+  @Post('payout-account/wise/verify')
+  @Throttle({default:{limit:5,ttl:60_000}})
+  verifyWise(@CurrentUser() u:AuthUser,@Body() dto:WiseVerifyDto){return this.wise.verify(u.id,dto.code);}
   @Get("payout-account") account(@CurrentUser() u: AuthUser) {
     return this.service.payoutAccount(u.id);
   }
@@ -113,7 +121,17 @@ export class PaymentIssueController {
 @ApiCookieAuth("access-cookie")
 @Controller("admin")
 export class MarketplacePaymentAdminController {
-  constructor(private service: MarketplacePaymentService) {}
+  constructor(private service: MarketplacePaymentService, private wise:WisePayoutService) {}
+  @Get('wise-payouts') wiseQueue(){return this.wise.dashboard();}
+  @Post('wise-payout-accounts/:id/approve')
+  @Throttle({default:{limit:5,ttl:60_000}})
+  approveWise(@CurrentUser() u:AuthUser,@Param('id') id:string,@Body() dto:WiseApproveDto){return this.wise.approve(u.id,id,dto);}
+  @Post('wise-payouts/:id/claim')
+  @Throttle({default:{limit:5,ttl:60_000}})
+  claimWise(@CurrentUser() u:AuthUser,@Param('id') id:string){return this.wise.claim(u.id,id);}
+  @Post('wise-payouts/:id/complete')
+  @Throttle({default:{limit:5,ttl:60_000}})
+  completeWise(@CurrentUser() u:AuthUser,@Param('id') id:string,@Body() dto:WiseCompleteDto){return this.wise.complete(u.id,id,dto);}
   @Get("collaboration-payments") payments() {
     return this.service.adminPayments();
   }

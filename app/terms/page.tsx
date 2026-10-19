@@ -29,12 +29,13 @@ export default function Terms() {
           or other cases approved by an administrator.
         </p>
         <p>
-          Payments are processed by Stripe Checkout. Rivera stores payment
+          Payments are processed through the configured provider, including Paystack. Rivera stores payment
           status and limited provider references, not card details. Submitted
           proposals reveal the full Campaign brief but never unlock private
           Business contact details.
         </p>
       </section>
+      <section id="wise-payouts"><h2>International Wise payouts</h2><p>International creator payouts use an admin-assisted Wise process. Creators must provide their own legal account name and payout email, verify access to that email, and complete Rivera’s recipient review. Availability depends on Wise’s supported routes and receiving requirements.</p><p>Business funding and release are separate from receipt of money. Queued or claimed payouts are not completed payments. A Rivera administrator sends the transfer in Wise and records its completed transfer ID. Wise may require the recipient to claim a payment or provide further receiving information. Contact support@riveracreators.com if a recorded payout has not arrived.</p><p>Amounts are displayed in USD for international accounts. Paystack collections use the disclosed KES settlement amount at Rivera’s fixed USD 1 = KES 130 rate. Wise and bank charges or conversion rates are separate; admins must check the recipient amount before recording completion.</p></section>
     </main>
   );
 }

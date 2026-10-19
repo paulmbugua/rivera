@@ -178,6 +178,7 @@ enum ApplicationPaymentStatus {
 enum PaymentProvider {
   STRIPE
   PAYSTACK
+  WISE
 }
 
 enum CreditTransactionType {
@@ -231,6 +232,7 @@ enum CollaborationPaymentStatus {
 
 enum CreatorTransferStatus {
   PENDING
+  PROCESSING
   SUCCEEDED
   FAILED
   REVERSED
@@ -1206,6 +1208,14 @@ model CreatorPayoutAccount {
   detailsSubmitted    Boolean             @default(false)
   requirementsDueJson Json?
   lastSyncedAt        DateTime?
+  wiseEmail           String?             @db.VarChar(254)
+  wiseLegalName       String?             @db.VarChar(160)
+  wiseEmailVerifiedAt DateTime?
+  wiseCodeHash        String?             @db.VarChar(64)
+  wiseCodeExpiresAt   DateTime?
+  wiseCodeAttempts    Int                 @default(0)
+  wiseReviewedBy      String?
+  wiseReviewedAt      DateTime?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -1267,6 +1277,13 @@ model CreatorTransfer {
   createdAt              DateTime              @default(now())
   releasedAt             DateTime?
   settledAt              DateTime?
+  wiseEmail              String?               @db.VarChar(254)
+  wiseLegalName          String?               @db.VarChar(160)
+  wiseAmountUsdMinor     Int?
+  wiseClaimedBy          String?
+  wiseClaimedAt          DateTime?
+  wiseTransferReference  String?               @unique @db.VarChar(30)
+  wiseCompletedBy        String?
 
   @@unique([collaborationPaymentId, amountMinor])
   @@index([creatorId, status])

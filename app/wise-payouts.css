@@ -1,0 +1,28 @@
+.wise-studio{font-size:14px;line-height:1.65}
+.application-shell.wise-admin{width:min(960px,calc(100% - 32px));padding:28px 0 72px}
+.wise-admin>header h1{font-size:34px;line-height:1.15;margin:10px 0}
+.wise-admin>header>p{font-size:14px}
+.wise-studio h2{font-size:21px;margin:12px 0;line-height:1.3}
+.wise-studio h3{font-size:17px;margin:0 0 6px}
+.wise-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.wise-studio .field{margin:12px 0;font-size:13px}
+.wise-studio .field input,.wise-studio .field textarea{font-size:14px;min-height:44px;padding:10px 12px;border-radius:9px}
+.wise-studio .field small,.wise-footnote{font-size:12px;color:var(--rivera-muted)}
+.wise-studio .button{font-size:13px;min-height:44px;padding:10px 16px;border-radius:9px;justify-content:center}
+.wise-check{display:flex;align-items:flex-start;gap:10px;margin:14px 0;font-size:13px;font-weight:400}
+.wise-check input{flex-shrink:0;width:18px;height:18px;margin-top:3px;accent-color:var(--rivera-green)}
+.wise-steps{padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
+.wise-steps li{border:1px solid var(--rivera-line);border-radius:8px;padding:7px 10px;font-size:12px}
+.wise-steps li[aria-current="step"],.wise-steps li[data-done="true"]{background:var(--rivera-soft);border-color:var(--rivera-green)}
+.wise-verification,.wise-confirm{border-top:1px solid var(--rivera-line);margin-top:18px;padding-top:10px}
+.wise-summary{display:flex;flex-direction:column;padding:16px;border:1px solid var(--rivera-line);border-radius:10px}
+.wise-card{border:1px solid var(--rivera-line);border-radius:12px;background:var(--rivera-paper);padding:18px;margin:14px 0}
+.wise-card dl{display:grid;grid-template-columns:minmax(130px,1fr) 2fr;gap:7px 16px;margin:16px 0;font-size:14px}
+.wise-card dd{margin:0;font-weight:600}.wise-card dt{color:var(--rivera-muted)}
+.wise-email{overflow-wrap:anywhere;user-select:all}
+.wise-stats{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}
+.wise-stats span{border:1px solid var(--rivera-line);padding:12px 18px;border-radius:10px}
+.wise-stats strong{font-size:22px;margin-right:6px}
+.wise-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.wise-admin>section{padding:18px 0}
+@media(max-width:560px){.wise-fields{grid-template-columns:1fr;gap:0}.wise-card{padding:15px}.wise-card dl{grid-template-columns:1fr;gap:4px}.wise-card dd{margin-bottom:8px}.wise-studio .field input,.wise-studio .field textarea{font-size:16px}.wise-studio .button{width:100%}.wise-steps li{flex:1 1 42%}}

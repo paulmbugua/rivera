@@ -7,7 +7,7 @@ export class CampaignEligibilityService {
   constructor(private db: PrismaService) {}
   async inspect(userId: string, campaignId: string) {
     const [creator, campaign] = await Promise.all([
-      this.db.creatorProfile.findUnique({ where: { userId }, include: { categories: true, socialAccounts: true } }),
+      this.db.creatorProfile.findUnique({ where: { userId }, include: { categories: true, socialAccounts: true, payoutAccount: true } }),
       this.db.campaign.findUnique({ where: { id: campaignId }, include: { platforms: true } }),
     ]);
     if (!creator) throw new ApiException(HttpStatus.BAD_REQUEST, 'CREATOR_PROFILE_INCOMPLETE', 'Complete your Creator profile before submitting a proposal.');

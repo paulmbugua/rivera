@@ -123,6 +123,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
           ["Application Payments", "/admin/payments"],
           ["Collaboration Payments", "/admin/collaboration-payments"],
           ["Transfers", "/admin/transfers"],
+          ["Wise payouts", "/admin/wise-payouts"],
           ["Refunds", "/admin/refunds"],
           ["Payment Issues", "/admin/payment-issues"],
           ["Payout Accounts", "/admin/payout-accounts"],

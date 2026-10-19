@@ -21,6 +21,7 @@ import {
 } from "./payment.provider";
 import { MarketplacePaymentService } from "../payments/marketplace-payment.service";
 import { convertMinor, settlementQuote } from './currency-policy';
+import { wiseReady } from '../payments/wise-payout.policy';
 
 const creatorProfileInclude = {
   user: { select: { email: true } },
@@ -434,7 +435,7 @@ export class ApplicationsService {
     return {
       application: this.ownDto(reviewed),
       fee: { amountMinor: fee.amountMinor, currencyCode: fee.currencyCode, settlement: settlementQuote(fee.amountMinor, fee.currencyCode, this.provider.providerName) },
-      payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || check.creator.country === 'KE',
+      payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || check.creator.country === 'KE' || wiseReady(check.creator.payoutAccount),
       freeApplicationCredits: check.creator.freeApplicationCredits,
       warnings: check.advisoryWarnings,
       outsideBudget:

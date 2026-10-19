@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { HttpStatus, Inject, Injectable } from "@nestjs/common";
+import { HttpStatus, Inject, Injectable, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { ApiException } from "../common/api-error";
 import { convertMinor, settlementQuote, USD_KES_RATE } from '../applications/currency-policy';
+import { WisePayoutService } from './wise-payout.service';
+import { wiseReady, wisePayoutQuote } from './wise-payout.policy';
 import {
   PAYMENT_PROVIDER,
   PaymentProviderAdapter,
@@ -22,6 +24,7 @@ export class MarketplacePaymentService {
   constructor(
     private db: PrismaService,
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProviderAdapter,
+    @Optional() private wise?: WisePayoutService,
   ) {}
   private fail(status: HttpStatus, code: string, message: string): never {
     throw new ApiException(status, code, message);
@@ -109,6 +112,9 @@ export class MarketplacePaymentService {
         "CREATOR_PROFILE_REQUIRED",
         "Creator profile required.",
       );
+    if(creator.payoutAccount?.provider==='WISE')return this.wise!.safeAccount(creator.payoutAccount);
+    if(this.provider.providerName==='PAYSTACK' && creator.country!=='KE' && !creator.payoutAccount)
+      return {provider:'WISE',setupMode:'WISE_MANUAL',payoutCountrySupported:true,onboardingStatus:'NOT_STARTED',payoutsEnabled:false,manualPayouts:true};
     return creator.payoutAccount
       ? { ...creator.payoutAccount, setupMode: this.provider.payoutOnboardingMode, payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || creator.country === 'KE' }
       : {
@@ -183,6 +189,7 @@ export class MarketplacePaymentService {
         "PAYOUT_ACCOUNT_NOT_FOUND",
         "Set up payouts first.",
       );
+    if(creator.payoutAccount.provider==='WISE')return this.wise!.safeAccount(creator.payoutAccount);
     const connected = await this.provider.retrieveConnectedAccount(
       creator.payoutAccount.providerAccountId,
     );
@@ -224,8 +231,8 @@ export class MarketplacePaymentService {
   }
   async fund(userId: string, participantId: string) {
     const p = await this.ownedParticipant(userId, participantId);
-    if (this.provider.providerName === 'PAYSTACK' && p.creator.country !== 'KE' && p.agreedCompensationMinor > 0)
-      this.fail(HttpStatus.CONFLICT, 'PAYOUT_COUNTRY_UNSUPPORTED', 'Do not fund yet: this creator needs a supported payout method. Paystack payouts currently support Kenyan M-Pesa recipients only. Contact support@riveracreators.com.');
+    if (this.provider.providerName === 'PAYSTACK' && p.creator.country !== 'KE' && !wiseReady(p.creator.payoutAccount) && p.agreedCompensationMinor > 0)
+      this.fail(HttpStatus.CONFLICT, 'PAYOUT_COUNTRY_UNSUPPORTED', 'Do not fund yet: this creator must verify their Wise email and complete admin review before receiving international payouts.');
     if (p.status !== "AWAITING_FUNDING")
       this.fail(
         HttpStatus.CONFLICT,
@@ -308,8 +315,9 @@ export class MarketplacePaymentService {
       currencyCode: x.currencyCode,
       platformFeeUsdMinor: convertMinor(x.platformFeeMinor, x.currencyCode, 'USD'),
       settlement: settlementQuote(x.grossAmountMinor, x.currencyCode, x.provider ?? this.provider.providerName),
-      payoutSettlement: settlementQuote(x.creatorNetMinor, x.currencyCode, x.provider ?? this.provider.providerName),
-      payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || x.creator?.country === 'KE',
+      payoutSettlement: x.creator?.payoutAccount?.provider==='WISE'?wisePayoutQuote(x.creatorNetMinor,x.currencyCode):settlementQuote(x.creatorNetMinor, x.currencyCode, x.provider ?? this.provider.providerName),
+      payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || x.creator?.country === 'KE' || wiseReady(x.creator?.payoutAccount),
+      payoutMethod: x.creator?.payoutAccount?.provider==='WISE'?'WISE_MANUAL':'MPESA',
       status: x.status,
       participantStatus: x.campaignParticipant?.status,
       fundingDueAt: x.campaignParticipant?.fundingDueAt,
@@ -320,7 +328,7 @@ export class MarketplacePaymentService {
       campaign: x.campaign,
       creator: x.creator,
       business: x.business,
-      transfers: x.transfers,
+      transfers: x.transfers?.map((t:any)=>({id:t.id,provider:t.provider,status:t.status,amountMinor:t.amountMinor,currencyCode:t.currencyCode,wiseAmountUsdMinor:t.wiseAmountUsdMinor,createdAt:t.createdAt,settledAt:t.settledAt})),
       refunds: x.refunds,
     };
   }
@@ -333,7 +341,7 @@ export class MarketplacePaymentService {
       },
       include: {
         campaign: { select: { title: true, slug: true } },
-        creator: { select: { displayName: true, slug: true, country: true } },
+        creator: { select: { displayName: true, slug: true, country: true, payoutAccount:{select:{provider:true,payoutsEnabled:true,onboardingStatus:true,wiseEmailVerifiedAt:true}} } },
         business: { select: { name: true } },
         collaborationPayment: { include: { transfers: true, refunds: true } },
       },
@@ -358,7 +366,8 @@ export class MarketplacePaymentService {
         refundedAmountMinor: 0,
         releasedAmountMinor: 0,
         currencyCode: p.currencyCode,
-        payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || p.creator.country === 'KE',
+        payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || p.creator.country === 'KE' || wiseReady(p.creator.payoutAccount),
+        payoutMethod: p.creator.payoutAccount?.provider==='WISE'?'WISE_MANUAL':'MPESA',
         status: "NOT_FUNDED",
         participantStatus: p.status,
         fundingDueAt: p.fundingDueAt,
@@ -375,7 +384,7 @@ export class MarketplacePaymentService {
       where: { id, business: { userId } },
       include: {
         campaign: { select: { title: true, slug: true } },
-        creator: { select: { displayName: true, slug: true, country: true } },
+        creator: { select: { displayName: true, slug: true, country: true, payoutAccount:{select:{provider:true,payoutsEnabled:true,onboardingStatus:true,wiseEmailVerifiedAt:true}} } },
         business: { select: { name: true } },
         transfers: true,
         refunds: true,
@@ -395,7 +404,7 @@ export class MarketplacePaymentService {
       include: {
         campaign: { select: { title: true, slug: true } },
         business: { select: { name: true, slug: true } },
-        creator: { select: { displayName: true, country: true } },
+        creator: { select: { displayName: true, country: true, payoutAccount:{select:{provider:true,payoutsEnabled:true,onboardingStatus:true,wiseEmailVerifiedAt:true}} } },
         transfers: true,
         refunds: true,
       },
@@ -430,7 +439,7 @@ export class MarketplacePaymentService {
   async release(userId: string, id: string) {
     return this.db.$transaction(
       async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`;
         const payment = await tx.collaborationPayment.findFirst({
           where: { id, business: { userId } },
           include: {
@@ -441,6 +450,7 @@ export class MarketplacePaymentService {
               },
             },
             transfers: true,
+            refunds: true,
           },
         });
         if (!payment)
@@ -466,6 +476,8 @@ export class MarketplacePaymentService {
             "PAYMENT_NOT_FUNDED",
             "Payment must be funded before release.",
           );
+        if(payment.refundedAmountMinor>0 || payment.refunds.some(refund=>refund.status==='PENDING'))
+          this.fail(HttpStatus.CONFLICT,'PAYMENT_REFUND_IN_PROGRESS','Resolve any refunds before releasing this payment.');
         if (!(await this.eligible(payment.campaignParticipant)))
           this.fail(
             HttpStatus.CONFLICT,
@@ -479,6 +491,7 @@ export class MarketplacePaymentService {
             "PAYOUT_ACCOUNT_UNAVAILABLE",
             "Creator payout account is not ready.",
           );
+        if(account.provider==='WISE')return this.wise!.queue(tx,payment,userId);
         const transfer = await this.provider.createTransfer({
           collaborationPaymentId: payment.id,
           accountId: account.providerAccountId,
@@ -618,16 +631,16 @@ export class MarketplacePaymentService {
         "PROVIDER_PAYMENT_REFERENCE_MISSING",
         "Provider payment reference is missing.",
       );
-    const draft = await this.db.collaborationRefund.create({
-      data: {
-        collaborationPaymentId: id,
-        amountMinor: dto.amountMinor,
-        currencyCode: payment.currencyCode,
-        reason: dto.reason.trim(),
-        approvedByAdminId: adminId,
-        requestedByUserId: adminId,
-      },
-    });
+    const draft = await this.db.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`;
+      const current=await tx.collaborationPayment.findUniqueOrThrow({where:{id},include:{refunds:true}});
+      if(!['FUNDED','PARTIALLY_REFUNDED'].includes(current.status)||current.releasedAmountMinor>0)
+        this.fail(HttpStatus.CONFLICT,'PAYMENT_NOT_REFUNDABLE','This payment has already entered release or payout processing.');
+      if(current.refunds.some(row=>row.status==='PENDING'))this.fail(HttpStatus.CONFLICT,'REFUND_ALREADY_PENDING','A refund is already pending.');
+      if(dto.amountMinor>current.fundedAmountMinor-current.refundedAmountMinor)this.fail(HttpStatus.CONFLICT,'REFUND_AMOUNT_EXCEEDS_AVAILABLE','Refund exceeds the remaining funds.');
+      return tx.collaborationRefund.create({data:{collaborationPaymentId:id,amountMinor:dto.amountMinor,currencyCode:current.currencyCode,
+        reason:dto.reason.trim(),approvedByAdminId:adminId,requestedByUserId:adminId}});
+    },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
     try {
       const result = await this.provider.refund(
         payment.providerPaymentIntentId,
@@ -765,11 +778,12 @@ export class MarketplacePaymentService {
     return issue;
   }
   async adminPayoutAccounts() {
-    return this.db.creatorPayoutAccount.findMany({
+    const rows = await this.db.creatorPayoutAccount.findMany({
       include: { creator: { select: { displayName: true, slug: true } } },
       orderBy: { updatedAt: "desc" },
       take: 100,
     });
+    return rows.map(row=>row.provider==='WISE'?{...this.wise!.safeAccount(row),creator:row.creator}:row);
   }
   async reconcilePayoutAccount(id: string) {
     const account = await this.db.creatorPayoutAccount.findUnique({
@@ -781,6 +795,7 @@ export class MarketplacePaymentService {
         "PAYOUT_ACCOUNT_NOT_FOUND",
         "Creator payout account not found.",
       );
+    if(account.provider==='WISE')return this.wise!.safeAccount(account);
     const connected = await this.provider.retrieveConnectedAccount(
       account.providerAccountId,
     );
@@ -827,7 +842,7 @@ export class MarketplacePaymentService {
         await this.markFundingFailed(id);
     }
     for (const transfer of payment.transfers.filter(
-      (x) => x.status === "PENDING",
+      (x) => x.status === "PENDING" && x.provider !== 'WISE',
     )) {
       const state = await this.provider.retrieveTransfer(
         transfer.providerTransferId,
@@ -1016,6 +1031,7 @@ export class MarketplacePaymentService {
       where: { id },
     });
     if (!transfer) return;
+    if (transfer.provider === 'WISE') return; // Only the admin-assisted Wise flow can settle these records.
     if (status === "pending") return;
     const succeeded = status === "succeeded";
     await this.db.$transaction([
@@ -1100,7 +1116,7 @@ export class MarketplacePaymentService {
           : [],
       };
       await this.db.creatorPayoutAccount.updateMany({
-        where: { providerAccountId: connected.accountId },
+        where: { providerAccountId: connected.accountId, provider: this.provider.providerName },
         data: {
           countryCode: connected.countryCode,
           defaultCurrencyCode: connected.defaultCurrencyCode,
@@ -1192,7 +1208,7 @@ export class MarketplacePaymentService {
       const transfer = await this.db.creatorTransfer.findUnique({
         where: { providerTransferId: o.id },
       });
-      if (transfer) {
+      if (transfer && transfer.provider === this.provider.providerName) {
         await this.applyTransferState(
           transfer.id,
           event.type === "transfer.reversed"

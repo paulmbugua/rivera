@@ -5,8 +5,10 @@ import { api, ApiError } from "@/lib/api";
 import { money, money as contractMoney, statusLabel } from "@/lib/applications";
 import { PaymentCurrencyNote, useDisplayMoney } from './payment-currency';
 import { SettlementQuote } from '@/lib/currency';
+import { WisePayoutSetup } from './wise-payouts';
 
 type Payment = {
+  payoutMethod?: string;
   platformFeeUsdMinor?: number;
   payoutCountrySupported?: boolean;
   settlement?: SettlementQuote;
@@ -32,12 +34,19 @@ type Payment = {
 };
 type PayoutAccount = {
   payoutCountrySupported?: boolean;
-  provider: "STRIPE" | "PAYSTACK";
-  setupMode: "HOSTED" | "MPESA";
+  provider: "STRIPE" | "PAYSTACK" | "WISE";
+  setupMode: "HOSTED" | "MPESA" | "WISE_MANUAL";
+  id?:string;
+  wiseEmail?:string;
+  wiseLegalName?:string;
+  wiseEmailVerified?:boolean;
+  verificationPending?:boolean;
   onboardingStatus: string;
   payoutsEnabled: boolean;
 };
 type Transfer = {
+  provider?:string;
+  wiseTransferReference?:string;
   id: string;
   status: string;
   amountMinor: number;
@@ -140,7 +149,8 @@ export function BusinessPayments() {
                 <dd>{money(x.releasedAmountMinor, x.currencyCode)}</dd>
               </dl>
               <PaymentCurrencyNote quote={x.settlement} />
-              {x.payoutCountrySupported === false && <p className="form-warning">Funding is unavailable until this creator has a supported payout method. Contact support@riveracreators.com.</p>}
+              {x.payoutMethod==='WISE_MANUAL'&&<p>After approved completion and release, Rivera queues an admin-assisted Wise payout in USD. This is not an automatic Paystack transfer.</p>}
+              {x.payoutCountrySupported === false && <p className="form-warning">Before funding, the international creator must verify their Wise email and complete Rivera’s payout review.</p>}
             </div>
             <div className="dashboard-actions">
               {["NOT_FUNDED", "FAILED"].includes(x.status) && (
@@ -222,6 +232,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
       back="/dashboard/creator"
     >
       <section className="application-panel">
+        {account?.setupMode==='WISE_MANUAL'?<WisePayoutSetup account={account} onUpdate={setAccount}/>:<>
         <p className="eyebrow">PAYOUT READINESS</p>
         <h2>{statusLabel(account?.onboardingStatus ?? "NOT_STARTED")}</h2>
         <p>
@@ -265,6 +276,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
             </button>
           </div>
         )}
+        </>}
       </section>
       {error && <p className="form-error">{error}</p>}
       {!payouts && (
@@ -281,6 +293,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
                 </p>
                 {x.status === "FUNDED" && <p>Funded by the Business and held for approved completion. This is not yet money received.</p>}
                 <PaymentCurrencyNote quote={x.payoutSettlement} payout />
+                {x.payoutMethod==='WISE_MANUAL'&&<p>Wise payouts are sent in USD by a Rivera administrator after Business release. Queued or claimed does not mean paid.</p>}
               </div>
             </article>
           ))}
@@ -294,6 +307,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
                 <p className="eyebrow">{statusLabel(x.status)}</p>
                 <h2>{x.collaborationPayment.campaign.title}</h2>
                 <p>{money(x.amountMinor, x.currencyCode)}</p>
+                {x.provider==='WISE'&&<p>Wise · {x.status==='PENDING'?'Queued — not sent':x.status==='PROCESSING'?'Claimed by admin — not confirmed paid':'Admin-confirmed completed'}{x.wiseTransferReference?` · Transfer ID ${x.wiseTransferReference}`:''}</p>}
               </div>
             </article>
           ))}

@@ -69,6 +69,7 @@ import {
   PaymentIssueController,
 } from "./payments/marketplace-payment.controllers";
 import { MarketplacePaymentService } from "./payments/marketplace-payment.service";
+import { WisePayoutService } from './payments/wise-payout.service';
 import {
   AdminOperationsController,
   HealthController,
@@ -262,6 +263,7 @@ function validate(config: Record<string, unknown>) {
     ApplicationStatusService,
     WorkspaceService,
     MarketplacePaymentService,
+    WisePayoutService,
     OperationsService,
     ReconciliationScheduler,
     AnalyticsInterceptor,

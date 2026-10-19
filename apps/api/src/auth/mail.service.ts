@@ -111,6 +111,11 @@ export class MailService {
       developmentUrl: url,
     });
   }
+  sendWiseVerificationEmail(email: string, code: string) {
+    return this.provider.send({to:email,subject:'Verify your Rivera Wise payout email',
+      text:`Your Rivera Wise payout verification code is ${code}. It expires in 30 minutes. Only enter it in your signed-in Rivera payout settings. Verifying this email does not send money or confirm Wise eligibility. If you did not request this, ignore this message.`,
+      html:template('Verify your Wise payout email',`Your code is ${code}. It expires in 30 minutes. Enter it only in your signed-in Rivera payout settings. Email verification is followed by an admin review. If you did not request this, ignore this message.`)});
+  }
   sendPasswordResetEmail(email: string, token: string) {
     const url = this.link("/reset-password", token);
     return this.provider.send({
