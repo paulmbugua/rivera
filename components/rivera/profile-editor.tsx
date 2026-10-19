@@ -1,11 +1,13 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { ChangeEvent, FormEvent, useEffect, useId, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Camera, ImagePlus, LoaderCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Protected } from "./protected";
+import { countryOptions } from "@/lib/countries";
+import { businessProfilePayload, creatorProfilePayload } from "@/lib/profile-draft";
 
 type Taxonomy = { id: string; name: string; slug: string };
 type Social = {
@@ -93,6 +95,30 @@ const platforms = [
 const message = (error: unknown) =>
   error instanceof ApiError ? error.message : "Please try again.";
 
+type ProfileSection={name:string;hint:string;complete:boolean};
+function ProfileStudio({role,completion,visibility,sections,active,onSelect,onSave,busy,dirty,children}:{role:'creator'|'business';completion:number;visibility:string;sections:ProfileSection[];active:number;onSelect:(index:number)=>void;onSave:()=>Promise<boolean>;busy:boolean;dirty:boolean;children:ReactNode}){
+  const heading=useRef<HTMLHeadingElement>(null);
+  const previous=useRef(active);
+  useEffect(()=>{if(previous.current!==active){heading.current?.focus();previous.current=active}},[active]);
+  async function next(){if(dirty&&!await onSave())return;onSelect(Math.min(active+1,sections.length-1))}
+  return <main className="profile-shell profile-studio">
+    <header className="profile-studio-header"><div><Link className="profile-studio-back" href={'/dashboard/'+role}>← Dashboard</Link><h1>{role==='creator'?'Your creator profile':'Your business profile'}</h1><p>A few details. A clearer first impression.</p></div><div className="profile-studio-save"><span role="status">{busy?'Saving…':dirty?'Unsaved changes':'Changes saved'}</span><button type="button" className="button secondary" disabled={busy} onClick={()=>void onSave()}>Save changes</button></div></header>
+    <div className="profile-studio-layout"><aside className="profile-studio-sidebar"><div className="profile-studio-strength"><div><span>Profile strength</span><strong>{Math.max(0,Math.min(100,completion))}%</strong></div><div className="profile-studio-meter" role="progressbar" aria-label="Saved profile strength" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completion}><i style={{width:Math.max(0,Math.min(100,completion))+'%'}}/></div><p>{dirty?'Save to update your progress.':'Build it at your own pace.'}</p></div><nav aria-label="Profile sections"><ol>{sections.map((section,index)=><li key={section.name}><button type="button" aria-current={active===index?'step':undefined} disabled={busy} onClick={()=>onSelect(index)}><span className="profile-studio-number" aria-hidden="true">{section.complete?'✓':index+1}</span><span>{section.name}</span></button></li>)}</ol></nav><p className="profile-studio-tip">✦ A complete profile helps the right people find you.</p></aside>
+    <div className="profile-studio-workspace"><div className="profile-studio-step"><span>Section {active+1} of {sections.length}</span><span className="profile-studio-status">{visibility==='PUBLIC'?'Public profile':visibility==='UNLISTED'?'Link only':'Private profile'}</span></div><div className="profile-studio-section-heading"><h2 ref={heading} tabIndex={-1}>{sections[active].name}</h2><p>{sections[active].hint}</p></div>{children}<footer className="profile-studio-footer"><div>{active>0&&<button type="button" className="button secondary" disabled={busy} onClick={()=>onSelect(active-1)}>← Back</button>}</div><button type="button" className="button primary" disabled={busy} onClick={()=>active===sections.length-1?void onSave():void next()}>{busy?'Saving…':active===sections.length-1?'Save changes':dirty?'Save & continue':'Continue'}<span aria-hidden="true">↗</span></button></footer></div></div>
+  </main>;
+}
+
+function ProfileChoices({title,items,selected,onChange,limit}:{title:string;items:Taxonomy[];selected:string[];onChange:(ids:string[])=>void;limit:number}){
+  const [expanded,setExpanded]=useState(false),[query,setQuery]=useState('');
+  const visible=items.filter(item=>item.name.toLowerCase().includes(query.toLowerCase())).filter((item,index)=>expanded||index<8||selected.includes(item.id));
+  return <div className="profile-choice-group"><div className="profile-field-heading"><h3>{title}</h3><span>{selected.length}/{limit} selected</span></div>{expanded&&<label className="field"><span className="sr-only">Search {title.toLowerCase()}</span><input type="search" placeholder={'Find '+title.toLowerCase()+'…'} value={query} onChange={e=>setQuery(e.target.value)}/></label>}<div className="profile-chips" role="group" aria-label={title}>{visible.map(item=><button key={item.id} type="button" aria-pressed={selected.includes(item.id)} disabled={!selected.includes(item.id)&&selected.length>=limit} onClick={()=>onChange(selected.includes(item.id)?selected.filter(id=>id!==item.id):[...selected,item.id])}>{selected.includes(item.id)?'✓ ':''}{item.name}</button>)}</div>{!items.length&&<p className="profile-help">No choices are available. Refresh the page to try again.</p>}{expanded&&query&&!visible.length&&<p className="profile-help">No matches. Try another word.</p>}{items.length>8&&<button type="button" className="profile-text-button" onClick={()=>{setExpanded(!expanded);setQuery('')}}>{expanded?'Show fewer':'See all '+title.toLowerCase()}</button>}</div>;
+}
+
+function ProfileReadiness({items,onSelect}:{items:{label:string;done:boolean;section:number}[];onSelect:(index:number)=>void}){
+  const missing=items.filter(item=>!item.done).length;
+  return <div className="profile-readiness"><h3>{missing?'A few things to finish':'Ready for the spotlight'}</h3><p>{missing?'Complete these details before publishing.':'Your essential profile details are in place.'}</p><ul>{items.map(item=><li key={item.label}><span aria-hidden="true">{item.done?'✓':'○'}</span><span>{item.label}</span>{!item.done&&<button type="button" className="profile-text-button" onClick={()=>onSelect(item.section)}>Add →</button>}</li>)}</ul></div>;
+}
+
 function MediaUpload({
   endpoint,
   label,
@@ -173,6 +199,8 @@ export function CreatorProfileEditor() {
   );
 }
 function CreatorEditor() {
+  const [active,setActive]=useState(0),[dirty,setDirty]=useState(false);
+  const dirtyRef=useRef(false),saveLock=useRef(false);
   const [profile, setProfile] = useState<Creator | null>(null);
   const [categories, setCategories] = useState<Taxonomy[]>([]);
   const [contentTypes, setContentTypes] = useState<Taxonomy[]>([]);
@@ -201,7 +229,7 @@ function CreatorEditor() {
         api<Taxonomy[]>("/categories"),
         api<Taxonomy[]>("/content-types"),
       ]);
-      setProfile(p);
+      setProfile(current=>current&&dirtyRef.current?{...p,...current,profileImageUrl:p.profileImageUrl,coverImageUrl:p.coverImageUrl,socialAccounts:p.socialAccounts,portfolio:p.portfolio,profileCompletion:p.profileCompletion,verificationStatus:p.verificationStatus,combinedFollowers:p.combinedFollowers}:p);
       setCategories(c);
       setContentTypes(t);
     } catch (e) {
@@ -219,53 +247,38 @@ function CreatorEditor() {
     );
   const selectedCategories = profile.categories.map((item) => item.category.id);
   const selectedTypes = profile.contentTypes.map((item) => item.contentType.id);
-  const patch = (value: Partial<Creator>) =>
+  const patch = (value: Partial<Creator>) => {
+    dirtyRef.current=true;setDirty(true);setSuccess('');setError('');
     setProfile((current) => (current ? { ...current, ...value } : current));
-  const toggle = (ids: string[], id: string) =>
-    ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id];
-  async function save(event: FormEvent) {
-    event.preventDefault();
+  };
+  async function save(event?: FormEvent) {
+    event?.preventDefault();
     const current = profile;
-    if (!current) return;
+    if (!current||saveLock.current) return false;
+    saveLock.current=true;
     setSaving(true);
     setError("");
     setSuccess("");
     try {
       const updated = await api<Creator>("/creators/me/profile", {
         method: "PATCH",
-        body: JSON.stringify({
-          displayName: current.displayName,
-          slug: current.slug,
-          headline: current.headline,
-          bio: current.bio,
-          countryCode: current.countryCode,
-          city: current.city,
-          websiteUrl: current.websiteUrl || undefined,
-          professionalContactEmail:
-            current.professionalContactEmail || undefined,
-          professionalPhone: current.professionalPhone || undefined,
-          preferredContactMethod: current.preferredContactMethod,
-          yearsExperience: current.yearsExperience,
-          travelAvailable: current.travelAvailable,
-          remoteCampaignsAllowed: current.remoteCampaignsAllowed,
-          profileVisibility: current.profileVisibility,
-          categoryIds: selectedCategories,
-          primaryCategoryId:
-            current.categories.find((item) => item.isPrimary)?.category.id ??
-            selectedCategories[0],
-          contentTypeIds: selectedTypes,
-          languages: current.languages,
-        }),
+        body: JSON.stringify(creatorProfilePayload(current)),
       });
       setProfile(updated);
+      dirtyRef.current=false;setDirty(false);
       setSuccess("Profile updated.");
+      return true;
     } catch (e) {
       setError(message(e));
+      return false;
     } finally {
       setSaving(false);
+      saveLock.current=false;
     }
   }
   async function publish() {
+    if(!await save())return;
+    setSaving(true);
     setError("");
     try {
       setProfile(
@@ -274,6 +287,8 @@ function CreatorEditor() {
       setSuccess("Your profile is public.");
     } catch (e) {
       setError(message(e));
+    } finally {
+      setSaving(false);
     }
   }
   async function requestVerification() {
@@ -290,11 +305,16 @@ function CreatorEditor() {
   }
   async function addSocial(event: FormEvent) {
     event.preventDefault();
+    if(saveLock.current)return;
+    if(!social.username.trim()&&!social.profileUrl.trim()){setError('Add a username or a link to your social profile.');return}
+    saveLock.current=true;setSaving(true);setError('');
     try {
       await api("/creators/me/social-accounts", {
         method: "POST",
         body: JSON.stringify({
           ...social,
+          username:social.username.trim()||undefined,
+          profileUrl:social.profileUrl.trim()||undefined,
           followers: Number(social.followers),
           averageViews: social.averageViews
             ? Number(social.averageViews)
@@ -316,6 +336,8 @@ function CreatorEditor() {
       void load();
     } catch (e) {
       setError(message(e));
+    } finally {
+      saveLock.current=false;setSaving(false);
     }
   }
   async function removeSocial(id: string) {
@@ -365,6 +387,8 @@ function CreatorEditor() {
   }
   async function addPortfolio(event: FormEvent) {
     event.preventDefault();
+    if(saveLock.current)return;
+    saveLock.current=true;setSaving(true);setError('');
     try {
       await api("/creators/me/portfolio", {
         method: "POST",
@@ -381,6 +405,8 @@ function CreatorEditor() {
       void load();
     } catch (e) {
       setError(message(e));
+    } finally {
+      saveLock.current=false;setSaving(false);
     }
   }
   async function removePortfolio(id: string) {
@@ -426,283 +452,43 @@ function CreatorEditor() {
       setError(message(e));
     }
   }
-  return (
-    <main className="profile-shell">
-      <header className="profile-top">
-        <div>
-          <Link href="/dashboard/creator">← Dashboard</Link>
-          <p className="eyebrow">CREATOR PROFILE</p>
-          <h1>Build a profile brands can trust.</h1>
-        </div>
-        <div className="completion">
-          <strong>{profile.profileCompletion}%</strong>
-          <span>Profile strength</span>
-          <div>
-            <i style={{ width: `${profile.profileCompletion}%` }} />
-          </div>
-        </div>
-      </header>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      {success && (
-        <p className="form-success" role="status">
-          {success}
-        </p>
-      )}
-      <form onSubmit={save} className="profile-grid">
-        <section className="profile-panel">
-          <h2>Identity & about</h2>
-          <div className="settings-grid">
-            <label className="field">
-              Display name
-              <input
-                value={profile.displayName}
-                onChange={(e) => patch({ displayName: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              Profile URL
-              <input
-                value={profile.slug}
-                onChange={(e) => patch({ slug: e.target.value.toLowerCase() })}
-              />
-            </label>
-          </div>
-          <label className="field">
-            Headline
-            <input
-              maxLength={120}
-              value={profile.headline}
-              onChange={(e) => patch({ headline: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            Bio
-            <textarea
-              rows={6}
-              maxLength={2000}
-              value={profile.bio}
-              onChange={(e) => patch({ bio: e.target.value })}
-            />
-          </label>
-          <div className="settings-grid">
-            <label className="field">
-              Country code
-              <input
-                maxLength={2}
-                value={profile.countryCode}
-                onChange={(e) =>
-                  patch({ countryCode: e.target.value.toUpperCase() })
-                }
-              />
-            </label>
-            <label className="field">
-              City
-              <input
-                value={profile.city}
-                onChange={(e) => patch({ city: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              Website
-              <input
-                type="url"
-                value={profile.websiteUrl ?? ""}
-                onChange={(e) => patch({ websiteUrl: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              Years experience
-              <input
-                type="number"
-                min="0"
-                max="80"
-                value={profile.yearsExperience ?? ""}
-                onChange={(e) =>
-                  patch({
-                    yearsExperience: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
-                  })
-                }
-              />
-            </label>
-            <label className="field">
-              Professional email (private until hired)
-              <input
-                type="email"
-                value={profile.professionalContactEmail ?? ""}
-                onChange={(e) =>
-                  patch({ professionalContactEmail: e.target.value })
-                }
-              />
-            </label>
-            <label className="field">
-              Professional phone (private until hired)
-              <input
-                value={profile.professionalPhone ?? ""}
-                onChange={(e) => patch({ professionalPhone: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              Preferred contact after hiring
-              <select
-                value={profile.preferredContactMethod ?? "RIVERA"}
-                onChange={(e) =>
-                  patch({ preferredContactMethod: e.target.value })
-                }
-              >
-                <option value="RIVERA">Rivera messaging</option>
-                <option value="EMAIL">Email</option>
-                <option value="PHONE">Phone</option>
-                <option value="WHATSAPP">WhatsApp</option>
-              </select>
-            </label>
-          </div>
-        </section>
-        <section className="profile-panel">
-          <h2>Media</h2>
-            <MediaUpload
-              endpoint="/uploads/profile-image"
-              label="Profile image"
-              currentUrl={profile.profileImageUrl}
-              onDone={() => void load()}
-            />
-          <MediaUpload
-            endpoint="/uploads/cover-image"
-            label="Cover image"
-            currentUrl={profile.coverImageUrl}
-            onDone={() => void load()}
-          />
-        </section>
-        <section className="profile-panel">
-          <h2>Categories</h2>
-          <p>
-            Select up to five. The first selection is your primary category.
-          </p>
-          <div className="choice-grid">
-            {categories.map((item) => (
-              <label key={item.id}>
-                <input
-                  type="checkbox"
-                  checked={selectedCategories.includes(item.id)}
-                  disabled={
-                    !selectedCategories.includes(item.id) &&
-                    selectedCategories.length >= 5
-                  }
-                  onChange={() =>
-                    setProfile((current) =>
-                      current
-                        ? {
-                            ...current,
-                            categories: toggle(selectedCategories, item.id).map(
-                              (id, index) => ({
-                                category: categories.find(
-                                  (category) => category.id === id,
-                                )!,
-                                isPrimary: index === 0,
-                              }),
-                            ),
-                          }
-                        : current,
-                    )
-                  }
-                />
-                {item.name}
-              </label>
-            ))}
-          </div>
-          <h3>Content types</h3>
-          <div className="choice-grid">
-            {contentTypes.map((item) => (
-              <label key={item.id}>
-                <input
-                  type="checkbox"
-                  checked={selectedTypes.includes(item.id)}
-                  onChange={() =>
-                    setProfile((current) =>
-                      current
-                        ? {
-                            ...current,
-                            contentTypes: toggle(selectedTypes, item.id).map(
-                              (id) => ({
-                                contentType: contentTypes.find(
-                                  (type) => type.id === id,
-                                )!,
-                              }),
-                            ),
-                          }
-                        : current,
-                    )
-                  }
-                />
-                {item.name}
-              </label>
-            ))}
-          </div>
-          <label className="field">
-            Languages{" "}
-            <small>Comma-separated language codes, e.g. en, sw, ar</small>
-            <input
-              value={profile.languages
-                .map((item) => item.languageCode)
-                .join(", ")}
-              onChange={(e) =>
-                patch({
-                  languages: e.target.value
-                    .split(",")
-                    .map((value) => value.trim().toLowerCase())
-                    .filter(Boolean)
-                    .map((languageCode) => ({
-                      languageCode,
-                      proficiency: "PROFESSIONAL",
-                    })),
-                })
-              }
-            />
-          </label>
-        </section>
-        <section className="profile-panel">
-          <h2>Availability & visibility</h2>
-          <label className="check-line">
-            <input
-              type="checkbox"
-              checked={profile.travelAvailable}
-              onChange={(e) => patch({ travelAvailable: e.target.checked })}
-            />{" "}
-            Available to travel
-          </label>
-          <label className="check-line">
-            <input
-              type="checkbox"
-              checked={profile.remoteCampaignsAllowed}
-              onChange={(e) =>
-                patch({ remoteCampaignsAllowed: e.target.checked })
-              }
-            />{" "}
-            Accepts remote campaigns
-          </label>
-          <label className="field">
-            Visibility
-            <select
-              value={profile.profileVisibility}
-              onChange={(e) => patch({ profileVisibility: e.target.value })}
-            >
-              <option value="PUBLIC">Public — appears in search</option>
-              <option value="UNLISTED">Unlisted — direct link only</option>
-              <option value="PRIVATE">Private — only you and Rivera</option>
-            </select>
-          </label>
-          <button className="button primary" disabled={saving}>
-            {saving ? "Saving…" : "Save profile"}
-          </button>
-        </section>
-      </form>
-      <section className="profile-panel wide">
-        <h2>Social accounts</h2>
+  const sections:ProfileSection[]=[
+    {name:'The basics',hint:'Introduce yourself. Let brands see the person behind the content.',complete:Boolean(profile.displayName&&profile.headline&&profile.bio&&profile.countryCode&&profile.city)},
+    {name:'Photos',hint:'Choose a photo and cover that feel like you.',complete:Boolean(profile.profileImageUrl)},
+    {name:'Your expertise',hint:'Choose the topics and formats that make your work stand out.',complete:Boolean(selectedCategories.length&&selectedTypes.length)},
+    {name:'Social accounts',hint:'Show brands where your audience lives.',complete:Boolean(profile.socialAccounts.length)},
+    {name:'Portfolio',hint:'Let your work do the talking.',complete:Boolean(profile.portfolio.length)},
+    {name:'Preferences & sharing',hint:'Choose how you work, check your details and share your profile.',complete:profile.profileVisibility==='PUBLIC'},
+  ];
+  const readiness=[{label:'Name, headline and bio',done:Boolean(profile.displayName&&profile.headline&&profile.bio),section:0},{label:'Country and city',done:Boolean(profile.countryCode&&profile.city),section:0},{label:'At least one category and content type',done:Boolean(selectedCategories.length&&selectedTypes.length),section:2},{label:'At least one social account',done:Boolean(profile.socialAccounts.length),section:3}];
+  return <ProfileStudio role="creator" completion={profile.profileCompletion} visibility={profile.profileVisibility} sections={sections} active={active} onSelect={setActive} onSave={()=>save()} busy={saving} dirty={dirty}>
+    {error&&<p className="form-error" role="alert">{error}</p>}{success&&<p className="form-success" role="status">{success}</p>}
+    <fieldset className="profile-editor-fields" disabled={saving}>
+    <form id="creator-profile-form" onSubmit={e=>void save(e)} className="profile-editor-form">
+      {active===0&&<section className="profile-panel">
+        <div className="settings-grid"><label className="field">Your name<input maxLength={120} placeholder="The name you use as a creator" value={profile.displayName??''} onChange={e=>patch({displayName:e.target.value})}/></label><label className="field">Headline<input maxLength={120} placeholder="e.g. Beauty & lifestyle creator" value={profile.headline??''} onChange={e=>patch({headline:e.target.value})}/></label></div>
+        <label className="field">A little about you<textarea rows={3} maxLength={2000} placeholder="Tell brands what you create, who your audience is, and what makes your work yours." value={profile.bio??''} onChange={e=>patch({bio:e.target.value})}/><small>{(profile.bio??'').length}/2000 characters</small></label>
+        <div className="settings-grid"><label className="field">Country<select value={profile.countryCode??''} onChange={e=>patch({countryCode:e.target.value})}><option value="">Choose a country</option>{countryOptions.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select></label><label className="field">City<input value={profile.city??''} placeholder="e.g. Nairobi" onChange={e=>patch({city:e.target.value})}/></label></div>
+        <details className="profile-more"><summary>Website & experience <span>Optional</span></summary><div className="settings-grid"><label className="field">Website<input type="url" placeholder="https://…" value={profile.websiteUrl??''} onChange={e=>patch({websiteUrl:e.target.value})}/></label><label className="field">Years creating content<input type="number" min={0} max={80} value={profile.yearsExperience??''} onChange={e=>patch({yearsExperience:e.target.value?Number(e.target.value):undefined})}/></label></div></details>
+        <details className="profile-more"><summary>Your profile link <span>Optional</span></summary><label className="field">Profile address<small>riveracreators.com/creators/{profile.slug}</small><input value={profile.slug??''} onChange={e=>patch({slug:e.target.value.toLowerCase()})}/></label></details>
+      </section>}
+      {active===1&&<section className="profile-panel"><MediaUpload endpoint="/uploads/profile-image" label="Profile photo" currentUrl={profile.profileImageUrl} onDone={()=>void load()}/><MediaUpload endpoint="/uploads/cover-image" label="Cover image" currentUrl={profile.coverImageUrl} onDone={()=>void load()}/><p className="profile-note">A clear photo and a cover that reflects your work make a great first impression. Images upload as soon as you choose them.</p></section>}
+      {active===2&&<section className="profile-panel">
+        <ProfileChoices title="Categories" items={categories} selected={selectedCategories} limit={5} onChange={ids=>patch({categories:ids.map((id,index)=>({category:categories.find(item=>item.id===id)!,isPrimary:index===0}))})}/>
+        <p className="profile-help">Your first choice is your main category.</p>
+        <ProfileChoices title="Content types" items={contentTypes} selected={selectedTypes} limit={12} onChange={ids=>patch({contentTypes:ids.map(id=>({contentType:contentTypes.find(item=>item.id===id)!}))})}/>
+        <label className="field">Main content language<select value={profile.languages[0]?.languageCode??''} onChange={e=>patch({languages:e.target.value?[{languageCode:e.target.value,proficiency:'PROFESSIONAL'},...profile.languages.slice(1).filter(item=>item.languageCode!==e.target.value)]:[]})}><option value="">Choose a language</option>{profile.languages[0]&&!['en','sw','ar','fr','es','pt'].includes(profile.languages[0].languageCode)&&<option value={profile.languages[0].languageCode}>{profile.languages[0].languageCode.toUpperCase()}</option>}<option value="en">English</option><option value="sw">Swahili</option><option value="ar">Arabic</option><option value="fr">French</option><option value="es">Spanish</option><option value="pt">Portuguese</option></select></label>
+        <details className="profile-more"><summary>More languages <span>Optional</span></summary><label className="field">Language codes<small>Separate with commas, e.g. en, sw, ar</small><input value={profile.languages.map(item=>item.languageCode).join(', ')} onChange={e=>patch({languages:e.target.value.split(',').map(value=>value.trim().toLowerCase()).filter(Boolean).map(languageCode=>({languageCode,proficiency:'PROFESSIONAL'}))})}/></label></details>
+      </section>}
+      {active===5&&<section className="profile-panel">
+        <h3 className="profile-field-title">How you like to work</h3><label className="check-line"><input type="checkbox" checked={profile.travelAvailable} onChange={e=>patch({travelAvailable:e.target.checked})}/>I’m available to travel</label><label className="check-line"><input type="checkbox" checked={profile.remoteCampaignsAllowed} onChange={e=>patch({remoteCampaignsAllowed:e.target.checked})}/>I’m open to remote campaigns</label>
+        <details className="profile-more"><summary>Contact details after hiring <span>Private</span></summary><p className="profile-help">These details stay private until hired. Use Rivera messages before a partnership is confirmed.</p><div className="settings-grid"><label className="field">Professional email<input type="email" value={profile.professionalContactEmail??''} onChange={e=>patch({professionalContactEmail:e.target.value})}/></label><label className="field">Professional phone<input type="tel" value={profile.professionalPhone??''} onChange={e=>patch({professionalPhone:e.target.value})}/></label></div><label className="field">Preferred contact method<select value={profile.preferredContactMethod??'RIVERA'} onChange={e=>patch({preferredContactMethod:e.target.value})}><option value="RIVERA">Rivera messaging</option><option value="EMAIL">Email</option><option value="PHONE">Phone</option><option value="WHATSAPP">WhatsApp</option></select></label></details>
+        <label className="field profile-visibility-field">Who can see your profile?<select value={profile.profileVisibility} onChange={e=>patch({profileVisibility:e.target.value})}><option value="PUBLIC">Everyone — appear in creator search</option><option value="UNLISTED">People with my profile link</option><option value="PRIVATE">Only me and Rivera</option></select></label>
+      </section>}
+      <button type="submit" className="sr-only" tabIndex={-1}>Save profile</button>
+    </form>
+    {active===3&&<section className="profile-panel wide">
+        <p className="profile-help">Add the accounts you use for your content. Your follower counts help businesses understand your audience.</p>
         {profile.socialAccounts.length ? (
           <div className="manage-list">
             {profile.socialAccounts.map((item) => (
@@ -748,7 +534,7 @@ function CreatorEditor() {
             account.
           </p>
         )}
-        <form onSubmit={addSocial} className="inline-form">
+        <form onSubmit={addSocial} className="inline-form profile-add-form">
           <label className="field">
             Platform
             <select
@@ -758,7 +544,7 @@ function CreatorEditor() {
               }
             >
               {platforms.map((value) => (
-                <option key={value}>{value}</option>
+                <option key={value} value={value}>{value==='TIKTOK'?'TikTok':value==='YOUTUBE'?'YouTube':value.toLowerCase().replace(/^./,c=>c.toUpperCase())}</option>
               ))}
             </select>
           </label>
@@ -772,7 +558,7 @@ function CreatorEditor() {
             />
           </label>
           <label className="field">
-            HTTPS profile URL
+            Profile link (https://…)
             <input
               type="url"
               value={social.profileUrl}
@@ -805,11 +591,11 @@ function CreatorEditor() {
               }
             />
           </label>
-          <button className="button secondary">Add account</button>
+          <button className="button primary" disabled={saving}>+ Add account</button>
         </form>
-      </section>
-      <section className="profile-panel wide">
-        <h2>Portfolio</h2>
+      </section>}
+    {active===4&&<section className="profile-panel wide">
+        <p className="profile-help">Show a few pieces you’re proud of. Link to a video, post or article so businesses can see your style.</p>
         {profile.portfolio.length ? (
           <div className="portfolio-manage">
             {profile.portfolio.map((item) => (
@@ -850,7 +636,7 @@ function CreatorEditor() {
             work.
           </p>
         )}
-        <form onSubmit={addPortfolio} className="inline-form">
+        <form onSubmit={addPortfolio} className="inline-form profile-add-form">
           <label className="field">
             Title
             <input
@@ -869,14 +655,14 @@ function CreatorEditor() {
                 setPortfolio({ ...portfolio, mediaType: e.target.value })
               }
             >
-              <option>EXTERNAL_LINK</option>
-              <option>VIDEO</option>
-              <option>ARTICLE</option>
-              <option>SOCIAL_POST</option>
+              <option value="EXTERNAL_LINK">Website link</option>
+              <option value="VIDEO">Video</option>
+              <option value="ARTICLE">Article</option>
+              <option value="SOCIAL_POST">Social post</option>
             </select>
           </label>
           <label className="field">
-            External HTTPS URL
+            Link to your work (https://…)
             <input
               required
               type="url"
@@ -895,46 +681,16 @@ function CreatorEditor() {
               }
             />
           </label>
-          <button className="button secondary">Add item</button>
+          <button className="button primary" disabled={saving}>+ Add to portfolio</button>
         </form>
-      </section>
-      <section className="profile-panel wide publish-panel">
-        <div>
-          <p>
-            Status: <strong>{profile.profileVisibility}</strong> · Verification:{" "}
-            <strong>{profile.verificationStatus}</strong>
-          </p>
-          <h2>Ready to share?</h2>
-          <p>
-            Publishing checks your profile’s minimum marketplace information.
-          </p>
-        </div>
-        <div>
-          {profile.profileVisibility !== "PUBLIC" && (
-            <button className="button primary" onClick={() => void publish()}>
-              Publish profile
-            </button>
-          )}
-          {profile.slug && (
-            <Link
-              className="button secondary"
-              href={`/creators/${profile.slug}`}
-            >
-              Preview profile
-            </Link>
-          )}
-          {!["VERIFIED", "PENDING"].includes(profile.verificationStatus) && (
-            <button
-              className="button secondary"
-              onClick={() => void requestVerification()}
-            >
-              Request verification
-            </button>
-          )}
-        </div>
-      </section>
-    </main>
-  );
+      </section>}
+    {active===5&&<section className="profile-panel profile-sharing">
+      <ProfileReadiness items={readiness} onSelect={setActive}/>
+      <div className="profile-sharing-actions">{profile.profileVisibility!=='PUBLIC'&&<button type="button" className="button primary" disabled={saving} onClick={()=>void publish()}>Save & publish profile</button>}{profile.slug&&<Link className="button secondary" href={'/creators/'+profile.slug}>Preview profile ↗</Link>}</div>
+      <details className="profile-more"><summary>Rivera verification <span>{profile.verificationStatus==='VERIFIED'?'Verified':profile.verificationStatus==='PENDING'?'Under review':'Optional'}</span></summary><p className="profile-help">Ask Rivera to review your profile for a verification badge.</p>{!['VERIFIED','PENDING'].includes(profile.verificationStatus)&&<button type="button" className="button secondary" disabled={saving} onClick={()=>void requestVerification()}>Request verification</button>}</details>
+    </section>}
+    </fieldset>
+  </ProfileStudio>;
 }
 
 export function BusinessProfileEditor() {
@@ -945,6 +701,8 @@ export function BusinessProfileEditor() {
   );
 }
 function BusinessEditor() {
+  const [active,setActive]=useState(0),[dirty,setDirty]=useState(false),[saving,setSaving]=useState(false);
+  const dirtyRef=useRef(false),saveLock=useRef(false);
   const [profile, setProfile] = useState<Business | null>(null);
   const [industries, setIndustries] = useState<Taxonomy[]>([]);
   const [feedback, setFeedback] = useState("");
@@ -954,7 +712,7 @@ function BusinessEditor() {
         api<Business>("/businesses/me/profile"),
         api<Taxonomy[]>("/industries"),
       ]);
-      setProfile(p);
+      setProfile(current=>current&&dirtyRef.current?{...p,...current,logoUrl:p.logoUrl,coverImageUrl:p.coverImageUrl,profileCompletion:p.profileCompletion,verificationStatus:p.verificationStatus}:p);
       setIndustries(i);
     } catch (e) {
       setFeedback(message(e));
@@ -969,23 +727,30 @@ function BusinessEditor() {
         <p>{feedback || "Loading profile…"}</p>
       </main>
     );
-  const patch = (value: Partial<Business>) =>
-    setProfile((current) => (current ? { ...current, ...value } : current));
-  async function save(event: FormEvent) {
-    event.preventDefault();
+  const patch = (value: Partial<Business>) => {dirtyRef.current=true;setDirty(true);setFeedback('');setProfile((current) => (current ? { ...current, ...value } : current))};
+  async function save(event?: FormEvent) {
+    event?.preventDefault();
+    if(!profile||saveLock.current)return false;
+    saveLock.current=true;setSaving(true);setFeedback('');
     try {
       setProfile(
         await api<Business>("/businesses/me/profile", {
           method: "PATCH",
-          body: JSON.stringify(profile),
+          body: JSON.stringify(businessProfilePayload(profile)),
         }),
       );
       setFeedback("Business profile updated.");
+      dirtyRef.current=false;setDirty(false);return true;
     } catch (e) {
       setFeedback(message(e));
+      return false;
+    } finally {
+      setSaving(false);saveLock.current=false;
     }
   }
   async function publish() {
+    if(!await save())return;
+    setSaving(true);
     try {
       setProfile(
         await api<Business>("/businesses/me/publish", { method: "POST" }),
@@ -993,6 +758,8 @@ function BusinessEditor() {
       setFeedback("Your business profile is public.");
     } catch (e) {
       setFeedback(message(e));
+    } finally {
+      setSaving(false);
     }
   }
   async function verify() {
@@ -1007,226 +774,47 @@ function BusinessEditor() {
       setFeedback(message(e));
     }
   }
-  return (
-    <main className="profile-shell">
-      <header className="profile-top">
-        <div>
-          <Link href="/dashboard/business">← Dashboard</Link>
-          <p className="eyebrow">BUSINESS PROFILE</p>
-          <h1>Show creators who you are.</h1>
-        </div>
-        <div className="completion">
-          <strong>{profile.profileCompletion}%</strong>
-          <span>Profile strength</span>
-          <div>
-            <i style={{ width: `${profile.profileCompletion}%` }} />
-          </div>
-        </div>
-      </header>
-      {feedback && (
-        <p
-          className={
-            feedback.includes("updated") ||
-            feedback.includes("submitted") ||
-            feedback.includes("public")
-              ? "form-success"
-              : "form-error"
-          }
-        >
-          {feedback}
-        </p>
-      )}
-      <form onSubmit={save} className="profile-grid">
-        <section className="profile-panel">
-          <h2>Business information</h2>
-          <div className="settings-grid">
-            <label className="field">
-              Business name
-              <input
-                value={profile.businessName}
-                onChange={(e) => patch({ businessName: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              Profile URL
-              <input
-                value={profile.slug}
-                onChange={(e) => patch({ slug: e.target.value.toLowerCase() })}
-              />
-            </label>
-          </div>
-          <label className="field">
-            Short description
-            <input
-              maxLength={240}
-              value={profile.shortDescription ?? ""}
-              onChange={(e) => patch({ shortDescription: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            About
-            <textarea
-              rows={7}
-              maxLength={3000}
-              value={profile.description}
-              onChange={(e) => patch({ description: e.target.value })}
-            />
-          </label>
-        </section>
-        <section className="profile-panel">
-          <h2>Industry & location</h2>
-          <label className="field">
-            Industry
-            <select
-              value={profile.industryId ?? ""}
-              onChange={(e) => patch({ industryId: e.target.value })}
-            >
-              <option value="">Select industry</option>
-              {industries.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="settings-grid">
-            <label className="field">
-              Country code
-              <input
-                maxLength={2}
-                value={profile.countryCode}
-                onChange={(e) =>
-                  patch({ countryCode: e.target.value.toUpperCase() })
-                }
-              />
-            </label>
-            <label className="field">
-              City
-              <input
-                value={profile.city}
-                onChange={(e) => patch({ city: e.target.value })}
-              />
-            </label>
-          </div>
-          <label className="field">
-            Address (private)
-            <input
-              value={profile.address ?? ""}
-              onChange={(e) => patch({ address: e.target.value })}
-            />
-          </label>
-        </section>
-        <section className="profile-panel">
-          <h2>Online presence</h2>
-          <label className="field">
-            Website
-            <input
-              type="url"
-              value={profile.website ?? ""}
-              onChange={(e) => patch({ website: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            Business email (private)
-            <input
-              type="email"
-              value={profile.businessEmail ?? ""}
-              onChange={(e) => patch({ businessEmail: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            Business phone (private)
-            <input
-              value={profile.businessPhone ?? ""}
-              onChange={(e) => patch({ businessPhone: e.target.value })}
-            />
-          </label>
-          <label className="field">
-            Preferred contact after hiring
-            <select
-              value={profile.preferredContactMethod ?? "RIVERA"}
-              onChange={(e) =>
-                patch({ preferredContactMethod: e.target.value })
-              }
-            >
-              <option value="RIVERA">Rivera messaging</option>
-              <option value="EMAIL">Email</option>
-              <option value="PHONE">Phone</option>
-              <option value="WHATSAPP">WhatsApp</option>
-            </select>
-          </label>
-          <label className="field">
-            Year established
-            <input
-              type="number"
-              min="1800"
-              max={new Date().getFullYear()}
-              value={profile.yearEstablished ?? ""}
-              onChange={(e) =>
-                patch({
-                  yearEstablished: e.target.value
-                    ? Number(e.target.value)
-                    : undefined,
-                })
-              }
-            />
-          </label>
-        </section>
-        <section className="profile-panel">
-          <h2>Media & privacy</h2>
-          <MediaUpload
-            endpoint="/uploads/logo"
-            label="Business logo"
-            currentUrl={profile.logoUrl}
-            onDone={() => void load()}
-          />
-          <MediaUpload
-            endpoint="/uploads/cover-image"
-            label="Cover image"
-            currentUrl={profile.coverImageUrl}
-            onDone={() => void load()}
-          />
-          <label className="field">
-            Visibility
-            <select
-              value={profile.profileVisibility}
-              onChange={(e) => patch({ profileVisibility: e.target.value })}
-            >
-              <option value="PUBLIC">Public</option>
-              <option value="UNLISTED">Unlisted</option>
-              <option value="PRIVATE">Private</option>
-            </select>
-          </label>
-          <button className="button primary">Save profile</button>
-        </section>
-      </form>
-      <section className="profile-panel wide publish-panel">
-        <div>
-          <p>
-            Status: <strong>{profile.profileVisibility}</strong> · Verification:{" "}
-            <strong>{profile.verificationStatus}</strong>
-          </p>
-          <h2>Publish your business identity</h2>
-        </div>
-        <div>
-          {profile.profileVisibility !== "PUBLIC" && (
-            <button className="button primary" onClick={() => void publish()}>
-              Publish profile
-            </button>
-          )}
-          <Link
-            className="button secondary"
-            href={`/businesses/${profile.slug}`}
-          >
-            Preview profile
-          </Link>
-          {!["VERIFIED", "PENDING"].includes(profile.verificationStatus) && (
-            <button className="button secondary" onClick={() => void verify()}>
-              Request verification
-            </button>
-          )}
-        </div>
-      </section>
-    </main>
-  );
+  const sections:ProfileSection[]=[
+    {name:'About your business',hint:'Tell creators who you are and what your business does.',complete:Boolean(profile.businessName&&profile.description)},
+    {name:'Industry & location',hint:'Help creators understand your market and where you’re based.',complete:Boolean(profile.industryId&&profile.countryCode&&profile.city)},
+    {name:'Logo & cover',hint:'Add the visuals that make your business recognizable.',complete:Boolean(profile.logoUrl)},
+    {name:'Contact details',hint:'Give your future partners a clear way to reach you.',complete:Boolean(profile.website||profile.businessEmail||profile.businessPhone)},
+    {name:'Visibility & sharing',hint:'Check your details and choose how people discover your business.',complete:profile.profileVisibility==='PUBLIC'},
+  ];
+  const readiness=[{label:'Business name and description',done:Boolean(profile.businessName&&profile.description),section:0},{label:'Industry',done:Boolean(profile.industryId),section:1},{label:'Country and city',done:Boolean(profile.countryCode&&profile.city),section:1}];
+  return <ProfileStudio role="business" completion={profile.profileCompletion} visibility={profile.profileVisibility} sections={sections} active={active} onSelect={setActive} onSave={()=>save()} busy={saving} dirty={dirty}>
+    {feedback&&<p role={feedback.includes('updated')||feedback.includes('submitted')||feedback.includes('public')?'status':'alert'} className={feedback.includes('updated')||feedback.includes('submitted')||feedback.includes('public')?'form-success':'form-error'}>{feedback}</p>}
+    <fieldset className="profile-editor-fields" disabled={saving}>
+    <form id="business-profile-form" onSubmit={e=>void save(e)} className="profile-editor-form">
+      {active===0&&<section className="profile-panel">
+        <label className="field">Business name<input maxLength={120} placeholder="The name creators will see" value={profile.businessName??''} onChange={e=>patch({businessName:e.target.value})}/></label>
+        <label className="field">Your business in one line<input maxLength={240} placeholder="e.g. Natural skincare made in Kenya" value={profile.shortDescription??''} onChange={e=>patch({shortDescription:e.target.value})}/><small>Shown on your public profile card.</small></label>
+        <label className="field">About your business<textarea rows={3} maxLength={3000} placeholder="What do you do, who do you serve, and what makes your business different?" value={profile.description??''} onChange={e=>patch({description:e.target.value})}/><small>{(profile.description??'').length}/3000 characters</small></label>
+        <details className="profile-more"><summary>More business details <span>Optional</span></summary><div className="settings-grid"><label className="field">Year established<input type="number" min={1800} max={new Date().getFullYear()} value={profile.yearEstablished??''} onChange={e=>patch({yearEstablished:e.target.value?Number(e.target.value):undefined})}/></label><label className="field">Profile address<small>riveracreators.com/businesses/{profile.slug}</small><input value={profile.slug??''} onChange={e=>patch({slug:e.target.value.toLowerCase()})}/></label></div></details>
+      </section>}
+      {active===1&&<section className="profile-panel">
+        <label className="field">Your industry<select value={profile.industryId??''} onChange={e=>patch({industryId:e.target.value})}><option value="">Choose an industry</option>{industries.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <div className="settings-grid"><label className="field">Country<select value={profile.countryCode??''} onChange={e=>patch({countryCode:e.target.value})}><option value="">Choose a country</option>{countryOptions.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select></label><label className="field">City<input value={profile.city??''} placeholder="e.g. Nairobi" onChange={e=>patch({city:e.target.value})}/></label></div>
+        <details className="profile-more"><summary>Street address <span>Private · Optional</span></summary><label className="field">Business address<input value={profile.address??''} placeholder="Building, street or office" onChange={e=>patch({address:e.target.value})}/><small>This address is kept private.</small></label></details>
+      </section>}
+      {active===2&&<section className="profile-panel"><MediaUpload endpoint="/uploads/logo" label="Business logo" currentUrl={profile.logoUrl} onDone={()=>void load()}/><MediaUpload endpoint="/uploads/cover-image" label="Cover image" currentUrl={profile.coverImageUrl} onDone={()=>void load()}/><p className="profile-note">Use a clear logo and a cover that tells your brand’s story. Images upload as soon as you choose them.</p></section>}
+      {active===3&&<section className="profile-panel">
+        <label className="field">Website <span className="profile-optional">Optional</span><input type="url" placeholder="https://yourbusiness.com" value={profile.website??''} onChange={e=>patch({website:e.target.value})}/></label>
+        <div className="settings-grid"><label className="field">Business email<input type="email" placeholder="hello@yourbusiness.com" value={profile.businessEmail??''} onChange={e=>patch({businessEmail:e.target.value})}/></label><label className="field">Business phone<input type="tel" placeholder="e.g. +254 700 000 000" value={profile.businessPhone??''} onChange={e=>patch({businessPhone:e.target.value})}/></label></div>
+        <label className="field">Preferred contact after hiring<select value={profile.preferredContactMethod??'RIVERA'} onChange={e=>patch({preferredContactMethod:e.target.value})}><option value="RIVERA">Rivera messaging</option><option value="EMAIL">Email</option><option value="PHONE">Phone</option><option value="WHATSAPP">WhatsApp</option></select></label>
+        <p className="profile-note">Your business email and phone stay private until a partnership unlocks contact details. Your website can appear publicly.</p>
+      </section>}
+      {active===4&&<section className="profile-panel">
+        <label className="field">Who can see your business profile?<select value={profile.profileVisibility} onChange={e=>patch({profileVisibility:e.target.value})}><option value="PUBLIC">Everyone — appear in business search</option><option value="UNLISTED">People with my profile link</option><option value="PRIVATE">Only me and Rivera</option></select></label>
+        <ProfileReadiness items={readiness} onSelect={setActive}/>
+      </section>}
+      <button type="submit" className="sr-only" tabIndex={-1}>Save profile</button>
+    </form>
+    {active===4&&<section className="profile-panel profile-sharing">
+      <div className="profile-sharing-actions">{profile.profileVisibility!=='PUBLIC'&&<button type="button" className="button primary" disabled={saving} onClick={()=>void publish()}>Save & publish profile</button>}{profile.slug&&<Link className="button secondary" href={'/businesses/'+profile.slug}>Preview profile ↗</Link>}</div>
+      <details className="profile-more"><summary>Rivera verification <span>{profile.verificationStatus==='VERIFIED'?'Verified':profile.verificationStatus==='PENDING'?'Under review':'Optional'}</span></summary><p className="profile-help">Ask Rivera to review your business for a verification badge.</p>{!['VERIFIED','PENDING'].includes(profile.verificationStatus)&&<button type="button" className="button secondary" disabled={saving} onClick={()=>void verify()}>Request verification</button>}</details>
+    </section>}
+    </fieldset>
+  </ProfileStudio>;
+
 }
