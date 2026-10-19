@@ -1,10 +1,26 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Protected } from "./protected";
 import { useAuth } from "./auth-provider";
 import { api } from "@/lib/api";
-import { ArrowUpRight, HeartHandshake, Sparkles } from "lucide-react";
+import { ArrowUpRight, HeartHandshake, Sparkles, LayoutDashboard, Megaphone, Settings, LogOut, Menu, X, MessageSquare, UserRound, Wallet, Search, FileText, Handshake, Bookmark, ShieldCheck, BarChart3, ChevronRight, Plus, Eye } from "lucide-react";
+
+function navigationIcon(text:string){
+  if(text==='Overview')return LayoutDashboard;
+  if(text.includes('Message')||text==='Support')return MessageSquare;
+  if(text==='Settings')return Settings;
+  if(text.includes('Profile')||text==='Creators'||text==='Businesses')return UserRound;
+  if(text==='Saved')return Bookmark;
+  if(text.includes('Payment')||text.includes('Fee')||text==='Earnings'||text==='Payouts'||text==='Transfers'||text==='Refunds')return Wallet;
+  if(text.includes('Application')||text==='Reports'||text==='Data Requests')return FileText;
+  if(text==='Offers'||text==='Collaborations')return Handshake;
+  if(text==='Find Creators'||text==='Recommended')return Search;
+  if(text==='Verifications'||text==='Reviews')return ShieldCheck;
+  if(text==='Analytics')return BarChart3;
+  return Megaphone;
+}
+const humanLabel=(value?:string)=>value?value.toLowerCase().replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()):'Loading…';
 type Summary = {
   slug: string;
   profileCompletion: number;
@@ -54,14 +70,22 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
   const { user, logout } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [market, setMarket] = useState<MarketSummary>({});
+  const [menuOpen,setMenuOpen]=useState(false),[loggingOut,setLoggingOut]=useState(false);
+  const menuButton=useRef<HTMLButtonElement>(null),menuPanel=useRef<HTMLElement>(null);
+  const [marketLoading,setMarketLoading]=useState(role!=='ADMIN'),[loadError,setLoadError]=useState(''),[retry,setRetry]=useState(0);
+  function toggleMenu(){setMenuOpen(current=>!current)}
+  function openMenu(){setMenuOpen(true);window.requestAnimationFrame(()=>{menuPanel.current?.scrollIntoView({behavior:'instant',block:'start'});menuPanel.current?.querySelector<HTMLAnchorElement>('a')?.focus()})}
+  async function signOut(){setLoggingOut(true);await logout()}
   useEffect(() => {
+    let cancelled=false;
     if (role !== "ADMIN") {
+      setMarketLoading(true);setLoadError('');
       api<Summary>(
         role === "CREATOR" ? "/creators/me/profile" : "/businesses/me/profile",
       )
-        .then(setSummary)
-        .catch(() => {});
-      Promise.all([
+        .then(value=>{if(!cancelled)setSummary(value)})
+        .catch(() => {if(!cancelled)setLoadError('Some dashboard details could not load. Try again.');});
+      Promise.allSettled([
         api<MarketSummary>(
           role === "CREATOR"
             ? "/creator/campaigns/summary/dashboard"
@@ -78,12 +102,10 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
             : "/business/workspace-summary",
         ),
       ])
-        .then(([campaigns, applications, workspaces]) =>
-          setMarket({ ...campaigns, ...applications, ...workspaces }),
-        )
-        .catch(() => {});
+        .then(results=>{if(cancelled)return;setMarket(Object.assign({},...results.filter(result=>result.status==='fulfilled').map(result=>result.value)));if(results.some(result=>result.status==='rejected'))setLoadError('Some dashboard details could not load. Try again.');setMarketLoading(false)});
     }
-  }, [role]);
+    return()=>{cancelled=true};
+  }, [role,retry]);
   const links =
     role === "ADMIN"
       ? [
@@ -153,107 +175,76 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
     ["Reviews pending", market.reviewsPending],
     ["Active collaborations", market.activeCollaborations],
   ];
+  const base=role==='ADMIN'?'/admin':'/dashboard/'+role.toLowerCase();
+  const campaignsHref=role==='BUSINESS'?base+'/campaigns':role==='CREATOR'?base+'/opportunities':'/admin/campaigns';
+  const profileHref=base+'/profile';
+  const mainStats=role==='BUSINESS'?[
+    {label:'Active campaigns',value:market.activeCampaigns,href:base+'/campaigns',icon:Megaphone},
+    {label:'Creators hired',value:market.creatorsHired,href:base+'/campaigns',icon:Handshake},
+    {label:'Awaiting review',value:market.awaitingReview,href:base+'/campaigns',icon:FileText},
+    {label:'Awaiting funding',value:market.awaitingFunding,href:base+'/payments',icon:Wallet},
+  ]:[
+    {label:'Active collaborations',value:market.activeCollaborations,href:base+'/collaborations',icon:Handshake},
+    {label:'Offers received',value:market.offersReceived,href:base+'/offers',icon:FileText},
+    {label:'Applications submitted',value:market.applicationsSubmitted,href:base+'/applications',icon:Megaphone},
+    {label:'Awaiting review',value:market.awaitingReview,href:base+'/collaborations',icon:Eye},
+  ];
+  const shortcuts=role==='ADMIN'?[
+    {label:'Verifications',hint:'Review pending requests',href:'/admin/verifications',icon:ShieldCheck},
+    {label:'Reports',hint:'Review marketplace reports',href:'/admin/reports',icon:FileText},
+    {label:'Support',hint:'Help your community',href:'/admin/support',icon:MessageSquare},
+    {label:'Analytics',hint:'Marketplace performance',href:'/admin/analytics',icon:BarChart3},
+  ]:role==='BUSINESS'?[
+    {label:'My campaigns',hint:'Manage your opportunities',href:campaignsHref,icon:Megaphone},
+    {label:'Messages',hint:'Keep partnerships moving',href:base+'/messages',icon:MessageSquare},
+    {label:'Find creators',hint:'Meet your next collaborator',href:'/creators',icon:Search},
+    {label:'Payments',hint:'Funding and payment history',href:base+'/payments',icon:Wallet},
+  ]:[
+    {label:'My applications',hint:'Follow your proposals',href:base+'/applications',icon:FileText},
+    {label:'Messages',hint:'Continue the conversation',href:base+'/messages',icon:MessageSquare},
+    {label:'Collaborations',hint:'Your active partnerships',href:base+'/collaborations',icon:Handshake},
+    {label:'Earnings',hint:'View your payment progress',href:base+'/earnings',icon:Wallet},
+  ];
+  const bottomLinks=role==='ADMIN'?[{label:'Home',href:'/admin',icon:LayoutDashboard},{label:'Reports',href:'/admin/reports',icon:FileText},{label:'Support',href:'/admin/support',icon:MessageSquare},{label:'Settings',href:'/settings',icon:Settings}]:[{label:'Home',href:base,icon:LayoutDashboard},{label:'Campaigns',href:campaignsHref,icon:Megaphone},{label:'Messages',href:base+'/messages',icon:MessageSquare},{label:'Profile',href:profileHref,icon:UserRound}];
   return (
-    <main className="dashboard-shell">
-      <header>
-        <Link href="/" className="brand">
-          <span className="brand-mark">R.</span>rivera
-        </Link>
-        <nav>
-          <Link href="/campaigns">Campaigns</Link>
-          <Link href="/settings">Settings</Link>
-          <button onClick={() => void logout()}>Log out</button>
+    <main className="dashboard-shell dashboard-modern">
+      <a className="dashboard-skip" href="#dashboard-content">Skip to dashboard</a>
+      <header className="dashboard-topbar">
+        <Link href="/" className="brand" aria-label="Rivera home"><span className="brand-mark">R.</span>rivera</Link>
+        <button ref={menuButton} type="button" className="dashboard-menu-button" aria-expanded={menuOpen} aria-controls="dashboard-navigation" onClick={toggleMenu}>{menuOpen?<X size={18}/>:<Menu size={18}/>}<span>{menuOpen?'Close menu':'Menu'}</span></button>
+        <nav className="dashboard-top-actions" aria-label="Account shortcuts">
+          <Link className="dashboard-top-campaigns" href={campaignsHref} prefetch={false}><Megaphone size={17} aria-hidden="true"/><span>Campaigns</span></Link>
+          <Link className="dashboard-top-settings" href="/settings" prefetch={false}><Settings size={17} aria-hidden="true"/><span>Settings</span></Link>
+          <button className="dashboard-top-logout" type="button" disabled={loggingOut} onClick={()=>void signOut()}><LogOut size={17} aria-hidden="true"/><span>{loggingOut?'Leaving…':'Log out'}</span></button>
         </nav>
       </header>
       <div className="dashboard-layout">
-        <aside aria-label={`${role.toLowerCase()} navigation`}>
-          {links.map(([text, href], index) => (
-            <Link
-              className={index === 0 ? "dashboard-nav-active" : ""}
-              key={href}
-              href={href}
-              prefetch={false}
-            >
-              {text}
-            </Link>
-          ))}
+        <aside ref={menuPanel} id="dashboard-navigation" className={'dashboard-navigation'+(menuOpen?' is-open':'')} aria-label={role.toLowerCase()+' navigation'} onKeyDown={event=>{if(event.key==='Escape'){setMenuOpen(false);menuButton.current?.focus()}}}>
+          <p className="dashboard-nav-caption">YOUR WORKSPACE</p>
+          <nav aria-label="Workspace pages">{links.map(([text,href],index)=>{const Icon=navigationIcon(text);return <Link className={index===0?'dashboard-nav-active':''} key={href} href={href} prefetch={false} aria-current={index===0?'page':undefined}><Icon size={17} aria-hidden="true"/><span>{text}</span></Link>})}</nav>
+          <div className="dashboard-nav-note"><HeartHandshake size={19} aria-hidden="true"/><p>Good partnerships start with a conversation.</p></div>
         </aside>
-        <section>
-          <p className="eyebrow"><span className="eyebrow-dot" /> {role} DASHBOARD</p>
-          <h1>Good to see you, {user?.firstName}.</h1>
-          {role === "ADMIN" ? (
-            <>
-              <p>Help Rivera remain a trusted place for purposeful partnerships.</p>
-              <div className="dashboard-focus"><span><HeartHandshake size={24}/></span><div><small>TODAY’S FOCUS</small><h2>Keep the marketplace healthy.</h2><p>Review the people, campaigns and requests that need a thoughtful human decision.</p></div><Link href="/admin/verifications" prefetch={false}>Review verifications <ArrowUpRight size={18}/></Link></div>
-            </>
-          ) : (
-            <>
-              <p>
-                {role === "BUSINESS"
-                  ? "Turn a clear idea into a partnership people will remember."
-                  : "Find opportunities that value your point of view and respect your craft."}
-              </p>
-              <div className="dashboard-focus"><span><Sparkles size={24}/></span><div><small>YOUR NEXT BEST STEP</small><h2>{role === "BUSINESS" ? "Bring the right people into the idea." : "Find the opportunity that feels like you."}</h2><p>{role === "BUSINESS" ? "Share a considered brief or revisit the campaigns already moving." : "Browse fresh opportunities or give your profile one more detail that helps you stand out."}</p></div><Link href={role === "BUSINESS" ? "/dashboard/business/campaigns/new" : "/dashboard/creator/opportunities"} prefetch={false}>{role === "BUSINESS" ? "Create a campaign" : "Explore opportunities"} <ArrowUpRight size={18}/></Link></div>
-              <div className="dashboard-stats">
-                <article>
-                  <strong>{summary?.profileCompletion ?? 0}%</strong>
-                  <span>Profile completion</span>
-                </article>
-                <article>
-                  <strong className="dashboard-stat-status">
-                    {summary?.profileVisibility ?? "PRIVATE"}
-                  </strong>
-                  <span>Visibility</span>
-                </article>
-                <article>
-                  <strong className="dashboard-stat-status">
-                    {summary?.verificationStatus ?? "UNVERIFIED"}
-                  </strong>
-                  <span>Verification</span>
-                </article>
-                {(role === "BUSINESS" ? businessStats : creatorStats).map(
-                  ([text, value]) => (
-                    <article key={text}>
-                      <strong>{value ?? 0}</strong>
-                      <span>{text}</span>
-                    </article>
-                  ),
-                )}
-              </div>
-              <div className="dashboard-actions">
-                <Link
-                  className="button primary"
-                  prefetch={false}
-                  href={
-                    role === "BUSINESS"
-                      ? "/dashboard/business/campaigns/new"
-                      : "/dashboard/creator/opportunities"
-                  }
-                >
-                  {role === "BUSINESS"
-                    ? "Create campaign"
-                    : "Browse opportunities"}
-                </Link>
-                <Link
-                  className="button secondary"
-                  href={`/dashboard/${role.toLowerCase()}/profile`}
-                  prefetch={false}
-                >
-                  Edit profile
-                </Link>
-                {summary?.slug && (
-                  <Link
-                    className="button secondary"
-                    href={`/${role === "CREATOR" ? "creators" : "businesses"}/${summary.slug}`}
-                  >
-                    Preview profile
-                  </Link>
-                )}
-              </div>
-            </>
-          )}
+        <section id="dashboard-content" className="dashboard-content" tabIndex={-1}>
+          <div className="dashboard-welcome"><div><p className="dashboard-kicker">{role==='BUSINESS'?'BUSINESS WORKSPACE':role==='CREATOR'?'CREATOR WORKSPACE':'RIVERA ADMIN'}</p><h1>{user?.firstName?'Hi, '+user.firstName+'.':'Welcome back.'}</h1><p>{role==='BUSINESS'?'Your next great partnership starts here.':role==='CREATOR'?'Your work, opportunities and conversations in one place.':'A clear view of your marketplace.'}</p></div><span className="dashboard-welcome-avatar" aria-hidden="true">{user?.firstName?.slice(0,1).toUpperCase()||'R'}</span></div>
+          {loadError&&<div className="dashboard-load-error" role="status"><span>{loadError}</span><button type="button" disabled={marketLoading} onClick={()=>setRetry(value=>value+1)}>Retry</button></div>}
+          <div className="dashboard-focus">
+            <span aria-hidden="true">{role==='ADMIN'?<HeartHandshake size={22}/>:<Sparkles size={22}/>}</span>
+            <div><small>{role==='ADMIN'?'TODAY’S FOCUS':'MAKE YOUR NEXT MOVE'}</small><h2>{role==='BUSINESS'?'Turn your idea into a campaign.':role==='CREATOR'?'Find your next opportunity.':'Keep the marketplace healthy.'}</h2><p>{role==='BUSINESS'?'A clear brief brings the right creators closer.':role==='CREATOR'?'Discover campaigns that fit your style and audience.':'Start with the requests that need your attention.'}</p></div>
+            <Link href={role==='ADMIN'?'/admin/verifications':role==='BUSINESS'?base+'/campaigns/new':campaignsHref} prefetch={false}>{role==='BUSINESS'?<Plus size={17}/>:<ArrowUpRight size={17}/>}<span>{role==='BUSINESS'?'Create campaign':role==='CREATOR'?'Explore campaigns':'Review verifications'}</span></Link>
+          </div>
+          {role!=='ADMIN'&&<>
+            <div className="dashboard-block-heading"><h2>At a glance</h2><span>Your latest activity</span></div>
+            <div className="dashboard-stats dashboard-primary-stats" aria-busy={marketLoading}>{mainStats.map(item=><Link key={item.label} href={item.href} prefetch={false} className="dashboard-stat-card"><span className="dashboard-stat-top"><item.icon size={17} aria-hidden="true"/><ArrowUpRight size={13} aria-hidden="true"/></span><strong>{marketLoading?'—':item.value??'—'}</strong><span>{item.label}</span></Link>)}</div>
+          </>}
+          <div className="dashboard-block-heading"><h2>{role==='ADMIN'?'Admin tools':'Quick access'}</h2><span>Pick up where you left off</span></div>
+          <div className="dashboard-quick-grid">{shortcuts.map(item=><Link key={item.label} href={item.href} prefetch={false} className="dashboard-quick-link"><span className="dashboard-quick-icon"><item.icon size={20} aria-hidden="true"/></span><span><strong>{item.label}</strong><small>{item.hint}</small></span><ChevronRight size={16} aria-hidden="true"/></Link>)}</div>
+          {role!=='ADMIN'&&<>
+            <section className="dashboard-profile-card" aria-labelledby="dashboard-profile-heading"><div className="dashboard-profile-top"><span className="dashboard-quick-icon"><UserRound size={20} aria-hidden="true"/></span><div><h2 id="dashboard-profile-heading">Your profile</h2><p>{summary?summary.profileCompletion>=100?'Looking good. Keep your details up to date.':'A few small details can make a stronger first impression.':'Loading profile details…'}</p></div><Link href={profileHref} prefetch={false}>Edit profile <ArrowUpRight size={14}/></Link></div><div className="dashboard-profile-progress"><span>{summary?summary.profileCompletion+'% complete':'Loading…'}</span><div role="progressbar" aria-label="Profile completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={summary?.profileCompletion??0}><i style={{width:Math.max(0,Math.min(100,summary?.profileCompletion??0))+'%'}}/></div></div><div className="dashboard-profile-tags"><span>Visibility: <strong>{humanLabel(summary?.profileVisibility)}</strong></span><span>Verification: <strong>{humanLabel(summary?.verificationStatus)}</strong></span>{summary?.slug&&<Link href={'/'+(role==='CREATOR'?'creators':'businesses')+'/'+summary.slug} prefetch={false}>Preview profile ↗</Link>}</div></section>
+            <details className="dashboard-more-activity"><summary>More activity details <span>View all numbers</span></summary><div className="dashboard-secondary-stats">{(role==='BUSINESS'?businessStats:creatorStats).map(([text,value])=><div key={text}><span>{text}</span><strong>{marketLoading?'—':value??'—'}</strong></div>)}</div></details>
+          </>}
         </section>
       </div>
+      <nav className="dashboard-bottom-nav" aria-label="Mobile quick navigation">{bottomLinks.map((item,index)=><Link href={item.href} key={item.href} prefetch={false} aria-current={index===0?'page':undefined}><item.icon size={20} aria-hidden="true"/><span>{item.label}</span></Link>)}<button type="button" aria-expanded={menuOpen} aria-controls="dashboard-navigation" onClick={()=>menuOpen?(setMenuOpen(false),menuButton.current?.focus()):openMenu()}><Menu size={20} aria-hidden="true"/><span>More</span></button></nav>
     </main>
   );
 }
