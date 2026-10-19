@@ -8,12 +8,14 @@ import {
   Application,
   ApplicationResult,
   majorToMinor,
-  money,
+  money as contractMoney,
   statusLabel,
 } from "@/lib/applications";
 import { Campaign } from "@/lib/campaigns";
 import { useAuth } from "./auth-provider";
 import { BusinessApplicationActions } from "./collaborations";
+import { PaymentCurrencyNote, useDisplayCurrency, useDisplayMoney } from './payment-currency';
+import { convertMinor, SettlementQuote } from '@/lib/currency';
 
 const errorText = (error: unknown) =>
   error instanceof ApiError
@@ -108,13 +110,17 @@ export function UnlockedCampaignBrief({ campaignId }: { campaignId: string }) {
 }
 
 type Review = {
+  payoutCountrySupported?: boolean;
   application: Application;
-  fee: { amountMinor: number; currencyCode: string };
+  fee: { amountMinor: number; currencyCode: string; settlement?: SettlementQuote };
   freeApplicationCredits: number;
   warnings: string[];
   outsideBudget: boolean;
 };
 export function ProposalForm({ campaignId }: { campaignId: string }) {
+  const { loading: accountLoading } = useAuth();
+  const money = useDisplayMoney();
+  const displayCurrency = useDisplayCurrency();
   const router = useRouter();
   const [campaign, setCampaign] = useState<Campaign | null>(null),
     [applicationId, setApplicationId] = useState<string>(),
@@ -140,10 +146,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
     return()=>{cancelled=true};
   }, [campaignId,loadAttempt]);
   const payload = () => ({
-    proposedAmountMinor: majorToMinor(
-      Number(form.proposedAmount),
-      campaign?.currencyCode ?? "USD",
-    ),
+    proposedAmountMinor: convertMinor(majorToMinor(Number(form.proposedAmount), displayCurrency), displayCurrency, campaign?.currencyCode ?? 'USD'),
     proposedCurrencyCode: campaign?.currencyCode ?? "USD",
     pitch: form.pitch,
     proposedDeliverables: form.proposedDeliverables || undefined,
@@ -222,7 +225,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
       setBusy(false);
     }
   }
-  if (!campaign)
+  if (!campaign || accountLoading)
     return (
       <main className="application-shell">
         <Link href="/dashboard/creator/opportunities">← Browse opportunities</Link>
@@ -251,7 +254,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
           <h2>Create your proposal</h2>
           <div className="settings-grid">
             <label className="field">
-              Your proposed price ({campaign.currencyCode})
+              Your proposed price ({displayCurrency})
               <input
                 required
                 min="0.01"
@@ -351,11 +354,14 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
                 ? `${review.application.estimatedDeliveryDays} days`
                 : "Not specified"}
             </dd>
-            <dt>Rivera Application Fee</dt>
+            <dt>Rivera Application Fee (USD-based)</dt>
             <dd>{money(review.fee.amountMinor, review.fee.currencyCode)}</dd>
             <dt>Total charged today</dt>
             <dd>{money(review.fee.amountMinor, review.fee.currencyCode)}</dd>
           </dl>
+          <p className="proposal-hint">Application fee: {contractMoney(review.fee.amountMinor, review.fee.currencyCode)}. Your proposal is recorded in {campaign.currencyCode}.</p>
+          <PaymentCurrencyNote quote={review.fee.settlement} />
+          {review.payoutCountrySupported === false && <p className="form-warning">Before paying an application fee: automatic creator payouts currently support Kenyan M-Pesa accounts only. International payouts are not enabled. <a href="mailto:support@riveracreators.com">Contact support</a> about payout availability.</p>}
           {review.outsideBudget && (
             <p className="form-warning">
               Your proposed price is outside the Business’s stated budget range.
@@ -493,6 +499,7 @@ function ApplicationCard({
   business?: boolean;
   campaignId?: string;
 }) {
+  const money = useDisplayMoney();
   return (
     <article className="application-card">
       <div>
@@ -530,6 +537,7 @@ function ApplicationCard({
 }
 
 export function CreatorApplicationDetail({ id }: { id: string }) {
+  const money = useDisplayMoney();
   const search = useSearchParams()!;
   const [app, setApp] = useState<Application | null>(null),
     [error, setError] = useState(""),
@@ -818,6 +826,7 @@ export function BusinessApplicationDetail({
   campaignId: string;
   id: string;
 }) {
+  const money = useDisplayMoney();
   const [app, setApp] = useState<Application | null>(null),
     [error, setError] = useState("");
   useEffect(() => {

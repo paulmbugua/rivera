@@ -4,6 +4,7 @@ import { ApplicationStatus, CampaignStatus, Prisma } from '@prisma/client';
 import { ApiException } from '../common/api-error';
 import { PrismaService } from '../common/prisma.service';
 import { AttachmentDto, CampaignAdminDto, CampaignDto, CampaignQueryDto, OwnerCampaignQueryDto } from './dto';
+import { accountCurrency } from '../applications/currency-policy';
 
 const campaignInclude = {
   business: { select: { id: true, name: true, slug: true, logoUrl: true, shortDescription: true, verificationStatus: true, profileVisibility: true } },
@@ -56,6 +57,7 @@ export class CampaignsService {
     if (dto.budgetMinMinor != null && dto.budgetMaxMinor != null && dto.budgetMaxMinor < dto.budgetMinMinor) this.fail(HttpStatus.BAD_REQUEST, 'INVALID_BUDGET_RANGE', 'Maximum budget must be at least the minimum budget.');
   }
   private scalar(dto: CampaignDto) {
+    if (dto.currencyCode && !['USD', 'KES'].includes(dto.currencyCode)) this.fail(HttpStatus.BAD_REQUEST, 'CAMPAIGN_CURRENCY_UNSUPPORTED', 'Choose USD or KES. Paystack settles payments in KES at USD 1 = KES 130.');
     const omit = new Set(['categoryIds','creatorLocations','platforms','languages','deliverables','applicationDeadline','campaignStartDate','campaignEndDate']);
     const values = Object.fromEntries(Object.entries(dto).filter(([key]) => !omit.has(key) && dto[key as keyof CampaignDto] !== undefined));
     if (dto.locationType && ['GLOBAL','REMOTE'].includes(dto.locationType)) {
@@ -101,7 +103,7 @@ export class CampaignsService {
   async create(userId: string, dto: CampaignDto) {
     const business = await this.businessFor(userId); this.validateDates(dto);
     const title = dto.title || 'Untitled campaign'; const slug = await this.uniqueSlug(title);
-    return this.prisma.campaign.create({ data: { businessId: business.id, title, slug, ...this.scalar(dto), ...this.dates(dto), ...this.nested(dto, true) } as unknown as Prisma.CampaignUncheckedCreateInput, include: campaignInclude }).then(item => this.ownerDto(item));
+    return this.prisma.campaign.create({ data: { businessId: business.id, title, slug, currencyCode: accountCurrency(business.country), ...this.scalar(dto), ...this.dates(dto), ...this.nested(dto, true) } as unknown as Prisma.CampaignUncheckedCreateInput, include: campaignInclude }).then(item => this.ownerDto(item));
   }
   async update(userId: string, id: string, dto: CampaignDto) {
     const campaign = await this.owned(userId, id); this.validateDates({ ...campaign, ...dto } as unknown as CampaignDto);

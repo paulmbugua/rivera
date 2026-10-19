@@ -159,14 +159,8 @@ export function AdminFees() {
           />
         </label>
         <label className="field">
-          Currency
-          <input
-            maxLength={3}
-            value={form.currencyCode}
-            onChange={(e) =>
-              setForm({ ...form, currencyCode: e.target.value.toUpperCase() })
-            }
-          />
+          Fee currency
+          <input value="USD" readOnly aria-label="Fee currency USD" />
         </label>
         <label className="field">
           Priority

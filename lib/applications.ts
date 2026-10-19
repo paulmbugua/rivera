@@ -78,7 +78,7 @@ export const money = (
 ) =>
   minor == null || !currency
     ? "—"
-    : new Intl.NumberFormat("en", { style: "currency", currency }).format(
+    : new Intl.NumberFormat("en", { style: "currency", currency, currencyDisplay: 'code' }).format(
         minor /
           10 **
             (new Intl.NumberFormat("en", {

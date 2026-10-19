@@ -33,3 +33,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <Context.Provider value={{ user, loading, refresh, logout }}>{children}{user && <NotificationCenter user={user} />}</Context.Provider>;
 }
 export function useAuth() { const value = useContext(Context); if (!value) throw new Error('AuthProvider missing'); return value; }
+export function useOptionalAuth() { return useContext(Context); }

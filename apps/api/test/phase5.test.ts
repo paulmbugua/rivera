@@ -40,8 +40,8 @@ test('fee and credit administration inputs are bounded', async () => {
 test('fee resolution prefers country and category specificity before priority', async () => {
   const rules = [
     { id: 'global', countryCode: null, categoryId: null, amountMinor: 300, currencyCode: 'USD', priority: 100 },
-    { id: 'country', countryCode: 'QA', categoryId: null, amountMinor: 900, currencyCode: 'QAR', priority: 1 },
-    { id: 'specific', countryCode: 'QA', categoryId: 'tech', amountMinor: 1000, currencyCode: 'QAR', priority: 0 },
+    { id: 'country', countryCode: 'QA', categoryId: null, amountMinor: 900, currencyCode: 'USD', priority: 1 },
+    { id: 'specific', countryCode: 'QA', categoryId: 'tech', amountMinor: 1000, currencyCode: 'USD', priority: 0 },
   ];
   const db = {
     creatorProfile: { findUniqueOrThrow: async () => ({ country: 'QA' }) },
@@ -49,7 +49,7 @@ test('fee resolution prefers country and category specificity before priority', 
     applicationFeeRule: { findMany: async () => rules },
   };
   const fee = await new ApplicationFeeService(db as never).resolve('campaign', 'creator');
-  assert.deepEqual(fee, { amountMinor: 1000, currencyCode: 'QAR', ruleId: 'specific' });
+  assert.deepEqual(fee, { amountMinor: 1000, currencyCode: 'USD', ruleId: 'specific' });
 });
 
 test('Stripe webhook verification accepts a current HMAC signature and rejects tampering', () => {
@@ -84,8 +84,9 @@ test('Stripe operations fail safely when the payment provider is not configured'
 
 test('payment activation verifies amount and currency and webhook events are idempotent', () => {
   const service = source('src/applications/applications.service.ts');
-  assert.match(service, /state\.amountMinor\s*!==\s*payment\.amountMinor/);
-  assert.match(service, /state\.currencyCode\s*!==\s*payment\.currencyCode/);
+  assert.match(service, /settlementQuote\(payment\.amountMinor, payment\.currencyCode, payment\.provider\)/);
+  assert.match(service, /state\.amountMinor\s*!==\s*expected\.amountMinor/);
+  assert.match(service, /state\.currencyCode\s*!==\s*expected\.currencyCode/);
   assert.match(service, /provider_providerEventId/);
   assert.match(service, /duplicate:\s*true/);
   assert.match(source('prisma/schema.prisma'), /@@unique\(\[provider, providerEventId\]\)/);

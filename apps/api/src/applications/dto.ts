@@ -29,7 +29,7 @@ export class FeeRuleDto {
   @IsOptional() @Transform(({value})=>typeof value==='string'&&value?value.trim().toUpperCase():undefined) @Matches(/^[A-Z]{2}$/) countryCode?: string;
   @IsOptional() @IsString() categoryId?: string;
   @Type(() => Number) @IsInt() @Min(0) @Max(10_000_000) amountMinor!: number;
-  @Transform(({value})=>String(value).toUpperCase()) @Matches(/^[A-Z]{3}$/) currencyCode!: string;
+  @Transform(({value})=>String(value).toUpperCase()) @Matches(/^(USD|KES)$/) currencyCode!: string;
   @Type(() => Number) @IsInt() @Min(-1000) @Max(1000) priority = 0;
   @IsBoolean() active = true;
   @IsOptional() @IsISO8601() startsAt?: string;

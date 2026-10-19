@@ -2,7 +2,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError, API_URL } from "@/lib/api";
-import { money, statusLabel } from "@/lib/applications";
+import { statusLabel } from "@/lib/applications";
+import { PaymentCurrencyNote, useDisplayCurrency, useDisplayMoney } from './payment-currency';
+import { convertMinor, SettlementQuote } from '@/lib/currency';
 
 const errorText = (e: unknown) =>
   e instanceof ApiError ? e.message : "Something went wrong.";
@@ -71,7 +73,7 @@ type Collaboration = {
   myReview?: { id: string; rating: number } | null;
   workItems?: WorkItem[];
 };
-type FundingQuote={campaignParticipantId:string;grossAmountMinor:number;platformFeeMinor:number;creatorNetMinor:number;currencyCode:string;status:string};
+type FundingQuote={campaignParticipantId:string;grossAmountMinor:number;platformFeeMinor:number;creatorNetMinor:number;currencyCode:string;status:string;settlement?:SettlementQuote;payoutCountrySupported?:boolean};
 type Asset = { id:string; type:"FILE"|"LINK"; name:string; url?:string; mimeType?:string; fileSize?:number };
 type Submission = { id:string; version:number; status:string; message?:string; revisionNote?:string; submittedAt:string; assets:Asset[] };
 type WorkItem = { id:string; title:string; description?:string; quantity:number; dueDate?:string; required:boolean; status:string; submissions:Submission[] };
@@ -217,6 +219,7 @@ export function BusinessApplicationActions({
   currencyCode: string;
   activeOfferId?: string;
 }) {
+  const displayCurrency = useDisplayCurrency();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [conversation, setConversation] = useState<string>(),
@@ -311,7 +314,7 @@ export function BusinessApplicationActions({
           <h3>Send Collaboration Offer</h3>
           <div className="settings-grid">
             <label className="field">
-              Compensation ({currencyCode})
+              Compensation ({displayCurrency})
               <input
                 type="number"
                 min="0"
@@ -354,7 +357,7 @@ export function BusinessApplicationActions({
             }
             onClick={() =>
               void action(`/business/applications/${applicationId}/offers`, {
-                compensationMinor: Math.round(Number(offer.amount) * 100),
+                compensationMinor: convertMinor(Math.round(Number(offer.amount) * 100), displayCurrency, currencyCode),
                 currencyCode,
                 deliverablesSummary: offer.deliverables,
                 additionalTerms: offer.terms || undefined,
@@ -415,6 +418,7 @@ export function BusinessApplicationActions({
 }
 
 export function CreatorOffers({ id }: { id?: string }) {
+  const money = useDisplayMoney();
   const [items, setItems] = useState<Offer[]>([]),
     [error, setError] = useState("");
   const load = () =>
@@ -531,6 +535,7 @@ function CollaborationView({
   item: Collaboration;
   role: "creator" | "business";
 }) {
+  const money = useDisplayMoney();
   const [contact, setContact] = useState<CollaborationContact>(), [workspace,setWorkspace]=useState<Collaboration>(item), [funding,setFunding]=useState<FundingQuote>(),
     [error, setError] = useState(""), [busy,setBusy]=useState(""), [message,setMessage]=useState<Record<string,string>>({}), [link,setLink]=useState<Record<string,string>>({}), [files,setFiles]=useState<Record<string,File|undefined>>({}), [rating,setRating]=useState(5), [comment,setComment]=useState("");
   const load=()=>api<Collaboration>(role==="creator"?`/creators/me/collaborations/${item.id}/work-items`:`/business/campaign-participants/${item.id}/work-items`).then(setWorkspace).catch(e=>setError(errorText(e)));
@@ -559,7 +564,9 @@ function CollaborationView({
         </p>
       </header>
       {error && <p className="form-error" role="alert">{error}</p>}
-      {workspace.status==="AWAITING_FUNDING"&&<section className="application-panel" aria-label="Funding required"><p className="eyebrow">AWAITING FUNDING</p><h2>{role==="creator"?"You’re hired — waiting for Business funding.":"Fund this collaboration before work begins"}</h2><p>{role==="creator"?"The Business must fund this collaboration before you begin submitting Campaign work through Rivera.":"This collaboration must be funded before Campaign work can be submitted."} Formal work is locked until Rivera verifies payment.</p>{workspace.fundingDueAt&&<p><strong>Funding deadline:</strong> {new Date(workspace.fundingDueAt).toLocaleString()}{workspace.fundingOverdue?" · Overdue":""}</p>}{role==="business"&&funding&&<><dl><dt>Creator compensation</dt><dd>{money(funding.creatorNetMinor,funding.currencyCode)}</dd><dt>Rivera fee</dt><dd>{money(funding.platformFeeMinor,funding.currencyCode)}</dd><dt>Total Business payment</dt><dd>{money(funding.grossAmountMinor,funding.currencyCode)}</dd></dl><div className="dashboard-actions"><button className="button primary" disabled={!!busy||funding.status==="PAYMENT_PENDING"} onClick={()=>void fund()}>{funding.status==="PAYMENT_PENDING"?"Payment processing":"Fund Collaboration"}</button><button className="button secondary" disabled={!!busy} onClick={()=>void cancelUnfunded()}>Cancel unfunded collaboration</button></div></>}{role==="creator"&&workspace.fundingOverdue&&<button className="button secondary" disabled={!!busy} onClick={()=>void cancelUnfunded()}>Cancel overdue unfunded collaboration</button>}</section>}
+      <PaymentCurrencyNote quote={role === 'business' ? funding?.settlement : undefined} />
+      {role === 'business' && funding?.payoutCountrySupported === false && <p className="form-warning">Funding is unavailable until this creator has a supported payout method. Contact support@riveracreators.com.</p>}
+      {workspace.status==="AWAITING_FUNDING"&&<section className="application-panel" aria-label="Funding required"><p className="eyebrow">AWAITING FUNDING</p><h2>{role==="creator"?"You’re hired — waiting for Business funding.":"Fund this collaboration before work begins"}</h2><p>{role==="creator"?"The Business must fund this collaboration before you begin submitting Campaign work through Rivera.":"This collaboration must be funded before Campaign work can be submitted."} Formal work is locked until Rivera verifies payment.</p>{workspace.fundingDueAt&&<p><strong>Funding deadline:</strong> {new Date(workspace.fundingDueAt).toLocaleString()}{workspace.fundingOverdue?" · Overdue":""}</p>}{role==="business"&&funding&&<><dl><dt>Creator compensation</dt><dd>{money(funding.creatorNetMinor,funding.currencyCode)}</dd><dt>Rivera fee</dt><dd>{money(funding.platformFeeMinor,funding.currencyCode)}</dd><dt>Total Business payment</dt><dd>{money(funding.grossAmountMinor,funding.currencyCode)}</dd></dl><div className="dashboard-actions"><button className="button primary" disabled={!!busy||funding.status==="PAYMENT_PENDING"||funding.payoutCountrySupported===false} onClick={()=>void fund()}>{funding.status==="PAYMENT_PENDING"?"Payment processing":"Fund Collaboration"}</button><button className="button secondary" disabled={!!busy} onClick={()=>void cancelUnfunded()}>Cancel unfunded collaboration</button></div></>}{role==="creator"&&workspace.fundingOverdue&&<button className="button secondary" disabled={!!busy} onClick={()=>void cancelUnfunded()}>Cancel overdue unfunded collaboration</button>}</section>}
       {workspace.status==="ACTIVE"&&workspace.fundingStatus==="FUNDED"&&<section className="application-panel"><p className="eyebrow">FUNDED · WORK UNLOCKED</p><h2>Funding confirmed. Work can now begin.</h2>{role==="creator"&&<p>Complete payout setup before earnings can be released. Funded compensation is not the same as money received.</p>}</section>}
       <section className="application-panel" aria-label="Deliverable progress">
         <p className="eyebrow">WORKSPACE PROGRESS</p>
@@ -660,6 +667,7 @@ function CollaborationView({
   );
 }
 export function CreatorCollaborations({ id }: { id?: string }) {
+  const money = useDisplayMoney();
   const [items, setItems] = useState<Collaboration[]>([]);
   useEffect(() => {
     api<Collaboration[]>("/creators/me/collaborations").then(setItems);
@@ -708,6 +716,7 @@ export function BusinessCollaborations({
   campaignId: string;
   id?: string;
 }) {
+  const money = useDisplayMoney();
   const [data, setData] = useState<{
     items: Collaboration[];
     creatorSlots: number;

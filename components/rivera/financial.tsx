@@ -2,9 +2,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { money, statusLabel } from "@/lib/applications";
+import { money, money as contractMoney, statusLabel } from "@/lib/applications";
+import { PaymentCurrencyNote, useDisplayMoney } from './payment-currency';
+import { SettlementQuote } from '@/lib/currency';
 
 type Payment = {
+  platformFeeUsdMinor?: number;
+  payoutCountrySupported?: boolean;
+  settlement?: SettlementQuote;
+  payoutSettlement?: SettlementQuote;
   id?: string;
   campaignParticipantId: string;
   grossAmountMinor: number;
@@ -25,6 +31,7 @@ type Payment = {
   refunds?: { id: string; status: string; amountMinor: number }[];
 };
 type PayoutAccount = {
+  payoutCountrySupported?: boolean;
   provider: "STRIPE" | "PAYSTACK";
   setupMode: "HOSTED" | "MPESA";
   onboardingStatus: string;
@@ -59,6 +66,7 @@ const errorText = (e: unknown) =>
   e instanceof ApiError ? e.message : "Something went wrong.";
 
 export function BusinessPayments() {
+  const money = useDisplayMoney();
   const [items, setItems] = useState<Payment[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState("");
@@ -124,19 +132,21 @@ export function BusinessPayments() {
               <dl>
                 <dt>Creator compensation</dt>
                 <dd>{money(x.creatorNetMinor, x.currencyCode)}</dd>
-                <dt>Rivera fee</dt>
-                <dd>{money(x.platformFeeMinor, x.currencyCode)}</dd>
+                <dt>Rivera fee (USD-based)</dt>
+                <dd>{x.platformFeeUsdMinor == null ? money(x.platformFeeMinor, x.currencyCode) : contractMoney(x.platformFeeUsdMinor, 'USD')}</dd>
                 <dt>Total Business payment</dt>
                 <dd>{money(x.grossAmountMinor, x.currencyCode)}</dd>
                 <dt>Released</dt>
                 <dd>{money(x.releasedAmountMinor, x.currencyCode)}</dd>
               </dl>
+              <PaymentCurrencyNote quote={x.settlement} />
+              {x.payoutCountrySupported === false && <p className="form-warning">Funding is unavailable until this creator has a supported payout method. Contact support@riveracreators.com.</p>}
             </div>
             <div className="dashboard-actions">
               {["NOT_FUNDED", "FAILED"].includes(x.status) && (
                 <button
                   className="button primary"
-                  disabled={!!busy}
+                  disabled={!!busy || x.payoutCountrySupported === false}
                   onClick={() => void action(x, "fund")}
                 >
                   Fund collaboration
@@ -160,6 +170,7 @@ export function BusinessPayments() {
 }
 
 export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
+  const money = useDisplayMoney();
   const [items, setItems] = useState<Payment[]>([]),
     [account, setAccount] = useState<PayoutAccount>(),
     [transfers, setTransfers] = useState<Transfer[]>([]),
@@ -222,7 +233,8 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
               ? "Connect the Kenyan M-Pesa number where Rivera should send approved earnings."
               : "Complete provider-hosted onboarding before Rivera can release funds."}
         </p>
-        {!account?.payoutsEnabled && (
+        {account?.payoutCountrySupported === false && <p className="privacy-note">Your earnings are shown in USD. Automatic payouts currently support Kenyan M-Pesa recipients only. <a href="mailto:support@riveracreators.com">Contact support about payout availability</a> before accepting paid work.</p>}
+        {!account?.payoutsEnabled && account?.payoutCountrySupported !== false && (
           <div className="dashboard-actions">
             {account?.setupMode === "MPESA" && (
               <label className="field">
@@ -268,6 +280,7 @@ export function CreatorEarnings({ payouts = false }: { payouts?: boolean }) {
                   {money(x.releasedAmountMinor, x.currencyCode)} released
                 </p>
                 {x.status === "FUNDED" && <p>Funded by the Business and held for approved completion. This is not yet money received.</p>}
+                <PaymentCurrencyNote quote={x.payoutSettlement} payout />
               </div>
             </article>
           ))}

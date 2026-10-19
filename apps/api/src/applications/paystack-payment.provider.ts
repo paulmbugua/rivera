@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { HttpStatus } from '@nestjs/common';
 import { ApiException } from '../common/api-error';
+import { settlementQuote } from './currency-policy';
 import {
   CheckoutInput,
   CheckoutResult,
@@ -35,7 +36,9 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
   }
 
   private currency() {
-    return (process.env.PAYSTACK_CURRENCY ?? 'KES').trim().toUpperCase();
+    const configured = (process.env.PAYSTACK_CURRENCY ?? 'KES').trim().toUpperCase();
+    if (configured !== 'KES') throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, 'PAYMENT_CURRENCY_CONFIGURATION', 'Rivera Paystack settlement must be configured in KES.');
+    return configured;
   }
 
   private referencePrefix() {
@@ -51,12 +54,12 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
   }
 
   private ensureCurrency(currencyCode: string) {
-    const configured = this.currency();
-    if (currencyCode.toUpperCase() !== configured)
+    this.currency();
+    if (!['USD', 'KES'].includes(currencyCode.toUpperCase()))
       throw new ApiException(
         HttpStatus.BAD_REQUEST,
         'PAYMENT_CURRENCY_UNSUPPORTED',
-        `Rivera Paystack payments are currently available in ${configured} only.`,
+        'Rivera supports USD pricing and KES settlement. Choose USD or KES.',
       );
   }
 
@@ -70,6 +73,7 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(15_000),
       });
     } catch {
       throw new ApiException(
@@ -119,27 +123,30 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
   }
 
   private paymentState(data: Record<string, unknown>): ProviderPayment {
+    const mode = this.secret().startsWith('sk_live_') ? 'live' : 'test';
+    if (data.domain && data.domain !== mode) throw new ApiException(HttpStatus.CONFLICT, 'PAYMENT_ENVIRONMENT_MISMATCH', 'Provider payment environment does not match this deployment.');
     const status = String(data.status ?? '').toLowerCase();
     return {
       paymentId: data.id == null ? undefined : String(data.id),
       checkoutSessionId: typeof data.reference === 'string' ? data.reference : undefined,
       status: status === 'success' ? 'paid' : status === 'failed' || status === 'abandoned' || status === 'reversed' ? 'failed' : 'pending',
       amountMinor: Number(data.amount ?? 0),
-      currencyCode: String(data.currency ?? this.currency()).toUpperCase(),
+      currencyCode: String(data.currency ?? '').toUpperCase(),
     };
   }
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     this.ensureCurrency(input.currencyCode);
+    const settlement = settlementQuote(input.amountMinor, input.currencyCode, this.providerName);
     const app = process.env.APP_URL ?? 'http://localhost:3000';
     const reference = `${this.referencePrefix()}APP-${input.paymentId}`.slice(0, 100);
     const data = await this.request('transaction/initialize', 'POST', {
       email: input.payerEmail,
-      amount: String(input.amountMinor),
-      currency: input.currencyCode.toUpperCase(),
+      amount: String(settlement.amountMinor),
+      currency: settlement.currencyCode,
       reference,
       callback_url: `${app}/dashboard/creator/applications/${input.applicationId}?payment=processing`,
-      metadata: JSON.stringify({ product: this.productName(), paymentId: input.paymentId, applicationId: input.applicationId, creatorId: input.creatorId, campaignId: input.campaignId }),
+      metadata: JSON.stringify({ product: this.productName(), paymentId: input.paymentId, applicationId: input.applicationId, creatorId: input.creatorId, campaignId: input.campaignId, settlement }),
     });
     return {
       checkoutSessionId: String(data.reference ?? reference),
@@ -153,10 +160,12 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
     return this.paymentState(await this.request(`transaction/verify/${encodeURIComponent(value)}`));
   }
 
-  async refund(paymentId: string, amountMinor: number, idempotencyKey: string): Promise<ProviderRefund> {
+  async refund(paymentId: string, amountMinor: number, idempotencyKey: string, currencyCode = 'KES'): Promise<ProviderRefund> {
+    this.ensureCurrency(currencyCode);
+    const settlement = settlementQuote(amountMinor, currencyCode, this.providerName);
     const data = await this.request('refund', 'POST', {
       transaction: paymentId,
-      amount: amountMinor,
+      amount: settlement.amountMinor,
       merchant_note: idempotencyKey,
     });
     const status = String(data.status ?? '').toLowerCase();
@@ -223,15 +232,16 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
 
   async createCollaborationPayment(input: CollaborationCheckoutInput): Promise<CheckoutResult> {
     this.ensureCurrency(input.currencyCode);
+    const settlement = settlementQuote(input.amountMinor, input.currencyCode, this.providerName);
     const app = process.env.APP_URL ?? 'http://localhost:3000';
     const reference = `${this.referencePrefix()}COLLAB-${input.collaborationPaymentId}-${input.attemptKey}`.slice(0, 100);
     const data = await this.request('transaction/initialize', 'POST', {
       email: input.payerEmail,
-      amount: String(input.amountMinor),
-      currency: input.currencyCode.toUpperCase(),
+      amount: String(settlement.amountMinor),
+      currency: settlement.currencyCode,
       reference,
       callback_url: `${app}/dashboard/business/payments?funding=processing`,
-      metadata: JSON.stringify({ product: this.productName(), collaborationPaymentId: input.collaborationPaymentId, participantId: input.participantId, businessId: input.businessId }),
+      metadata: JSON.stringify({ product: this.productName(), collaborationPaymentId: input.collaborationPaymentId, participantId: input.participantId, businessId: input.businessId, settlement }),
     });
     return {
       checkoutSessionId: String(data.reference ?? reference),
@@ -241,6 +251,7 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
 
   async createTransfer(input: {collaborationPaymentId:string;accountId:string;amountMinor:number;currencyCode:string;idempotencyKey:string}): Promise<ProviderTransfer> {
     this.ensureCurrency(input.currencyCode);
+    const settlement = settlementQuote(input.amountMinor, input.currencyCode, this.providerName);
     const normalizedReference = `${this.referencePrefix()}TRANSFER-${input.idempotencyKey}`
       .toLowerCase()
       .replace(/[^a-z0-9_-]/g, '-')
@@ -250,11 +261,11 @@ export class PaystackPaymentProvider implements PaymentProviderAdapter {
       : `${normalizedReference}-${createHash('sha256').update(input.idempotencyKey).digest('hex')}`.slice(0, 16);
     const data = await this.request('transfer', 'POST', {
       source: 'balance',
-      amount: input.amountMinor,
+      amount: settlement.amountMinor,
       recipient: input.accountId,
       reason: `Rivera collaboration ${input.collaborationPaymentId}`,
       reference,
-      currency: input.currencyCode.toUpperCase(),
+      currency: settlement.currencyCode,
     });
     const status = String(data.status ?? '').toLowerCase();
     return {

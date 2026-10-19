@@ -3,6 +3,7 @@ import { HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { ApiException } from "../common/api-error";
+import { convertMinor, settlementQuote } from '../applications/currency-policy';
 import {
   PAYMENT_PROVIDER,
   PaymentProviderAdapter,
@@ -62,6 +63,7 @@ export class MarketplacePaymentService {
           0,
       ),
       policy: "BUSINESS_PAYS_ON_TOP",
+      fixedCurrencyCode: 'USD',
     };
   }
   async updateFeeSettings(dto: FeeSettingsDto) {
@@ -83,10 +85,11 @@ export class MarketplacePaymentService {
   private calculate(
     compensation: number,
     settings: { basisPoints: number; fixedMinor: number; policy: string },
+    currencyCode = 'USD',
   ) {
     const fee =
       Math.floor((compensation * settings.basisPoints + 9999) / 10000) +
-      settings.fixedMinor;
+      convertMinor(settings.fixedMinor, 'USD', currencyCode);
     return {
       grossAmountMinor: compensation + fee,
       platformFeeMinor: fee,
@@ -105,9 +108,10 @@ export class MarketplacePaymentService {
         "Creator profile required.",
       );
     return creator.payoutAccount
-      ? { ...creator.payoutAccount, setupMode: this.provider.payoutOnboardingMode }
+      ? { ...creator.payoutAccount, setupMode: this.provider.payoutOnboardingMode, payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || creator.country === 'KE' }
       : {
         provider: this.provider.providerName,
+        payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || creator.country === 'KE',
         setupMode: this.provider.payoutOnboardingMode,
         onboardingStatus: "NOT_STARTED",
         chargesEnabled: false,
@@ -218,6 +222,8 @@ export class MarketplacePaymentService {
   }
   async fund(userId: string, participantId: string) {
     const p = await this.ownedParticipant(userId, participantId);
+    if (this.provider.providerName === 'PAYSTACK' && p.creator.country !== 'KE' && p.agreedCompensationMinor > 0)
+      this.fail(HttpStatus.CONFLICT, 'PAYOUT_COUNTRY_UNSUPPORTED', 'Do not fund yet: this creator needs a supported payout method. Paystack payouts currently support Kenyan M-Pesa recipients only. Contact support@riveracreators.com.');
     if (p.status !== "AWAITING_FUNDING")
       this.fail(
         HttpStatus.CONFLICT,
@@ -225,7 +231,7 @@ export class MarketplacePaymentService {
         "Only a collaboration awaiting Business funding can be funded.",
       );
     const settings = await this.feeSettings(),
-      money = this.calculate(p.agreedCompensationMinor, settings);
+      money = this.calculate(p.agreedCompensationMinor, settings, p.currencyCode);
     const existing = p.collaborationPayment;
     if (existing && !["NOT_FUNDED", "FAILED"].includes(existing.status))
       return existing.status === "PAYMENT_PENDING" &&
@@ -298,6 +304,10 @@ export class MarketplacePaymentService {
       refundedAmountMinor: x.refundedAmountMinor,
       releasedAmountMinor: x.releasedAmountMinor,
       currencyCode: x.currencyCode,
+      platformFeeUsdMinor: convertMinor(x.platformFeeMinor, x.currencyCode, 'USD'),
+      settlement: settlementQuote(x.grossAmountMinor, x.currencyCode, x.provider ?? this.provider.providerName),
+      payoutSettlement: settlementQuote(x.creatorNetMinor, x.currencyCode, x.provider ?? this.provider.providerName),
+      payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || x.creator?.country === 'KE',
       status: x.status,
       participantStatus: x.campaignParticipant?.status,
       fundingDueAt: x.campaignParticipant?.fundingDueAt,
@@ -321,7 +331,7 @@ export class MarketplacePaymentService {
       },
       include: {
         campaign: { select: { title: true, slug: true } },
-        creator: { select: { displayName: true, slug: true } },
+        creator: { select: { displayName: true, slug: true, country: true } },
         business: { select: { name: true } },
         collaborationPayment: { include: { transfers: true, refunds: true } },
       },
@@ -339,11 +349,14 @@ export class MarketplacePaymentService {
         });
       return {
         campaignParticipantId: p.id,
-        ...this.calculate(p.agreedCompensationMinor, settings),
+        ...this.calculate(p.agreedCompensationMinor, settings, p.currencyCode),
+        platformFeeUsdMinor: convertMinor(this.calculate(p.agreedCompensationMinor, settings, p.currencyCode).platformFeeMinor, p.currencyCode, 'USD'),
+        settlement: settlementQuote(this.calculate(p.agreedCompensationMinor, settings, p.currencyCode).grossAmountMinor, p.currencyCode, this.provider.providerName),
         fundedAmountMinor: 0,
         refundedAmountMinor: 0,
         releasedAmountMinor: 0,
         currencyCode: p.currencyCode,
+        payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || p.creator.country === 'KE',
         status: "NOT_FUNDED",
         participantStatus: p.status,
         fundingDueAt: p.fundingDueAt,
@@ -360,7 +373,7 @@ export class MarketplacePaymentService {
       where: { id, business: { userId } },
       include: {
         campaign: { select: { title: true, slug: true } },
-        creator: { select: { displayName: true, slug: true } },
+        creator: { select: { displayName: true, slug: true, country: true } },
         business: { select: { name: true } },
         transfers: true,
         refunds: true,
@@ -380,7 +393,7 @@ export class MarketplacePaymentService {
       include: {
         campaign: { select: { title: true, slug: true } },
         business: { select: { name: true, slug: true } },
-        creator: { select: { displayName: true } },
+        creator: { select: { displayName: true, country: true } },
         transfers: true,
         refunds: true,
       },
@@ -618,6 +631,7 @@ export class MarketplacePaymentService {
         payment.providerPaymentIntentId,
         dto.amountMinor,
         `rivera-collaboration-refund-${draft.id}`,
+        payment.currencyCode,
       );
       if (result.status === "failed") {
         await this.db.collaborationRefund.update({
@@ -798,6 +812,8 @@ export class MarketplacePaymentService {
         paymentId: payment.providerPaymentIntentId,
         checkoutSessionId: payment.providerCheckoutSessionId,
       });
+      if (payment.provider === 'PAYSTACK' && state.checkoutSessionId !== payment.providerCheckoutSessionId)
+        this.fail(HttpStatus.CONFLICT, 'PAYMENT_REFERENCE_MISMATCH', 'Provider payment reference does not match.');
       if (state.status === "paid")
         await this.confirmFunding(
           payment.id,
@@ -860,13 +876,14 @@ export class MarketplacePaymentService {
     });
     if (!payment) return;
     if (payment.fundedAt) return;
+    const expected = settlementQuote(payment.grossAmountMinor, payment.currencyCode, payment.provider);
     if (
-      amount !== payment.grossAmountMinor ||
-      currency.toUpperCase() !== payment.currencyCode
+      amount !== expected.amountMinor ||
+      currency.toUpperCase() !== expected.currencyCode
     )
       this.fail(
         HttpStatus.CONFLICT,
-        amount !== payment.grossAmountMinor
+        amount !== expected.amountMinor
           ? "PAYMENT_AMOUNT_MISMATCH"
           : "PAYMENT_CURRENCY_MISMATCH",
         "Provider payment does not match the expected amount and currency.",
@@ -877,7 +894,7 @@ export class MarketplacePaymentService {
         where: { id, fundedAt: null },
         data: {
           status: "FUNDED",
-          fundedAmountMinor: amount,
+          fundedAmountMinor: payment.grossAmountMinor,
           fundedAt: now,
           providerPaymentIntentId:
             paymentIntentId ?? payment.providerPaymentIntentId,
@@ -938,8 +955,9 @@ export class MarketplacePaymentService {
           metadata: {
             participantId: payment.campaignParticipantId,
             paymentId: payment.id,
-            amountMinor: amount,
-            currencyCode: currency.toUpperCase(),
+            amountMinor: payment.grossAmountMinor,
+            currencyCode: payment.currencyCode,
+            settlement: expected,
           },
         },
       });
@@ -1122,6 +1140,16 @@ export class MarketplacePaymentService {
         event.type === "payment_intent.succeeded") &&
       id
     ) {
+      if (this.provider.providerName === 'PAYSTACK') {
+        const payment = await this.db.collaborationPayment.findUnique({ where: { id } });
+        if (!payment?.providerCheckoutSessionId || o.id !== payment.providerCheckoutSessionId)
+          this.fail(HttpStatus.CONFLICT, 'PAYMENT_REFERENCE_MISMATCH', 'Provider payment reference does not match.');
+        const verified = await this.provider.retrievePayment({ checkoutSessionId: payment.providerCheckoutSessionId });
+        if (verified.status !== 'paid' || verified.checkoutSessionId !== payment.providerCheckoutSessionId)
+          this.fail(HttpStatus.CONFLICT, 'PAYMENT_NOT_CONFIRMED', 'The provider has not confirmed this payment.');
+        await this.confirmFunding(id, verified.amountMinor, verified.currencyCode, verified.paymentId);
+        return true;
+      }
       await this.confirmFunding(
         id,
         Number(o.amount_total ?? o.amount_received ?? o.amount),

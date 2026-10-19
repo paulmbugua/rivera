@@ -20,6 +20,7 @@ import {
   VerifiedWebhook,
 } from "./payment.provider";
 import { MarketplacePaymentService } from "../payments/marketplace-payment.service";
+import { convertMinor, settlementQuote } from './currency-policy';
 
 const creatorProfileInclude = {
   user: { select: { email: true } },
@@ -219,6 +220,7 @@ export class ApplicationsService {
           id: p.id,
           amountMinor: p.amountMinor,
           currencyCode: p.currencyCode,
+          settlement: settlementQuote(p.amountMinor, p.currencyCode, p.provider),
           status: p.status,
           paidAt: p.paidAt,
           refundedAt: p.refundedAt,
@@ -320,6 +322,7 @@ export class ApplicationsService {
     return {
       amountMinor: fee.amountMinor,
       currencyCode: fee.currencyCode,
+      settlement: settlementQuote(fee.amountMinor, fee.currencyCode, this.provider.providerName),
       freeCreditAvailable: result.creator.freeApplicationCredits > 0,
       freeApplicationCredits: result.creator.freeApplicationCredits,
       canApply: result.canApply,
@@ -430,7 +433,8 @@ export class ApplicationsService {
     });
     return {
       application: this.ownDto(reviewed),
-      fee: { amountMinor: fee.amountMinor, currencyCode: fee.currencyCode },
+      fee: { amountMinor: fee.amountMinor, currencyCode: fee.currencyCode, settlement: settlementQuote(fee.amountMinor, fee.currencyCode, this.provider.providerName) },
+      payoutCountrySupported: this.provider.providerName !== 'PAYSTACK' || check.creator.country === 'KE',
       freeApplicationCredits: check.creator.freeApplicationCredits,
       warnings: check.advisoryWarnings,
       outsideBudget:
@@ -674,6 +678,7 @@ export class ApplicationsService {
         expiresAt,
         applicationFeeMinor: fee.amountMinor,
         applicationFeeCurrencyCode: fee.currencyCode,
+        settlement: settlementQuote(fee.amountMinor, fee.currencyCode, this.provider.providerName),
       };
     } catch (error) {
       await this.db.$transaction([
@@ -1321,7 +1326,14 @@ export class ApplicationsService {
         ),
         currencyCode: String(object.currency).toUpperCase(),
       };
-      await this.activatePayment(payment.id, state, `${this.provider.providerName.toLowerCase()}-webhook`);
+      // Verify with Paystack independently; signed metadata is routing, not proof of payment.
+      if (payment.provider === 'PAYSTACK' && object.id !== payment.providerCheckoutSessionId)
+        this.fail(HttpStatus.CONFLICT, 'PAYMENT_REFERENCE_MISMATCH', 'Provider payment reference does not match.');
+      const verified = payment.provider === 'PAYSTACK'
+        ? await this.provider.retrievePayment({ checkoutSessionId: payment.providerCheckoutSessionId })
+        : state;
+      if (verified.status !== 'paid') this.fail(HttpStatus.CONFLICT, 'PAYMENT_NOT_CONFIRMED', 'The provider has not confirmed this payment.');
+      await this.activatePayment(payment.id, verified, `${this.provider.providerName.toLowerCase()}-webhook`);
       return;
     }
     if (
@@ -1350,7 +1362,10 @@ export class ApplicationsService {
       },
     });
     if (payment.status === "PAID") return;
-    if (state.amountMinor !== payment.amountMinor) {
+    const expected = settlementQuote(payment.amountMinor, payment.currencyCode, payment.provider);
+    if (payment.provider === 'PAYSTACK' && state.checkoutSessionId !== payment.providerCheckoutSessionId)
+      this.fail(HttpStatus.CONFLICT, 'PAYMENT_REFERENCE_MISMATCH', 'Provider payment reference does not match.');
+    if (state.amountMinor !== expected.amountMinor) {
       await this.db.applicationPayment.update({
         where: { id: paymentId },
         data: {
@@ -1365,7 +1380,7 @@ export class ApplicationsService {
         "Payment amount requires support review.",
       );
     }
-    if (state.currencyCode !== payment.currencyCode) {
+    if (state.currencyCode !== expected.currencyCode) {
       await this.db.applicationPayment.update({
         where: { id: paymentId },
         data: {
@@ -1403,8 +1418,8 @@ export class ApplicationsService {
     }
     const updated = await this.db.$transaction(
       async (tx) => {
-        await tx.applicationPayment.update({
-          where: { id: paymentId },
+        const claimed = await tx.applicationPayment.updateMany({
+          where: { id: paymentId, status: { in: ['PENDING', 'PROCESSING', 'FAILED'] } },
           data: {
             status: "PAID",
             providerPaymentId: state.paymentId,
@@ -1414,6 +1429,7 @@ export class ApplicationsService {
             failureMessage: null,
           },
         });
+        if (!claimed.count) return null;
         const app = await tx.campaignApplication.update({
           where: { id: payment.applicationId },
           data: {
@@ -1431,6 +1447,7 @@ export class ApplicationsService {
           {
             amountMinor: payment.amountMinor,
             currencyCode: payment.currencyCode,
+            settlement: expected,
           },
         );
         await this.audit(
@@ -1438,7 +1455,7 @@ export class ApplicationsService {
           payment.applicationId,
           actorUserId,
           "APPLICATION_SUBMITTED",
-          { method: "STRIPE" },
+          { method: payment.provider },
         );
         await tx.notification.createMany({
           data: [
@@ -1464,7 +1481,7 @@ export class ApplicationsService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
-    void this.sendSubmissionEmails(updated);
+    if (updated) void this.sendSubmissionEmails(updated);
   }
   private async failPayment(paymentId: string, code: string) {
     const payment = await this.db.applicationPayment.findUniqueOrThrow({
@@ -1501,9 +1518,11 @@ export class ApplicationsService {
     const payment = await this.db.applicationPayment.findUniqueOrThrow({
       where: { id: paymentId },
     });
-    const reported = Number(
-      object.amount_refunded ?? object.amount ?? payment.amountMinor,
-    );
+    // Refund callbacks report settlement subunits; the ledger stays in contract currency.
+    if (payment.provider === 'PAYSTACK' && object.status !== 'succeeded') return;
+    const rawReported = Number(object.amount_refunded ?? object.amount ?? settlementQuote(payment.amountMinor, payment.currencyCode, payment.provider).amountMinor);
+    if (!Number.isSafeInteger(rawReported) || rawReported < 0) this.fail(HttpStatus.CONFLICT, 'REFUND_AMOUNT_INVALID', 'Invalid provider refund amount.');
+    const reported = payment.provider === 'PAYSTACK' ? convertMinor(rawReported, 'KES', payment.currencyCode) : rawReported;
     const refundedAmountMinor = Math.min(
       payment.amountMinor,
       Math.max(
@@ -1601,9 +1620,10 @@ export class ApplicationsService {
     return this.db.applicationFeeRule.create({
       data: {
         ...dto,
+        amountMinor: convertMinor(dto.amountMinor, dto.currencyCode, 'USD'),
         countryCode: dto.countryCode || null,
         categoryId: dto.categoryId || null,
-        currencyCode: dto.currencyCode.toUpperCase(),
+        currencyCode: 'USD',
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
         endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
       },
@@ -1620,9 +1640,10 @@ export class ApplicationsService {
       where: { id },
       data: {
         ...dto,
+        amountMinor: convertMinor(dto.amountMinor, dto.currencyCode, 'USD'),
         countryCode: dto.countryCode || null,
         categoryId: dto.categoryId || null,
-        currencyCode: dto.currencyCode.toUpperCase(),
+        currencyCode: 'USD',
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
         endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
       },
@@ -1745,6 +1766,7 @@ export class ApplicationsService {
         payment.providerPaymentId,
         payment.amountMinor,
         `rivera-refund-${payment.id}`,
+        payment.currencyCode,
       );
     } catch {
       this.fail(

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { convertMinor } from './currency-policy';
 
 @Injectable()
 export class ApplicationFeeService {
@@ -14,10 +15,8 @@ export class ApplicationFeeService {
     const rules = await this.db.applicationFeeRule.findMany({ where: { active: true, AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gt: now } }] }, { OR: [{ countryCode: null }, { countryCode: creator.country }] }, { OR: [{ categoryId: null }, { categoryId: { in: categoryIds } }] }] }, orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }] });
     const score = (rule: {countryCode:string|null;categoryId:string|null}) => rule.countryCode && rule.categoryId ? 4 : rule.countryCode ? 3 : rule.categoryId ? 2 : 1;
     const rule = rules.sort((a,b)=>score(b)-score(a)||b.priority-a.priority)[0];
-    if (rule) return { amountMinor: rule.amountMinor, currencyCode: rule.currencyCode, ruleId: rule.id };
-    const providerCurrency = process.env.PAYMENTS_PROVIDER === 'paystack'
-      ? (process.env.PAYSTACK_CURRENCY ?? 'KES')
-      : (process.env.DEFAULT_APPLICATION_FEE_CURRENCY ?? 'USD');
-    return { amountMinor: Number(process.env.DEFAULT_APPLICATION_FEE_MINOR ?? 300), currencyCode: providerCurrency.toUpperCase(), ruleId: null };
+    // Legacy KES rules retain their value; all new fee quotes are denominated in USD.
+    if (rule) return { amountMinor: convertMinor(rule.amountMinor, rule.currencyCode, 'USD'), currencyCode: 'USD', ruleId: rule.id };
+    return { amountMinor: convertMinor(Number(process.env.DEFAULT_APPLICATION_FEE_MINOR ?? 300), process.env.DEFAULT_APPLICATION_FEE_CURRENCY ?? 'USD', 'USD'), currencyCode: 'USD', ruleId: null };
   }
 }

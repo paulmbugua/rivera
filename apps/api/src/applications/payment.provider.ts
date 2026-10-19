@@ -16,7 +16,7 @@ export interface PaymentProviderAdapter {
   readonly payoutOnboardingMode:'HOSTED'|'MPESA';
   createCheckout(input:CheckoutInput):Promise<CheckoutResult>;
   retrievePayment(reference:{paymentId?:string|null;checkoutSessionId?:string|null}):Promise<ProviderPayment>;
-  refund(paymentId:string,amountMinor:number,idempotencyKey:string):Promise<ProviderRefund>;
+  refund(paymentId:string,amountMinor:number,idempotencyKey:string,currencyCode?:string):Promise<ProviderRefund>;
   retrieveRefund(refundId:string):Promise<ProviderRefund>;
   verifyWebhook(rawBody:Buffer,signature?:string):VerifiedWebhook;
   createConnectedAccount(input:{creatorId:string;countryCode:string;email:string;displayName:string;phoneNumber?:string}):Promise<ConnectedAccount>;
