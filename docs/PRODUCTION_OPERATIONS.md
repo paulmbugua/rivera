@@ -19,7 +19,7 @@ Email launch requires verified sending domains with SPF, DKIM and DMARC. Confirm
 1. Create and verify a database backup.
 2. Build immutable API and web images and run lint, type checks, tests and dependency audit.
 3. Deploy to staging and run the marketplace smoke suite.
-4. Run `pnpm --dir apps/api prisma:deploy` as a one-off migration job.
+4. Run `pnpm --dir apps/api prisma:deploy` as a one-off migration job. This also initializes missing categories, industries and content types. To repair missing lookup choices alone, run `pnpm --dir apps/api prisma:seed:reference`. This command preserves existing entries and does not create demo users or campaigns. Do not use the full development seed in production.
 5. Deploy the API, then verify `/api/v1/health` and `/api/v1/health/ready`.
 6. Deploy the web application behind HTTPS and a trusted reverse proxy.
 7. Verify the selected provider's webhook endpoint, signature and test event processing.

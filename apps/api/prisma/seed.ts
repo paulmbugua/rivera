@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import { hash } from 'bcryptjs';
+import { seedReferenceData } from './reference-data';
 
 const db = new PrismaClient();
 const development = process.env.NODE_ENV !== 'production';
@@ -16,14 +17,8 @@ async function seedUser(input: { email?: string; password?: string; firstName: s
   return db.user.create({ data: { email, passwordHash: await hash(input.password, 12), firstName: input.firstName, lastName: input.lastName, status: 'ACTIVE', emailVerifiedAt: new Date(), roles: { create: { role: input.role } } } });
 }
 
-const categoryNames = ['Technology','Fashion','Beauty','Food','Travel','Fitness','Sports','Gaming','Lifestyle','Finance','Business','Education','Automotive','Music','Entertainment','Parenting','Health & Wellness','Real Estate','Hospitality','Photography','Art & Design','Home & Living','Pets','Outdoor','Other'];
-const industryNames = ['Retail','Technology','Hospitality','Food & Beverage','Beauty & Cosmetics','Fashion','Automotive','Real Estate','Travel & Tourism','Education','Healthcare','Financial Services','Professional Services','Entertainment','Sports & Fitness','E-commerce','Consumer Goods','Construction','Events','Telecommunications','Other'];
-const contentNames = ['Short-form video','Long-form video','Instagram Reels','TikTok Videos','YouTube Videos','Stories','Photography','Product Reviews','Unboxing','UGC','Blog Articles','Livestreams','Podcasts','Tutorials','Testimonials','Event Coverage'];
-
 async function seedTaxonomy() {
-  for (const [sortOrder, name] of categoryNames.entries()) await db.category.upsert({ where: { slug: slug(name) }, create: { name, slug: slug(name), sortOrder }, update: { name, sortOrder, active: true } });
-  for (const [sortOrder, name] of industryNames.entries()) await db.industry.upsert({ where: { slug: slug(name) }, create: { name, slug: slug(name), sortOrder }, update: { name, sortOrder, active: true } });
-  for (const [sortOrder, name] of contentNames.entries()) await db.contentType.upsert({ where: { slug: slug(name) }, create: { name, slug: slug(name), sortOrder }, update: { name, sortOrder, active: true } });
+  await seedReferenceData(db);
 }
 
 const creatorFixtures = [
