@@ -1,0 +1,8 @@
+.campaign-summary-box .application-cta{display:flex;flex-direction:column;align-items:stretch;gap:14px;margin-top:22px}
+.campaign-summary-box .application-cta .button{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:46px;padding:11px 16px;border-radius:11px;font-size:13px;line-height:1.5;white-space:normal;text-align:center}
+.campaign-summary-box .application-cta .save-area{margin:0;padding-top:14px;border-top:1px solid var(--rivera-line)}
+.campaign-summary-box .application-cta .save-opportunity-button{background:transparent;border:1px solid var(--rivera-line);color:var(--rivera-ink);box-shadow:none;font-weight:550}
+.campaign-summary-box .application-cta .save-opportunity-button:hover{background:var(--rivera-soft);border-color:var(--rivera-green);transform:none}
+.campaign-summary-box .application-cta .save-opportunity-button[aria-pressed="true"]{background:var(--rivera-soft);border-color:var(--rivera-green)}
+.campaign-summary-box .application-cta .save-area p{color:var(--rivera-muted);font-size:11px;line-height:1.6;margin:8px 0 0}
+.campaign-summary-box .application-cta .form-error{font-size:12px;line-height:1.6;margin:10px 0 0}

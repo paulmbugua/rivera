@@ -172,8 +172,8 @@ export class CampaignsService {
     const [items,total] = await this.prisma.$transaction([this.prisma.campaign.findMany({ where, include: campaignInclude, orderBy, skip: (query.page-1)*query.limit, take: query.limit }), this.prisma.campaign.count({ where })]);
     return { items: items.map(item => this.publicDto(item)), pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total/query.limit) } };
   }
-  async publicDetail(slug: string) {
-    const campaign = await this.prisma.campaign.findFirst({ where: { slug, status: 'OPEN', visibility: { in: ['PUBLIC','UNLISTED'] }, deletedAt: null }, include: campaignInclude });
+  async publicDetail(identifier: string) {
+    const campaign = await this.prisma.campaign.findFirst({ where: { OR: [{ slug: identifier }, { id: identifier }], status: 'OPEN', visibility: { in: ['PUBLIC','UNLISTED'] }, deletedAt: null }, include: campaignInclude });
     if (!campaign) this.fail(HttpStatus.NOT_FOUND,'CAMPAIGN_NOT_FOUND','Campaign not found.');
     void this.prisma.campaign.update({ where: { id: campaign.id }, data: { viewCount: { increment: 1 } } }).catch(() => undefined);
     return this.publicDto(campaign);

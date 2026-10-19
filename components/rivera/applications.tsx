@@ -122,6 +122,7 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
     [review, setReview] = useState<Review | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [loadAttempt, setLoadAttempt] = useState(0),
     [form, setForm] = useState({
       proposedAmount: "",
       pitch: "",
@@ -131,10 +132,13 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
       feeConfirmed: false,
     });
   useEffect(() => {
-    api<Campaign>(`/campaigns/${campaignId}`)
-      .then(setCampaign)
-      .catch((e) => setError(errorText(e)));
-  }, [campaignId]);
+    let cancelled=false;
+    setError('');
+    api<Campaign>(`/campaigns/${encodeURIComponent(campaignId)}`)
+      .then(value=>{if(!cancelled)setCampaign(value)})
+      .catch((e) => {if(!cancelled)setError(errorText(e))});
+    return()=>{cancelled=true};
+  }, [campaignId,loadAttempt]);
   const payload = () => ({
     proposedAmountMinor: majorToMinor(
       Number(form.proposedAmount),
@@ -221,7 +225,8 @@ export function ProposalForm({ campaignId }: { campaignId: string }) {
   if (!campaign)
     return (
       <main className="application-shell">
-        <p>{error || "Loading Campaign…"}</p>
+        <Link href="/dashboard/creator/opportunities">← Browse opportunities</Link>
+        {error?<section className="application-panel"><h1>We couldn’t open this campaign</h1><p role="alert" className="form-error">{error}</p><p>It may no longer be available. You can try again or browse other opportunities.</p><button type="button" className="button secondary" onClick={()=>setLoadAttempt(value=>value+1)}>Try again</button></section>:<p role="status">Loading campaign…</p>}
       </main>
     );
   return (
