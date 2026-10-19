@@ -166,6 +166,23 @@ test('Wise manual payouts: real PostgreSQL lifecycle and concurrency',{skip:!pro
       assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).status,'SETTLED');
       await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'WISE',providerAccountId:`wise-manual:${creator.id}`}});
     });
+    await t.test('a post-provider database failure recovers into reconciliation without another send',async()=>{
+      const p=await paymentFixture();await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'PAYSTACK',providerAccountId:'RCP_TEST_ONLY'}});
+      let sends=0,reference='',failCommit=true,paid=false;
+      const provider={providerName:'PAYSTACK',createTransfer:async()=>{sends++;return {transferId:reference,status:'pending'};},retrieveTransfer:async()=>({transferId:reference,status:paid?'succeeded':'pending',amountMinor:1300000,currencyCode:'KES',recipientAccountId:'RCP_TEST_ONLY'})};
+      const recovering=new Proxy(db,{get(target,key){if(key==='$transaction')return (...args:any[])=>{if(Array.isArray(args[0])&&failCommit){failCommit=false;return Promise.reject(new Error('Synthetic interrupted database commit'));}return (target.$transaction as any)(...args);};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});
+      const payments=new MarketplacePaymentService(recovering as never,provider as never,wise);const queued=await payments.release(businessUser.id,p.id);
+      reference=(await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).providerTransferId;
+      await db.creatorTransfer.update({where:{id:queued.id},data:{scheduledFor:new Date(Date.now()-1000)}});await payments.dispatchScheduledPayout(queued.id);
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).status,'PROCESSING');
+      assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).status,'PAYOUT_PENDING');
+      await payments.dispatchScheduledPayout(queued.id);assert.equal(sends,1);
+      assert.equal((await db.creatorTransfer.findUniqueOrThrow({where:{id:queued.id}})).status,'PENDING');
+      assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).status,'RELEASE_PENDING');
+      paid=true;await payments.reconcile(p.id);assert.equal(sends,1);
+      assert.equal((await db.collaborationPayment.findUniqueOrThrow({where:{id:p.id}})).status,'SETTLED');
+      await db.creatorPayoutAccount.update({where:{id:accountId},data:{provider:'WISE',providerAccountId:`wise-manual:${creator.id}`}});
+    });
     await t.test('Kenyan creators retain the M-Pesa setup',async()=>{
       const kenyanUser=await user('CREATOR');await db.creatorProfile.create({data:{userId:kenyanUser.id,slug:`kenyan-${suffix}`,displayName:'Kenyan Creator',country:'KE',bio:'Test'}});
       const account=await market.payoutAccount(kenyanUser.id);assert.equal(account.provider,'PAYSTACK');assert.equal(account.setupMode,'MPESA');

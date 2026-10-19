@@ -591,8 +591,12 @@ export class MarketplacePaymentService {
         if(!dispatch.verifyOnly)state=await this.provider.retrieveTransfer(dispatch.providerTransferId);
         this.verifyScheduledTransfer(dispatch,state);
       }
-      await this.db.creatorTransfer.updateMany({where:{id,status:'PROCESSING'},data:{providerTransferId:state.transferId,status:'PENDING',lastCheckedAt:now,failureCode:null,failureMessage:null}});
-      await this.db.collaborationPayment.updateMany({where:{id:dispatch.collaborationPaymentId,status:'PAYOUT_PENDING'},data:{status:'RELEASE_PENDING'}});
+      // Commit both states together: a crash must not strand a provider-pending payout
+      // outside the reconciliation queue.
+      await this.db.$transaction([
+        this.db.creatorTransfer.updateMany({where:{id,status:'PROCESSING'},data:{providerTransferId:state.transferId,status:'PENDING',lastCheckedAt:now,failureCode:null,failureMessage:null}}),
+        this.db.collaborationPayment.updateMany({where:{id:dispatch.collaborationPaymentId,status:'PAYOUT_PENDING'},data:{status:'RELEASE_PENDING'}}),
+      ]);
       await this.applyTransferState(id,state.status,state.failureCode,state.failureMessage);
     }catch{
       await this.db.creatorTransfer.updateMany({where:{id,status:'PROCESSING'},data:{lastCheckedAt:now,failureCode:'PAYOUT_VERIFICATION_REQUIRED',failureMessage:'Provider outcome is uncertain. Verify the existing reference; do not send again.'}});
