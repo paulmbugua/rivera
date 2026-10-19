@@ -82,6 +82,7 @@ test('USD fixed platform fee converts to KES without changing creator compensati
   const service=new MarketplacePaymentService({} as never,{} as never) as any;
   assert.deepEqual(service.calculate(10000,{basisPoints:1000,fixedMinor:100},'USD'),{grossAmountMinor:11100,platformFeeMinor:1100,creatorNetMinor:10000});
   assert.deepEqual(service.calculate(1300000,{basisPoints:1000,fixedMinor:100},'KES'),{grossAmountMinor:1443000,platformFeeMinor:143000,creatorNetMinor:1300000});
+  assert.deepEqual(service.calculate(10000,{basisPoints:1000,fixedMinor:0},'KES'),{grossAmountMinor:11040,platformFeeMinor:1040,creatorNetMinor:10000});
 });
 function fundingFixture(currency='USD',gross=11000){
   const row:any={id:'p1',provider:'PAYSTACK',grossAmountMinor:gross,currencyCode:currency,fundedAt:null,campaignParticipantId:'pt1',creatorId:'c1',businessId:'b1',campaignParticipant:{applicationId:'a1',creator:{userId:'cu1'},business:{userId:'bu1'},application:{conversation:null}}};

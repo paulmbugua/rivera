@@ -3,7 +3,7 @@ import { HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { ApiException } from "../common/api-error";
-import { convertMinor, settlementQuote } from '../applications/currency-policy';
+import { convertMinor, settlementQuote, USD_KES_RATE } from '../applications/currency-policy';
 import {
   PAYMENT_PROVIDER,
   PaymentProviderAdapter,
@@ -87,9 +87,11 @@ export class MarketplacePaymentService {
     settings: { basisPoints: number; fixedMinor: number; policy: string },
     currencyCode = 'USD',
   ) {
-    const fee =
-      Math.floor((compensation * settings.basisPoints + 9999) / 10000) +
-      convertMinor(settings.fixedMinor, 'USD', currencyCode);
+    // Price the whole fee in USD cents first, rounding up once. In a KES
+    // contract the resulting fee is therefore an exact multiple of the rate.
+    const divisor = 10000 * (currencyCode === 'KES' ? USD_KES_RATE : 1);
+    const feeUsd = Math.floor((compensation * settings.basisPoints + divisor - 1) / divisor) + settings.fixedMinor;
+    const fee = convertMinor(feeUsd, 'USD', currencyCode);
     return {
       grossAmountMinor: compensation + fee,
       platformFeeMinor: fee,
