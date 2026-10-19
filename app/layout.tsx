@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./product-scale.css";
 import { AuthProvider } from "@/components/rivera/auth-provider";
 import { ThemeProvider } from "@/components/rivera/theme-provider";
 import {

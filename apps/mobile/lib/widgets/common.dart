@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+export 'responsive.dart';
 
 import '../core/theme.dart';
 

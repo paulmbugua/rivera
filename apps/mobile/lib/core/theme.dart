@@ -27,22 +27,33 @@ ThemeData riveraTheme([Brightness brightness = Brightness.light]) {
     brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: canvas,
-    fontFamily: 'Georgia',
+    fontFamily: 'Arial',
     textTheme: TextTheme(
-      displaySmall: TextStyle(fontSize: 40, height: 1.05, color: ink),
-      headlineMedium: TextStyle(fontSize: 30, height: 1.1, color: ink),
+      displaySmall: TextStyle(
+          fontSize: 30,
+          height: 1.15,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -.7,
+          color: ink),
+      headlineMedium: TextStyle(
+          fontSize: 25,
+          height: 1.2,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -.5,
+          color: ink),
       titleLarge: TextStyle(
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: FontWeight.w700,
         color: ink,
       ),
       bodyLarge: TextStyle(
         fontFamily: 'Arial',
-        fontSize: 16,
+        fontSize: 15,
         height: 1.45,
         color: ink,
       ),
-      bodyMedium: TextStyle(fontFamily: 'Arial', height: 1.4, color: ink),
+      bodyMedium:
+          TextStyle(fontFamily: 'Arial', fontSize: 14, height: 1.5, color: ink),
       labelLarge: const TextStyle(
         fontFamily: 'Arial',
         fontWeight: FontWeight.w700,
@@ -55,31 +66,32 @@ ThemeData riveraTheme([Brightness brightness = Brightness.light]) {
         color: dark ? const Color(0xFF91A69F) : const Color(0xFF71817B),
       ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: line),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: line),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: scheme.primary, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     ),
     cardTheme: CardThemeData(
       elevation: 0,
       color: surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: line),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(54),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        minimumSize: const Size.fromHeight(48),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(
           fontFamily: 'Arial',
           fontWeight: FontWeight.w700,
@@ -88,11 +100,19 @@ ThemeData riveraTheme([Brightness brightness = Brightness.light]) {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         side: BorderSide(color: line),
       ),
     ),
     appBarTheme: AppBarTheme(
+      toolbarHeight: 56,
+      titleTextStyle: TextStyle(
+          fontFamily: 'Arial',
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: ink),
       elevation: 0,
       centerTitle: false,
       backgroundColor: canvas,
@@ -100,6 +120,7 @@ ThemeData riveraTheme([Brightness brightness = Brightness.light]) {
       surfaceTintColor: Colors.transparent,
     ),
     navigationBarTheme: NavigationBarThemeData(
+      height: 72,
       backgroundColor: surface,
       indicatorColor: dark ? const Color(0xFF294A41) : const Color(0xFFD8EBE5),
       labelTextStyle: const WidgetStatePropertyAll(

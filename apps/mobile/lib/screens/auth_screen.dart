@@ -40,13 +40,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String get title => switch (mode) {
-    AuthMode.login => 'Welcome back',
-    AuthMode.register => 'Create your account',
-    AuthMode.forgot => 'Reset your password',
-    AuthMode.verify => 'Verify your email',
-    AuthMode.reset => 'Choose a new password',
-    AuthMode.reactivate => 'Reactivate your account',
-  };
+        AuthMode.login => 'Welcome back',
+        AuthMode.register => 'Create your account',
+        AuthMode.forgot => 'Reset your password',
+        AuthMode.verify => 'Verify your email',
+        AuthMode.reset => 'Choose a new password',
+        AuthMode.reactivate => 'Reactivate your account',
+      };
 
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
@@ -188,11 +188,12 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
+        child: RiveraPage(
+          maxWidth: RiveraLayout.authWidth,
+          top: 8,
           children: [
             const RiveraLogo(),
-            const SizedBox(height: 34),
+            const SizedBox(height: 24),
             Eyebrow(
               mode == AuthMode.login
                   ? 'Rivera account'
@@ -207,7 +208,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   : 'We’ll keep this thoughtful, clear and secure.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
             Form(
               key: formKey,
               child: Column(
@@ -386,15 +387,15 @@ class _AuthScreenState extends State<AuthScreen> {
     TextInputType? keyboard,
     String? Function(String?)? validator,
     Widget? suffix,
-  }) => TextFormField(
-    controller: controller,
-    obscureText: obscure,
-    keyboardType: keyboard,
-    validator:
-        validator ??
-        (v) => v == null || v.trim().isEmpty ? '$label is required' : null,
-    decoration: InputDecoration(labelText: label, suffixIcon: suffix),
-  );
+  }) =>
+      TextFormField(
+        controller: controller,
+        obscureText: obscure,
+        keyboardType: keyboard,
+        validator: validator ??
+            (v) => v == null || v.trim().isEmpty ? '$label is required' : null,
+        decoration: InputDecoration(labelText: label, suffixIcon: suffix),
+      );
 }
 
 class GoogleRegistrationScreen extends StatefulWidget {
@@ -456,63 +457,63 @@ class _GoogleRegistrationScreenState extends State<GoogleRegistrationScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Complete your account')),
-    body: ListView(
-      padding: const EdgeInsets.all(22),
-      children: [
-        const Eyebrow('Google, then Rivera'),
-        const SizedBox(height: 12),
-        Text(
-          'Choose your Rivera path.',
-          style: Theme.of(context).textTheme.displaySmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          widget.pending['email']?.toString() ?? '',
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 24),
-        TextField(
-          controller: first,
-          decoration: const InputDecoration(labelText: 'First name'),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: last,
-          decoration: const InputDecoration(labelText: 'Last name'),
-        ),
-        const SizedBox(height: 18),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(
-              value: 'CREATOR',
-              label: Text('Creator'),
-              icon: Icon(Icons.auto_awesome_outlined),
+        appBar: AppBar(title: const Text('Complete your account')),
+        body: RiveraPage(
+          maxWidth: RiveraLayout.authWidth,
+          children: [
+            const Eyebrow('Google, then Rivera'),
+            const SizedBox(height: 12),
+            Text(
+              'Choose your Rivera path.',
+              style: Theme.of(context).textTheme.displaySmall,
             ),
-            ButtonSegment(
-              value: 'BUSINESS',
-              label: Text('Business'),
-              icon: Icon(Icons.storefront_outlined),
+            const SizedBox(height: 8),
+            Text(
+              widget.pending['email']?.toString() ?? '',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: first,
+              decoration: const InputDecoration(labelText: 'First name'),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: last,
+              decoration: const InputDecoration(labelText: 'Last name'),
+            ),
+            const SizedBox(height: 18),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'CREATOR',
+                  label: Text('Creator'),
+                  icon: Icon(Icons.auto_awesome_outlined),
+                ),
+                ButtonSegment(
+                  value: 'BUSINESS',
+                  label: Text('Business'),
+                  icon: Icon(Icons.storefront_outlined),
+                ),
+              ],
+              selected: {role},
+              onSelectionChanged: (value) => setState(() => role = value.first),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: terms,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text(
+                'I agree to Rivera’s Terms of Service and Privacy Policy.',
+              ),
+              onChanged: (value) => setState(() => terms = value ?? false),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: widget.controller.busy ? null : save,
+              child: const Text('Create account & send activation'),
             ),
           ],
-          selected: {role},
-          onSelectionChanged: (value) => setState(() => role = value.first),
         ),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: terms,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: const Text(
-            'I agree to Rivera’s Terms of Service and Privacy Policy.',
-          ),
-          onChanged: (value) => setState(() => terms = value ?? false),
-        ),
-        const SizedBox(height: 14),
-        FilledButton(
-          onPressed: widget.controller.busy ? null : save,
-          child: const Text('Create account & send activation'),
-        ),
-      ],
-    ),
-  );
+      );
 }

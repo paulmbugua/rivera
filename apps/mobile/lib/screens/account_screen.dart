@@ -12,8 +12,7 @@ class AccountScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = controller.user!;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 34),
+    return RiveraPage(
       children: [
         const SectionHeading(
           eyebrow: 'Your Rivera',
@@ -343,8 +342,7 @@ class _AccountEditorState extends State<AccountEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Account details')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+        body: RiveraPage(
           children: [
             Center(
               child: Column(
@@ -479,8 +477,7 @@ class _MarketplaceProfileEditorState extends State<MarketplaceProfileEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Marketplace profile')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+        body: RiveraPage(
           children: [
             SectionHeading(
               eyebrow: '${p['profileCompletion'] ?? 0}% complete',
@@ -591,8 +588,8 @@ class _PasswordScreenState extends State<PasswordScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Change password')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+        body: RiveraPage(
+          maxWidth: RiveraLayout.authWidth,
           children: [
             const SectionHeading(
               eyebrow: 'Protect your work',

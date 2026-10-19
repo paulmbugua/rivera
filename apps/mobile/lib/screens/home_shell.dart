@@ -18,6 +18,7 @@ class _HomeShellState extends State<HomeShell> {
   int index = 0;
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 840;
     final pages = [
       DashboardScreen(
         controller: widget.controller,
@@ -30,39 +31,65 @@ class _HomeShellState extends State<HomeShell> {
     ];
     return Scaffold(
       body: SafeArea(
-        child: IndexedStack(index: index, children: pages),
+        child: Row(children: [
+          if (wide)
+            NavigationRail(
+              selectedIndex: index,
+              onDestinationSelected: (value) => setState(() => index = value),
+              labelType: NavigationRailLabelType.all,
+              destinations: const [
+                NavigationRailDestination(
+                    icon: Icon(Icons.home_outlined), label: Text('Home')),
+                NavigationRailDestination(
+                    icon: Icon(Icons.explore_outlined),
+                    label: Text('Discover')),
+                NavigationRailDestination(
+                    icon: Icon(Icons.work_outline_rounded),
+                    label: Text('Work')),
+                NavigationRailDestination(
+                    icon: Icon(Icons.account_balance_wallet_outlined),
+                    label: Text('Money')),
+                NavigationRailDestination(
+                    icon: Icon(Icons.person_outline_rounded),
+                    label: Text('You')),
+              ],
+            ),
+          Expanded(child: IndexedStack(index: index, children: pages)),
+        ]),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) => setState(() => index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.explore_outlined),
-            selectedIcon: Icon(Icons.explore_rounded),
-            label: 'Discover',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.work_outline_rounded),
-            selectedIcon: Icon(Icons.work_rounded),
-            label: 'Work',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-            label: 'Money',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'You',
-          ),
-        ],
-      ),
+      bottomNavigationBar: wide
+          ? null
+          : NavigationBar(
+              selectedIndex: index,
+              onDestinationSelected: (value) => setState(() => index = value),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.explore_outlined),
+                  selectedIcon: Icon(Icons.explore_rounded),
+                  label: 'Discover',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.work_outline_rounded),
+                  selectedIcon: Icon(Icons.work_rounded),
+                  label: 'Work',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.account_balance_wallet_outlined),
+                  selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+                  label: 'Money',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: 'You',
+                ),
+              ],
+            ),
     );
   }
 }

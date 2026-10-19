@@ -29,8 +29,8 @@ class DashboardScreen extends StatelessWidget {
             : _creatorStats();
     return RefreshIndicator(
       onRefresh: controller.refreshWorkspace,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+      child: RiveraPage(
+        maxWidth: RiveraLayout.contentWidth,
         children: [
           Row(
             children: [

@@ -149,10 +149,10 @@ class _PublicMarketplaceScreenState extends State<PublicMarketplaceScreen>
       ],
     );
     return widget.embedded
-        ? body
+        ? RiveraContent(child: body)
         : Scaffold(
             appBar: AppBar(backgroundColor: riveraCream),
-            body: SafeArea(child: body),
+            body: SafeArea(child: RiveraContent(child: body)),
           );
   }
 }
@@ -414,8 +414,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     final business = mapOf(item['business']);
     return Scaffold(
       appBar: AppBar(title: const RiveraLogo()),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      body: RiveraPage(
         children: [
           Eyebrow(textOf(business, ['name'], 'Rivera opportunity')),
           const SizedBox(height: 12),
@@ -533,8 +532,7 @@ class CreatorDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const RiveraLogo()),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+        body: RiveraPage(
           children: [
             Center(
               child: CircleAvatar(
@@ -670,8 +668,7 @@ class _ApplicationComposerState extends State<ApplicationComposer> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Your proposal')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+        body: RiveraPage(
           children: [
             const Eyebrow('Make a thoughtful first impression'),
             const SizedBox(height: 12),

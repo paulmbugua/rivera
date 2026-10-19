@@ -25,8 +25,8 @@ class NotificationsScreen extends StatelessWidget {
         body: RefreshIndicator(
           onRefresh: controller.refreshNotifications,
           child: controller.notifications.isEmpty
-              ? ListView(
-                  children: const [
+              ? const RiveraPage(
+                  children: [
                     SizedBox(height: 130),
                     RiveraEmpty(
                       icon: Icons.notifications_active_outlined,
@@ -37,7 +37,7 @@ class NotificationsScreen extends StatelessWidget {
                   ],
                 )
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  padding: RiveraLayout.insets(context, top: 12),
                   itemCount: controller.notifications.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 9),
                   itemBuilder: (context, index) {
@@ -83,7 +83,8 @@ class NotificationsScreen extends StatelessWidget {
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            textOf(item, ['title'], 'Rivera update'),
+                                            textOf(item, ['title'],
+                                                'Rivera update'),
                                             style: const TextStyle(
                                               fontWeight: FontWeight.w800,
                                             ),
@@ -211,8 +212,8 @@ class _NotificationPreferencesScreenState
         appBar: AppBar(title: const Text('Notification preferences')),
         body: loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
+            : RiveraPage(
+                top: 12,
                 children: [
                   const SectionHeading(
                     eyebrow: 'Your attention, your choice',
@@ -274,8 +275,7 @@ class _NotificationPreferencesScreenState
                   : Icons.inbox_outlined,
           size: 17,
         ),
-        onSelected: item['critical'] == true
-            ? null
-            : (_) => _toggle(item, field),
+        onSelected:
+            item['critical'] == true ? null : (_) => _toggle(item, field),
       );
 }

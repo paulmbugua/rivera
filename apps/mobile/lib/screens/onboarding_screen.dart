@@ -70,8 +70,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final business = widget.controller.user!.isBusiness;
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(22),
+        child: RiveraPage(
           children: [
             const RiveraLogo(),
             const SizedBox(height: 34),

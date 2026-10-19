@@ -313,8 +313,7 @@ class WorkspaceScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+  Widget build(BuildContext context) => RiveraPage(
         children: [
           SectionHeading(
             eyebrow: financeOnly
@@ -360,9 +359,11 @@ class WorkspaceScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => feature.path == '/creators/me/payout-account'
-                        ? PayoutSetupScreen(controller: controller)
-                        : CollectionScreen(controller: controller, feature: feature),
+                    builder: (_) =>
+                        feature.path == '/creators/me/payout-account'
+                            ? PayoutSetupScreen(controller: controller)
+                            : CollectionScreen(
+                                controller: controller, feature: feature),
                   ),
                 ),
               ),
@@ -394,7 +395,8 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
 
   Future<void> load() async {
     try {
-      account = mapOf(await widget.controller.fetch('/creators/me/payout-account'));
+      account =
+          mapOf(await widget.controller.fetch('/creators/me/payout-account'));
       error = null;
     } catch (e) {
       error = e.toString();
@@ -405,12 +407,19 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
 
   Future<void> connect() async {
     if (phone.text.trim().isEmpty) {
-      setState(() => error = 'Enter the Kenyan M-Pesa number that should receive your earnings.');
+      setState(() => error =
+          'Enter the Kenyan M-Pesa number that should receive your earnings.');
       return;
     }
-    setState(() { saving = true; error = null; });
+    setState(() {
+      saving = true;
+      error = null;
+    });
     try {
-      await widget.controller.send('POST', '/creators/me/payout-account/onboard', {'phoneNumber': phone.text.trim()});
+      await widget.controller.send(
+          'POST',
+          '/creators/me/payout-account/onboard',
+          {'phoneNumber': phone.text.trim()});
       phone.clear();
       await load();
     } catch (e) {
@@ -433,12 +442,12 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
       appBar: AppBar(title: const Text('Payout account')),
       body: loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(20),
+          : RiveraPage(
               children: [
                 const Eyebrow('RIVERA EARNINGS'),
                 const SizedBox(height: 12),
-                Text(active ? 'Ready for payouts' : 'Connect M-Pesa', style: Theme.of(context).textTheme.headlineMedium),
+                Text(active ? 'Ready for payouts' : 'Connect M-Pesa',
+                    style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 10),
                 Text(active
                     ? 'Your Paystack recipient is ready to receive approved Rivera earnings in KES.'
@@ -449,18 +458,27 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
                     controller: phone,
                     keyboardType: TextInputType.phone,
                     autofillHints: const [AutofillHints.telephoneNumber],
-                    decoration: const InputDecoration(labelText: 'M-Pesa number', hintText: '+254712345678', prefixIcon: Icon(Icons.phone_android_rounded)),
+                    decoration: const InputDecoration(
+                        labelText: 'M-Pesa number',
+                        hintText: '+254712345678',
+                        prefixIcon: Icon(Icons.phone_android_rounded)),
                   ),
                   const SizedBox(height: 14),
                   FilledButton.icon(
                     onPressed: saving ? null : connect,
-                    icon: saving ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.verified_user_outlined),
+                    icon: saving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.verified_user_outlined),
                     label: Text(saving ? 'Connecting…' : 'Connect M-Pesa'),
                   ),
                 ],
                 if (error != null) ...[
                   const SizedBox(height: 16),
-                  Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
                 ],
               ],
             ),
@@ -535,7 +553,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
       body = RefreshIndicator(
         onRefresh: load,
         child: ListView.separated(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+          padding: RiveraLayout.insets(context,
+              top: 12, bottom: 100, maxWidth: RiveraLayout.contentWidth),
           itemCount: items.length,
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (_, i) {
@@ -647,8 +666,7 @@ class DetailView extends StatelessWidget {
   final Map<String, dynamic> data;
   final AppController controller;
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(20),
+  Widget build(BuildContext context) => RiveraPage(
         children: [
           const Eyebrow('Live Rivera record'),
           const SizedBox(height: 10),
@@ -775,8 +793,7 @@ class _CampaignEditorState extends State<CampaignEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('New campaign')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+        body: RiveraPage(
           children: [
             const SectionHeading(
               eyebrow: 'Start with clarity',
