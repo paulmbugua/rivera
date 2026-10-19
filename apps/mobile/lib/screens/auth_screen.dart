@@ -5,7 +5,7 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
 
-enum AuthMode { login, register, forgot, verify, reset }
+enum AuthMode { login, register, forgot, verify, reset, reactivate }
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({
@@ -40,12 +40,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String get title => switch (mode) {
-        AuthMode.login => 'Welcome back',
-        AuthMode.register => 'Create your account',
-        AuthMode.forgot => 'Reset your password',
-        AuthMode.verify => 'Verify your email',
-        AuthMode.reset => 'Choose a new password',
-      };
+    AuthMode.login => 'Welcome back',
+    AuthMode.register => 'Create your account',
+    AuthMode.forgot => 'Reset your password',
+    AuthMode.verify => 'Verify your email',
+    AuthMode.reset => 'Choose a new password',
+    AuthMode.reactivate => 'Reactivate your account',
+  };
 
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
@@ -100,9 +101,28 @@ class _AuthScreenState extends State<AuthScreen> {
             showRiveraMessage(context, 'Password updated. Welcome back.');
           }
           break;
+        case AuthMode.reactivate:
+          await widget.controller.requestReactivation(email.text);
+          if (mounted) {
+            showRiveraMessage(
+              context,
+              'If a deactivated account exists for this email, reactivation instructions have been sent.',
+            );
+          }
+          break;
       }
     } on ApiException catch (e) {
-      if (mounted) showRiveraMessage(context, e.message, error: true);
+      if (!mounted) return;
+      if (e.code == 'ACCOUNT_DEACTIVATED') {
+        setState(() => mode = AuthMode.reactivate);
+        showRiveraMessage(
+          context,
+          'This Rivera account is deactivated. Request a secure reactivation link to continue.',
+          error: true,
+        );
+      } else {
+        showRiveraMessage(context, e.message, error: true);
+      }
     }
   }
 
@@ -115,7 +135,9 @@ class _AuthScreenState extends State<AuthScreen> {
       } else if (result['status'] == 'verification_required') {
         setState(() => mode = AuthMode.verify);
         showRiveraMessage(
-            context, 'Activate your Rivera account from the email we sent.');
+          context,
+          'Activate your Rivera account from the email we sent.',
+        );
       } else {
         await Navigator.push(
           context,
@@ -128,7 +150,17 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
     } on ApiException catch (e) {
-      if (mounted) showRiveraMessage(context, e.message, error: true);
+      if (!mounted) return;
+      if (e.code == 'ACCOUNT_DEACTIVATED') {
+        setState(() => mode = AuthMode.reactivate);
+        showRiveraMessage(
+          context,
+          'This Rivera account is deactivated. Request a secure reactivation link to continue.',
+          error: true,
+        );
+      } else {
+        showRiveraMessage(context, e.message, error: true);
+      }
     }
   }
 
@@ -194,6 +226,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     AuthMode.login,
                     AuthMode.register,
                     AuthMode.forgot,
+                    AuthMode.reactivate,
                   ].contains(mode))
                     _field(
                       email,
@@ -299,6 +332,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             AuthMode.forgot => 'Send reset link',
                             AuthMode.verify => 'Verify email',
                             AuthMode.reset => 'Reset password',
+                            AuthMode.reactivate => 'Send reactivation link',
                           }),
                   ),
                   if ([AuthMode.login, AuthMode.register].contains(mode)) ...[
@@ -352,20 +386,23 @@ class _AuthScreenState extends State<AuthScreen> {
     TextInputType? keyboard,
     String? Function(String?)? validator,
     Widget? suffix,
-  }) =>
-      TextFormField(
-        controller: controller,
-        obscureText: obscure,
-        keyboardType: keyboard,
-        validator: validator ??
-            (v) => v == null || v.trim().isEmpty ? '$label is required' : null,
-        decoration: InputDecoration(labelText: label, suffixIcon: suffix),
-      );
+  }) => TextFormField(
+    controller: controller,
+    obscureText: obscure,
+    keyboardType: keyboard,
+    validator:
+        validator ??
+        (v) => v == null || v.trim().isEmpty ? '$label is required' : null,
+    decoration: InputDecoration(labelText: label, suffixIcon: suffix),
+  );
 }
 
 class GoogleRegistrationScreen extends StatefulWidget {
-  const GoogleRegistrationScreen(
-      {super.key, required this.controller, required this.pending});
+  const GoogleRegistrationScreen({
+    super.key,
+    required this.controller,
+    required this.pending,
+  });
   final AppController controller;
   final Map<String, dynamic> pending;
   @override
@@ -375,31 +412,42 @@ class GoogleRegistrationScreen extends StatefulWidget {
 
 class _GoogleRegistrationScreenState extends State<GoogleRegistrationScreen> {
   late final first = TextEditingController(
-      text: widget.pending['firstName']?.toString() ?? '');
-  late final last =
-      TextEditingController(text: widget.pending['lastName']?.toString() ?? '');
+    text: widget.pending['firstName']?.toString() ?? '',
+  );
+  late final last = TextEditingController(
+    text: widget.pending['lastName']?.toString() ?? '',
+  );
   String role = 'CREATOR';
   bool terms = false;
   Future<void> save() async {
     if (first.text.trim().isEmpty || last.text.trim().isEmpty) {
-      showRiveraMessage(context, 'Enter your first and last name.',
-          error: true);
+      showRiveraMessage(
+        context,
+        'Enter your first and last name.',
+        error: true,
+      );
       return;
     }
     if (!terms) {
-      showRiveraMessage(context, 'Please accept the Terms and Privacy Policy.',
-          error: true);
+      showRiveraMessage(
+        context,
+        'Please accept the Terms and Privacy Policy.',
+        error: true,
+      );
       return;
     }
     try {
       await widget.controller.completeGoogleRegistration(
-          token: widget.pending['token'].toString(),
-          firstName: first.text,
-          lastName: last.text,
-          accountType: role);
+        token: widget.pending['token'].toString(),
+        firstName: first.text,
+        lastName: last.text,
+        accountType: role,
+      );
       if (!mounted) return;
       showRiveraMessage(
-          context, 'Account created. Check your email to activate Rivera.');
+        context,
+        'Account created. Check your email to activate Rivera.',
+      );
       Navigator.popUntil(context, (route) => route.isFirst);
     } on ApiException catch (e) {
       if (mounted) showRiveraMessage(context, e.message, error: true);
@@ -408,46 +456,63 @@ class _GoogleRegistrationScreenState extends State<GoogleRegistrationScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: const Text('Complete your account')),
-      body: ListView(padding: const EdgeInsets.all(22), children: [
+    appBar: AppBar(title: const Text('Complete your account')),
+    body: ListView(
+      padding: const EdgeInsets.all(22),
+      children: [
         const Eyebrow('Google, then Rivera'),
         const SizedBox(height: 12),
-        Text('Choose your Rivera path.',
-            style: Theme.of(context).textTheme.displaySmall),
+        Text(
+          'Choose your Rivera path.',
+          style: Theme.of(context).textTheme.displaySmall,
+        ),
         const SizedBox(height: 8),
-        Text(widget.pending['email']?.toString() ?? '',
-            style: Theme.of(context).textTheme.bodyLarge),
+        Text(
+          widget.pending['email']?.toString() ?? '',
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
         const SizedBox(height: 24),
         TextField(
-            controller: first,
-            decoration: const InputDecoration(labelText: 'First name')),
+          controller: first,
+          decoration: const InputDecoration(labelText: 'First name'),
+        ),
         const SizedBox(height: 14),
         TextField(
-            controller: last,
-            decoration: const InputDecoration(labelText: 'Last name')),
+          controller: last,
+          decoration: const InputDecoration(labelText: 'Last name'),
+        ),
         const SizedBox(height: 18),
-        SegmentedButton<String>(segments: const [
-          ButtonSegment(
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
               value: 'CREATOR',
               label: Text('Creator'),
-              icon: Icon(Icons.auto_awesome_outlined)),
-          ButtonSegment(
+              icon: Icon(Icons.auto_awesome_outlined),
+            ),
+            ButtonSegment(
               value: 'BUSINESS',
               label: Text('Business'),
-              icon: Icon(Icons.storefront_outlined))
-        ], selected: {
-          role
-        }, onSelectionChanged: (value) => setState(() => role = value.first)),
+              icon: Icon(Icons.storefront_outlined),
+            ),
+          ],
+          selected: {role},
+          onSelectionChanged: (value) => setState(() => role = value.first),
+        ),
         CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: terms,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text(
-                'I agree to Rivera’s Terms of Service and Privacy Policy.'),
-            onChanged: (value) => setState(() => terms = value ?? false)),
+          contentPadding: EdgeInsets.zero,
+          value: terms,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text(
+            'I agree to Rivera’s Terms of Service and Privacy Policy.',
+          ),
+          onChanged: (value) => setState(() => terms = value ?? false),
+        ),
         const SizedBox(height: 14),
         FilledButton(
-            onPressed: widget.controller.busy ? null : save,
-            child: const Text('Create account & send activation'))
-      ]));
+          onPressed: widget.controller.busy ? null : save,
+          child: const Text('Create account & send activation'),
+        ),
+      ],
+    ),
+  );
 }

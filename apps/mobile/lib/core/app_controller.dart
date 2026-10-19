@@ -68,30 +68,30 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> loadPublic() => _run(() async {
-        final values = await Future.wait([
-          api.get('/campaigns?limit=20'),
-          api.get('/creators?limit=20'),
-        ]);
-        campaigns = itemsOf(values[0]);
-        creators = itemsOf(values[1]);
-      }, quiet: true);
+    final values = await Future.wait([
+      api.get('/campaigns?limit=20'),
+      api.get('/creators?limit=20'),
+    ]);
+    campaigns = itemsOf(values[0]);
+    creators = itemsOf(values[1]);
+  }, quiet: true);
 
   Future<void> login(String email, String password) => _run(() async {
-        final result = mapOf(
-          await api.post('/auth/login', {
-            'email': email.trim(),
-            'password': password,
-          }),
-        );
-        user = RiveraUser.fromJson(mapOf(result['user']));
-        if (user!.onboardingCompleted || user!.isAdmin) {
-          await refreshWorkspace();
-        } else {
-          await loadPublic();
-        }
-        await RiveraNotifications.instance.register(api);
-        await refreshNotifications();
-      });
+    final result = mapOf(
+      await api.post('/auth/login', {
+        'email': email.trim(),
+        'password': password,
+      }),
+    );
+    user = RiveraUser.fromJson(mapOf(result['user']));
+    if (user!.onboardingCompleted || user!.isAdmin) {
+      await refreshWorkspace();
+    } else {
+      await loadPublic();
+    }
+    await RiveraNotifications.instance.register(api);
+    await refreshNotifications();
+  });
 
   Future<void> register({
     required String firstName,
@@ -99,24 +99,24 @@ class AppController extends ChangeNotifier {
     required String email,
     required String password,
     required String accountType,
-  }) =>
-      _run(() async {
-        await api.post('/auth/register', {
-          'firstName': firstName.trim(),
-          'lastName': lastName.trim(),
-          'email': email.trim(),
-          'password': password,
-          'accountType': accountType,
-          'termsAccepted': true,
-        });
-      });
+  }) => _run(() async {
+    await api.post('/auth/register', {
+      'firstName': firstName.trim(),
+      'lastName': lastName.trim(),
+      'email': email.trim(),
+      'password': password,
+      'accountType': accountType,
+      'termsAccepted': true,
+    });
+  });
 
   Future<Map<String, dynamic>> googleIdentity() async {
     Map<String, dynamic> result = {};
     await _run(() async {
       final idToken = await RiveraGoogleAuth.signIn();
-      result =
-          mapOf(await api.post('/auth/google/firebase', {'idToken': idToken}));
+      result = mapOf(
+        await api.post('/auth/google/firebase', {'idToken': idToken}),
+      );
       if (result['status'] == 'authenticated') {
         user = RiveraUser.fromJson(mapOf(result['user']));
         if (user!.onboardingCompleted || user!.isAdmin) {
@@ -136,33 +136,36 @@ class AppController extends ChangeNotifier {
     required String firstName,
     required String lastName,
     required String accountType,
-  }) =>
-      _run(() async {
-        await api.post('/auth/google/register', {
-          'token': token,
-          'firstName': firstName.trim(),
-          'lastName': lastName.trim(),
-          'accountType': accountType,
-          'termsAccepted': true,
-        });
-      });
+  }) => _run(() async {
+    await api.post('/auth/google/register', {
+      'token': token,
+      'firstName': firstName.trim(),
+      'lastName': lastName.trim(),
+      'accountType': accountType,
+      'termsAccepted': true,
+    });
+  });
 
   Future<void> forgotPassword(String email) =>
       _run(() => api.post('/auth/forgot-password', {'email': email.trim()}));
 
+  Future<void> requestReactivation(String email) => _run(
+    () => api.post('/auth/reactivation/request', {'email': email.trim()}),
+  );
+
   Future<void> resendVerification(String email) => _run(
-        () => api.post('/auth/resend-verification', {'email': email.trim()}),
-      );
+    () => api.post('/auth/resend-verification', {'email': email.trim()}),
+  );
 
   Future<void> verifyEmail(String token) =>
       _run(() => api.post('/auth/verify-email', {'token': token.trim()}));
 
   Future<void> resetPassword(String token, String password) => _run(
-        () => api.post('/auth/reset-password', {
-          'token': token.trim(),
-          'password': password,
-        }),
-      );
+    () => api.post('/auth/reset-password', {
+      'token': token.trim(),
+      'password': password,
+    }),
+  );
 
   Future<void> logout() async {
     await RiveraNotifications.instance.unregister();
@@ -179,38 +182,38 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> refreshWorkspace() => _run(() async {
-        if (user == null) return;
-        if (user!.isAdmin) {
-          dashboard = mapOf(await api.get('/admin/summary'));
-        } else {
-          final role = user!.isBusiness ? 'business' : 'creator';
-          final owner = user!.isBusiness
-              ? '/businesses/me/profile'
-              : '/creators/me/profile';
-          final summaries = await Future.wait([
-            api.get(owner),
-            api.get('/$role/campaigns/summary/dashboard'),
-            api.get(
-              user!.isBusiness
-                  ? '/business/applications/summary'
-                  : '/creators/me/applications/summary',
-            ),
-            api.get(
-              user!.isBusiness
-                  ? '/business/workspace-summary'
-                  : '/creators/me/workspace-summary',
-            ),
-          ]);
-          profile = mapOf(summaries[0]);
-          dashboard = {
-            ...mapOf(summaries[1]),
-            ...mapOf(summaries[2]),
-            ...mapOf(summaries[3]),
-          };
-        }
-        await loadPublic();
-        await refreshNotifications();
-      }, quiet: true);
+    if (user == null) return;
+    if (user!.isAdmin) {
+      dashboard = mapOf(await api.get('/admin/summary'));
+    } else {
+      final role = user!.isBusiness ? 'business' : 'creator';
+      final owner = user!.isBusiness
+          ? '/businesses/me/profile'
+          : '/creators/me/profile';
+      final summaries = await Future.wait([
+        api.get(owner),
+        api.get('/$role/campaigns/summary/dashboard'),
+        api.get(
+          user!.isBusiness
+              ? '/business/applications/summary'
+              : '/creators/me/applications/summary',
+        ),
+        api.get(
+          user!.isBusiness
+              ? '/business/workspace-summary'
+              : '/creators/me/workspace-summary',
+        ),
+      ]);
+      profile = mapOf(summaries[0]);
+      dashboard = {
+        ...mapOf(summaries[1]),
+        ...mapOf(summaries[2]),
+        ...mapOf(summaries[3]),
+      };
+    }
+    await loadPublic();
+    await refreshNotifications();
+  }, quiet: true);
 
   Future<void> refreshNotifications() async {
     if (user == null) return;
@@ -228,9 +231,11 @@ class AppController extends ChangeNotifier {
     if (id.isEmpty) return;
     await api.patch('/notifications/$id/read');
     notifications = notifications
-        .map((item) => item['id'] == id
-            ? {...item, 'readAt': DateTime.now().toIso8601String()}
-            : item)
+        .map(
+          (item) => item['id'] == id
+              ? {...item, 'readAt': DateTime.now().toIso8601String()}
+              : item,
+        )
         .toList();
     notificationUnread = notificationUnread > 0 ? notificationUnread - 1 : 0;
     notifyListeners();
@@ -240,7 +245,9 @@ class AppController extends ChangeNotifier {
     await api.patch('/notifications/read-all');
     final readAt = DateTime.now().toIso8601String();
     notifications = notifications
-        .map((item) => item['readAt'] == null ? {...item, 'readAt': readAt} : item)
+        .map(
+          (item) => item['readAt'] == null ? {...item, 'readAt': readAt} : item,
+        )
         .toList();
     notificationUnread = 0;
     notifyListeners();
@@ -274,10 +281,10 @@ class AppController extends ChangeNotifier {
       });
 
   Future<void> updateAccount(Map<String, dynamic> payload) => _run(() async {
-        user = RiveraUser.fromJson(
-          mapOf(await api.patch('/auth/profile', payload)),
-        );
-      });
+    user = RiveraUser.fromJson(
+      mapOf(await api.patch('/auth/profile', payload)),
+    );
+  });
 
   Future<void> changePassword(String currentPassword, String newPassword) =>
       _run(() async {
