@@ -3,6 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+test('Wise alerts open the admin payout desk or the creator payout setup',async()=>{
+  const center=await source('components/rivera/notification-center.tsx');
+  assert.match(center,/type\.startsWith\('WISE_'\)/);
+  assert.match(center,/user\.roles\.includes\('ADMIN'\)\) return '\/admin\/wise-payouts'/);
+  assert.ok(center.indexOf("type.startsWith('WISE_')")<center.indexOf('type.includes("PAYMENT")'));
+});
 
 test("web notification center exposes unread and desktop alert flows", async () => {
   const notificationCenter = await source("components/rivera/notification-center.tsx");
