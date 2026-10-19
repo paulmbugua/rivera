@@ -28,6 +28,8 @@
 .auth-shell .auth-form-side { min-width: 0; padding: 26px 34px 30px; }
 .auth-shell .auth-frame .auth-card { max-width: var(--product-auth); padding: 22px 0 0; margin-block: auto; }
 .auth-shell .auth-card h1 { font-family: inherit; font-size: 29px; font-weight: 700; line-height: 1.18; letter-spacing: -.035em; margin: 10px 0; }
+.auth-shell .auth-card > p { color: var(--rivera-muted); }
+.auth-shell .auth-card > .eyebrow { color: var(--rivera-green); }
 .auth-shell .auth-intro { font-size: 14px; margin-bottom: 20px; }
 .auth-shell .eyebrow { font-size: 10px; letter-spacing: .14em; }
 .auth-shell .auth-card .field { margin: 12px 0; gap: 6px; font-size: 13px; }
