@@ -6,7 +6,7 @@
 .dashboard-modern .brand-mark{width:33px;height:33px;font-size:20px}
 .dashboard-modern .dashboard-top-actions{display:flex;align-items:center;gap:8px}
 .dashboard-modern .dashboard-top-actions>a,.dashboard-modern .dashboard-top-actions>button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:10px 14px;border:1px solid var(--rivera-line);border-radius:10px;background:var(--rivera-paper);color:var(--rivera-ink);font-family:inherit;font-size:12px;font-weight:650;line-height:1.5;text-decoration:none;cursor:pointer;white-space:nowrap}
-.dashboard-modern .dashboard-top-actions>a.dashboard-top-campaigns{background:var(--rivera-forest);border-color:var(--rivera-forest);color:var(--rivera-on-forest)}
+.dashboard-modern .dashboard-top-actions>a.dashboard-top-campaigns{display:inline-flex;background:var(--rivera-forest);border-color:var(--rivera-forest);color:var(--rivera-on-forest)}
 .dashboard-modern .dashboard-top-actions>a:hover,.dashboard-modern .dashboard-top-actions>button:hover{box-shadow:0 0 0 3px var(--rivera-soft);border-color:var(--rivera-green)}
 .dashboard-modern .dashboard-top-actions>button.dashboard-top-logout{border-color:var(--rivera-line);color:var(--rivera-ink);background:var(--rivera-soft)}
 .dashboard-modern .dashboard-top-actions>button.dashboard-top-logout:hover{color:var(--rivera-danger,#b32e36);border-color:currentColor}
