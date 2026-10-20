@@ -1,0 +1,9 @@
+<en-US>
+A cleaner, more compact Rivera experience.
+
+- Refreshed sign-in and registration screens.
+- Consistent styling across profiles, campaigns and account screens.
+- Improved phone and tablet layouts with centered forms.
+- Side navigation on larger tablets.
+- Better dark-mode readability, keyboard scrolling and accessibility support.
+</en-US>
