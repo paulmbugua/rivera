@@ -383,10 +383,14 @@ class PayoutSetupScreen extends StatefulWidget {
 
 class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
   final phone = TextEditingController();
+  final wiseEmail = TextEditingController();
+  final wiseName = TextEditingController();
+  final wiseCode = TextEditingController();
   Map<String, dynamic> account = {};
   String? error;
   bool loading = true;
   bool saving = false;
+  bool ownsWiseAccount = false;
 
   @override
   void initState() {
@@ -398,11 +402,81 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
     try {
       account =
           mapOf(await widget.controller.fetch('/creators/me/payout-account'));
+      wiseEmail.text = account['wiseEmail']?.toString() ?? wiseEmail.text;
+      wiseName.text = account['wiseLegalName']?.toString() ?? wiseName.text;
       error = null;
     } catch (e) {
       error = e.toString();
     } finally {
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> saveWise() async {
+    if (wiseName.text.trim().length < 3 ||
+        !wiseEmail.text.contains('@') ||
+        !ownsWiseAccount) {
+      setState(() => error =
+          'Enter your legal name and Wise email, then confirm this is your own account.');
+      return;
+    }
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final result = mapOf(await widget.controller.send(
+        'POST',
+        '/creators/me/payout-account/wise',
+        {
+          'email': wiseEmail.text.trim().toLowerCase(),
+          'legalName': wiseName.text.trim(),
+          'ownsAccount': true,
+        },
+      ));
+      account = mapOf(result['account']);
+      wiseCode.clear();
+      if (mounted) {
+        showRiveraMessage(
+          context,
+          result['message']?.toString() ??
+              'Verification code sent to your Wise email.',
+        );
+      }
+    } catch (exception) {
+      error = exception.toString();
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> verifyWise() async {
+    if (!RegExp(r'^\d{8}$').hasMatch(wiseCode.text)) {
+      setState(() => error = 'Enter the 8-digit code sent to your email.');
+      return;
+    }
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final result = mapOf(await widget.controller.send(
+        'POST',
+        '/creators/me/payout-account/wise/verify',
+        {'code': wiseCode.text},
+      ));
+      account = mapOf(result['account']);
+      wiseCode.clear();
+      if (mounted) {
+        showRiveraMessage(
+          context,
+          'Email verified. Rivera will review your Wise details next.',
+        );
+      }
+    } catch (exception) {
+      error = exception.toString();
+    } finally {
+      if (mounted) setState(() => saving = false);
     }
   }
 
@@ -433,28 +507,147 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
   @override
   void dispose() {
     phone.dispose();
+    wiseEmail.dispose();
+    wiseName.dispose();
+    wiseCode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final active = account['payoutsEnabled'] == true;
+    final wise = account['setupMode'] == 'WISE_MANUAL';
+    final wiseVerified = account['wiseEmailVerified'] == true;
     return Scaffold(
       appBar: AppBar(title: const Text('Payout account')),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RiveraPage(
               children: [
-                const Eyebrow('RIVERA EARNINGS'),
+                Eyebrow(
+                    wise ? 'WISE · INTERNATIONAL PAYOUTS' : 'RIVERA EARNINGS'),
                 const SizedBox(height: 12),
-                Text(active ? 'Ready for payouts' : 'Connect M-Pesa',
+                Text(
+                    active
+                        ? 'Ready for payouts'
+                        : wise
+                            ? 'Set up your Wise payout email'
+                            : 'Connect M-Pesa',
                     style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 10),
-                Text(active
-                    ? 'Your Paystack recipient is ready to receive approved Rivera earnings in KES.'
-                    : 'Use the Kenyan M-Pesa number registered to the person receiving creator earnings.'),
+                Text(wise
+                    ? active
+                        ? 'Your Wise payout details are approved. Released USD earnings enter Rivera’s Monday payout queue.'
+                        : wiseVerified
+                            ? 'Your email is verified. Rivera must review USD receiving eligibility before funding is enabled.'
+                            : 'International earnings are paid in USD through an admin-assisted Wise transfer.'
+                    : active
+                        ? 'Your Paystack recipient is ready to receive approved Rivera earnings in KES.'
+                        : 'Use the Kenyan M-Pesa number registered to the person receiving creator earnings.'),
                 const SizedBox(height: 22),
-                if (!active) ...[
+                if (wise) ...[
+                  _PayoutProgress(
+                    step: active
+                        ? 4
+                        : wiseVerified
+                            ? 3
+                            : account['wiseEmail'] != null
+                                ? 2
+                                : 1,
+                  ),
+                  const SizedBox(height: 18),
+                  if (wiseVerified)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(account['wiseLegalName']?.toString() ?? '',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text(account['wiseEmail']?.toString() ?? ''),
+                            const SizedBox(height: 9),
+                            Text(active
+                                ? 'Approved and ready for the weekly payout flow.'
+                                : 'Verified and waiting for Rivera’s payout review.'),
+                          ],
+                        ),
+                      ),
+                    )
+                  else ...[
+                    TextField(
+                      controller: wiseName,
+                      textCapitalization: TextCapitalization.words,
+                      autofillHints: const [AutofillHints.name],
+                      decoration: const InputDecoration(
+                        labelText: 'Full legal name on Wise',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: wiseEmail,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: const InputDecoration(
+                        labelText: 'Wise account email',
+                        prefixIcon: Icon(Icons.alternate_email_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: ownsWiseAccount,
+                      onChanged: saving
+                          ? null
+                          : (value) =>
+                              setState(() => ownsWiseAccount = value ?? false),
+                      title: const Text('This is my own Wise account'),
+                      subtitle: const Text(
+                        'I can access this email and will confirm that it can receive USD.',
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: saving || !ownsWiseAccount ? null : saveWise,
+                      icon: const Icon(Icons.mark_email_read_outlined),
+                      label: Text(account['wiseEmail'] != null
+                          ? 'Resend verification code'
+                          : 'Save and send code'),
+                    ),
+                    if (account['wiseEmail'] != null) ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: wiseCode,
+                        keyboardType: TextInputType.number,
+                        maxLength: 8,
+                        autofillHints: const [AutofillHints.oneTimeCode],
+                        decoration: const InputDecoration(
+                          labelText: '8-digit email code',
+                          counterText: '',
+                          prefixIcon: Icon(Icons.password_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: saving ? null : verifyWise,
+                        child: const Text('Verify email'),
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Never share your Wise password, OTP, card details or API token with Rivera.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ] else if (!active) ...[
                   TextField(
                     controller: phone,
                     keyboardType: TextInputType.phone,
@@ -483,6 +676,46 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
                 ],
               ],
             ),
+    );
+  }
+}
+
+class _PayoutProgress extends StatelessWidget {
+  const _PayoutProgress({required this.step});
+  final int step;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Details', 'Verify', 'Review', 'Ready'];
+    return Row(
+      children: labels.indexed.map((item) {
+        final number = item.$1 + 1;
+        final selected = step >= number;
+        return Expanded(
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                foregroundColor: selected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                child: step > number
+                    ? const Icon(Icons.check_rounded, size: 16)
+                    : Text('$number',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
+              const SizedBox(height: 5),
+              Text(item.$2,
+                  style: Theme.of(context).textTheme.labelSmall,
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

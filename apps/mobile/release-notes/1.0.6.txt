@@ -7,5 +7,6 @@ Rivera mobile now works more like the web experience.
 - Added offer decisions, proposal submission, payments and campaign controls.
 - Expanded campaign creation with categories, platforms and deliverables.
 - Added tap-to-choose profile, logo and cover image uploads.
+- Added international Wise payout setup and email verification.
 - Improved compact layouts, labels, dates, money and status presentation.
 </en-US>
