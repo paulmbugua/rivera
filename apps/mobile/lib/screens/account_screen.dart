@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/app_controller.dart';
 import '../core/api_client.dart';
+import '../core/models.dart';
 import '../widgets/common.dart';
 import 'workspace_screen.dart';
 import 'notifications_screen.dart';
@@ -320,7 +324,36 @@ class _AccountEditorState extends State<AccountEditor> {
         text: widget.controller.user!.profileImageUrl,
       );
   bool busy = false;
+
+  Future<void> choosePhoto() async {
+    final selected = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
+    if (selected == null) return;
+    setState(() => busy = true);
+    try {
+      final endpoint = widget.controller.user!.isBusiness
+          ? '/uploads/logo'
+          : '/uploads/profile-image';
+      final uploaded = mapOf(
+        await widget.controller.api.upload(endpoint, File(selected.path)),
+      );
+      image.text = uploaded['url']?.toString() ?? image.text;
+      if (mounted) setState(() {});
+    } catch (exception) {
+      if (mounted) {
+        showRiveraMessage(context, exception.toString(), error: true);
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> save() async {
+    setState(() => busy = true);
     try {
       await widget.controller.updateAccount({
         'firstName': first.text.trim(),
@@ -336,6 +369,8 @@ class _AccountEditorState extends State<AccountEditor> {
       }
     } on ApiException catch (e) {
       if (mounted) showRiveraMessage(context, e.message, error: true);
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -345,20 +380,55 @@ class _AccountEditorState extends State<AccountEditor> {
         body: RiveraPage(
           children: [
             Center(
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 48,
-                    backgroundImage:
-                        image.text.isNotEmpty ? NetworkImage(image.text) : null,
-                    child: image.text.isEmpty
-                        ? const Icon(Icons.person_outline, size: 38)
-                        : null,
+              child: Semantics(
+                button: true,
+                label: 'Choose a profile photo',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(58),
+                  onTap: busy ? null : choosePhoto,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      CircleAvatar(
+                        radius: 48,
+                        backgroundImage: image.text.isNotEmpty
+                            ? NetworkImage(image.text)
+                            : null,
+                        child: image.text.isEmpty
+                            ? const Icon(Icons.person_outline, size: 38)
+                            : null,
+                      ),
+                      Positioned(
+                        right: -4,
+                        bottom: -2,
+                        child: CircleAvatar(
+                          radius: 17,
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimary,
+                          child: busy
+                              ? const SizedBox.square(
+                                  dimension: 15,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.add_a_photo_outlined,
+                                  size: 17),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  const Text('Use an uploaded image URL below',
-                      style: TextStyle(fontFamily: 'Arial', fontSize: 12)),
-                ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 9),
+            Center(
+              child: TextButton.icon(
+                onPressed: busy ? null : choosePhoto,
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('Choose profile photo'),
               ),
             ),
             const SizedBox(height: 16),
@@ -371,8 +441,6 @@ class _AccountEditorState extends State<AccountEditor> {
             ),
             const SizedBox(height: 12),
             _field(phone, 'Phone'),
-            const SizedBox(height: 12),
-            _field(image, 'Profile image URL'),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -422,6 +490,41 @@ class _MarketplaceProfileEditorState extends State<MarketplaceProfileEditor> {
       country = TextEditingController(
         text: (p['countryCode'] ?? '').toString(),
       );
+  bool uploadingMedia = false;
+
+  Future<void> chooseMedia({required bool cover}) async {
+    final selected = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: cover ? 2400 : 1600,
+      maxHeight: cover ? 1600 : 1600,
+    );
+    if (selected == null) return;
+    setState(() => uploadingMedia = true);
+    try {
+      final endpoint = cover
+          ? '/uploads/cover-image'
+          : widget.controller.user!.isBusiness
+              ? '/uploads/logo'
+              : '/uploads/profile-image';
+      await widget.controller.api.upload(endpoint, File(selected.path));
+      await widget.controller.refreshWorkspace();
+      if (mounted) {
+        showRiveraMessage(
+          context,
+          cover ? 'Cover image updated.' : 'Profile image updated.',
+        );
+        setState(() {});
+      }
+    } catch (exception) {
+      if (mounted) {
+        showRiveraMessage(context, exception.toString(), error: true);
+      }
+    } finally {
+      if (mounted) setState(() => uploadingMedia = false);
+    }
+  }
+
   Future<void> save() async {
     final business = widget.controller.user!.isBusiness;
     try {
@@ -486,6 +589,38 @@ class _MarketplaceProfileEditorState extends State<MarketplaceProfileEditor> {
                   'Publish when your story feels clear. You can return and refine it any time.',
             ),
             const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _MediaPickerCard(
+                    label: widget.controller.user!.isBusiness
+                        ? 'Business logo'
+                        : 'Profile photo',
+                    imageUrl: (widget.controller.profile[
+                                widget.controller.user!.isBusiness
+                                    ? 'logoUrl'
+                                    : 'profileImageUrl'] ??
+                            '')
+                        .toString(),
+                    icon: Icons.account_circle_outlined,
+                    busy: uploadingMedia,
+                    onTap: () => chooseMedia(cover: false),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MediaPickerCard(
+                    label: 'Cover image',
+                    imageUrl: (widget.controller.profile['coverImageUrl'] ?? '')
+                        .toString(),
+                    icon: Icons.landscape_outlined,
+                    busy: uploadingMedia,
+                    onTap: () => chooseMedia(cover: true),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             _field(
               name,
               widget.controller.user!.isBusiness
@@ -542,6 +677,70 @@ class _MarketplaceProfileEditorState extends State<MarketplaceProfileEditor> {
         decoration: InputDecoration(
           labelText: label,
           alignLabelWithHint: lines > 1,
+        ),
+      );
+}
+
+class _MediaPickerCard extends StatelessWidget {
+  const _MediaPickerCard({
+    required this.label,
+    required this.imageUrl,
+    required this.icon,
+    required this.busy,
+    required this.onTap,
+  });
+  final String label, imageUrl;
+  final IconData icon;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: 'Choose $label',
+        child: InkWell(
+          onTap: busy ? null : onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            height: 112,
+            decoration: BoxDecoration(
+              image: imageUrl.isEmpty
+                  ? null
+                  : DecorationImage(
+                      image: NetworkImage(imageUrl),
+                      fit: BoxFit.cover,
+                      colorFilter: ColorFilter.mode(
+                        Colors.black.withValues(alpha: .22),
+                        BlendMode.darken,
+                      ),
+                    ),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (busy)
+                  const CircularProgressIndicator()
+                else ...[
+                  Icon(icon,
+                      color: imageUrl.isEmpty
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.white),
+                  const SizedBox(height: 7),
+                  Text(
+                    imageUrl.isEmpty ? 'Choose $label' : 'Change $label',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: imageUrl.isEmpty ? null : Colors.white,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       );
 }

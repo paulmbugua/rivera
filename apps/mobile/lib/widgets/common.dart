@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 export 'responsive.dart';
+export 'record_view.dart';
 
 import '../core/theme.dart';
 

@@ -1,7 +1,7 @@
 name: rivera_mobile
 description: Rivera mobile marketplace for brands and creators.
 publish_to: none
-version: 1.0.5+6
+version: 1.0.6+7
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -16,6 +16,8 @@ dependencies:
   google_sign_in: ^7.2.0
   firebase_messaging: ^16.7.0
   flutter_local_notifications: ^22.3.1
+  image_picker: ^1.2.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,11 @@
+<en-US>
+Rivera mobile now works more like the web experience.
+
+- Rebuilt application credits with a clear balance and readable activity.
+- Removed raw database and JSON-style records from user screens.
+- Added mobile messaging with readable conversation bubbles and replies.
+- Added offer decisions, proposal submission, payments and campaign controls.
+- Expanded campaign creation with categories, platforms and deliverables.
+- Added tap-to-choose profile, logo and cover image uploads.
+- Improved compact layouts, labels, dates, money and status presentation.
+</en-US>

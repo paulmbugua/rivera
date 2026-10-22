@@ -1,11 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../core/app_controller.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
+import 'workflow_screen.dart';
 
 class FeatureLink {
   const FeatureLink(
@@ -359,9 +358,11 @@ class WorkspaceScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        feature.path == '/creators/me/payout-account'
-                            ? PayoutSetupScreen(controller: controller)
+                    builder: (_) => feature.path ==
+                            '/creators/me/payout-account'
+                        ? PayoutSetupScreen(controller: controller)
+                        : feature.path == '/creators/me/application-credits'
+                            ? ApplicationCreditsScreen(controller: controller)
                             : CollectionScreen(
                                 controller: controller, feature: feature),
                   ),
@@ -486,6 +487,264 @@ class _PayoutSetupScreenState extends State<PayoutSetupScreen> {
   }
 }
 
+class ApplicationCreditsScreen extends StatefulWidget {
+  const ApplicationCreditsScreen({super.key, required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<ApplicationCreditsScreen> createState() =>
+      _ApplicationCreditsScreenState();
+}
+
+class _ApplicationCreditsScreenState extends State<ApplicationCreditsScreen> {
+  bool loading = true;
+  String? error;
+  int balance = 0;
+  List<Map<String, dynamic>> history = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final response = mapOf(
+        await widget.controller.fetch('/creators/me/application-credits'),
+      );
+      balance = (response['balance'] as num?)?.toInt() ?? 0;
+      history = (response['history'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (exception) {
+      error = exception.toString();
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Application credits'),
+          actions: [
+            IconButton(
+              tooltip: 'Refresh credits',
+              onPressed: loading ? null : load,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: loading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? RiveraEmpty(
+                    icon: Icons.cloud_off_outlined,
+                    title: 'Credits are unavailable',
+                    copy: error!,
+                    action: FilledButton(
+                      onPressed: load,
+                      child: const Text('Try again'),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: load,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: RiveraLayout.insets(
+                        context,
+                        top: 12,
+                        bottom: 72,
+                        maxWidth: RiveraLayout.formWidth,
+                      ),
+                      children: [
+                        const Eyebrow('YOUR APPLICATION BALANCE'),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Apply with confidence.',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          'A free credit can cover one eligible campaign application fee.',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                        const SizedBox(height: 16),
+                        _CreditBalanceCard(balance: balance),
+                        const SizedBox(height: 22),
+                        Text(
+                          'Recent activity',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 10),
+                        if (history.isEmpty)
+                          const RiveraEmpty(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'No credit activity yet',
+                            copy:
+                                'Credits you receive or use will appear here.',
+                          )
+                        else
+                          ...history.map((item) => _CreditActivity(item: item)),
+                      ],
+                    ),
+                  ),
+      );
+}
+
+class _CreditBalanceCard extends StatelessWidget {
+  const _CreditBalanceCard({required this.balance});
+  final int balance;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onPrimary
+                    .withValues(alpha: .13),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(
+                Icons.toll_rounded,
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$balance',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  Text(
+                    balance == 1 ? 'credit available' : 'credits available',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimary
+                              .withValues(alpha: .78),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _CreditActivity extends StatelessWidget {
+  const _CreditActivity({required this.item});
+  final Map<String, dynamic> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+    final positive = quantity >= 0;
+    final reason = item['reason']?.toString().trim();
+    final type = recordValue(item['type'] ?? (positive ? 'GRANT' : 'USED'));
+    final date = recordValue(item['createdAt'] ?? '', key: 'createdAt');
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: (positive ? riveraGreen : riveraGold)
+                    .withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                positive ? Icons.add_rounded : Icons.arrow_upward_rounded,
+                color: positive ? riveraGreen : const Color(0xFF80591B),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          reason == null || reason.isEmpty ? type : reason,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      Text(
+                        '${positive ? '+' : ''}$quantity',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: positive
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.error,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$type · $date',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  if (item['balanceAfter'] != null) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      'Balance after: ${item['balanceAfter']}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class CollectionScreen extends StatefulWidget {
   const CollectionScreen({
     super.key,
@@ -559,28 +818,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (_, i) {
             final item = items[i];
-            final title = textOf(
-                item,
-                [
-                  'title',
-                  'displayName',
-                  'businessName',
-                  'name',
-                  'reference',
-                  'subject',
-                  'email',
-                ],
-                '${widget.feature.title} item');
-            final subtitle = textOf(
-                item,
-                [
-                  'shortDescription',
-                  'headline',
-                  'description',
-                  'status',
-                  'createdAt',
-                ],
-                'Tap for details');
+            final title = _collectionTitle(item, widget.feature.title);
+            final subtitle = _collectionSubtitle(item);
             return Card(
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(
@@ -600,6 +839,23 @@ class _CollectionScreenState extends State<CollectionScreen> {
                     ? StatusPill(item['status'].toString())
                     : const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                 onTap: () async {
+                  if (widget.feature.path == '/conversations') {
+                    final conversationTitle = _collectionTitle(
+                      item,
+                      widget.feature.title,
+                    );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ConversationScreen(
+                          controller: widget.controller,
+                          conversationId: item['id'].toString(),
+                          title: conversationTitle,
+                        ),
+                      ),
+                    );
+                    return;
+                  }
                   dynamic detail = item;
                   if (widget.feature.detailPath != null) {
                     final path = widget.feature.detailPath!
@@ -613,13 +869,12 @@ class _CollectionScreenState extends State<CollectionScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          appBar: AppBar(title: Text(title)),
-                          body: DetailView(
-                            title: title,
-                            data: mapOf(detail),
-                            controller: widget.controller,
-                          ),
+                        builder: (_) => ActionableRecordScreen(
+                          controller: widget.controller,
+                          title: title,
+                          collectionPath: widget.feature.path,
+                          detailPath: widget.feature.detailPath,
+                          initialData: mapOf(detail),
                         ),
                       ),
                     );
@@ -655,6 +910,50 @@ class _CollectionScreenState extends State<CollectionScreen> {
   }
 }
 
+String _collectionTitle(
+  Map<String, dynamic> item,
+  String collection,
+) {
+  final direct = textOf(
+    item,
+    const [
+      'title',
+      'displayName',
+      'businessName',
+      'name',
+      'reference',
+      'subject',
+      'email',
+    ],
+    '',
+  );
+  if (direct.isNotEmpty) return direct;
+  for (final nestedKey in const ['campaign', 'creator', 'business']) {
+    final nested = mapOf(item[nestedKey]);
+    final value = textOf(
+      nested,
+      const ['title', 'displayName', 'name', 'businessName'],
+      '',
+    );
+    if (value.isNotEmpty) return value;
+  }
+  return collection;
+}
+
+String _collectionSubtitle(Map<String, dynamic> item) {
+  final lastMessage = mapOf(item['lastMessage']);
+  if (lastMessage['content'] != null) return lastMessage['content'].toString();
+  final business = mapOf(item['business']);
+  if (business['name'] != null) return business['name'].toString();
+  final creator = mapOf(item['creator']);
+  if (creator['displayName'] != null) return creator['displayName'].toString();
+  return textOf(
+    item,
+    const ['shortDescription', 'headline', 'description', 'status'],
+    'Tap for details',
+  );
+}
+
 class DetailView extends StatelessWidget {
   const DetailView({
     super.key,
@@ -668,57 +967,13 @@ class DetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => RiveraPage(
         children: [
-          const Eyebrow('Live Rivera record'),
+          const Eyebrow('Overview'),
           const SizedBox(height: 10),
           Text(title, style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 18),
-          ...data.entries
-              .where(
-                (e) =>
-                    e.value != null &&
-                    !['id', 'passwordHash', 'deletedAt'].contains(e.key),
-              )
-              .map(
-                (e) => Card(
-                  margin: const EdgeInsets.only(bottom: 9),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _label(e.key),
-                          style: TextStyle(
-                            fontFamily: 'Arial',
-                            color: Theme.of(context).colorScheme.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: .7,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _value(e.value),
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+          RiveraRecordView(data: data),
         ],
       );
-  String _label(String value) => value
-      .replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[1]}')
-      .replaceAll('_', ' ')
-      .trim()
-      .toUpperCase();
-  String _value(dynamic value) {
-    if (value is Map || value is List) {
-      return const JsonEncoder.withIndent('  ').convert(value);
-    }
-    return value.toString().replaceAll('_', ' ');
-  }
 }
 
 class CampaignEditor extends StatefulWidget {
@@ -735,11 +990,42 @@ class _CampaignEditorState extends State<CampaignEditor> {
       product = TextEditingController(),
       audience = TextEditingController(),
       outcomes = TextEditingController(),
+      deliverableTitle = TextEditingController(text: 'TikTok video'),
+      deliverableDescription = TextEditingController(),
+      deliverableQuantity = TextEditingController(text: '1'),
       min = TextEditingController(),
       max = TextEditingController(),
       slots = TextEditingController(text: '1');
-  String currency = 'USD', location = 'REMOTE';
-  bool busy = false;
+  String currency = 'USD', location = 'GLOBAL', objective = 'BRAND_AWARENESS';
+  List<Map<String, dynamic>> categories = const [];
+  final selectedCategories = <String>{};
+  final selectedPlatforms = <String>{'TIKTOK'};
+  bool busy = false, loadingTaxonomy = true;
+  String? formError;
+
+  @override
+  void initState() {
+    super.initState();
+    currency = widget.controller.user?.countryCode == 'KE' ? 'KES' : 'USD';
+    loadTaxonomy();
+  }
+
+  Future<void> loadTaxonomy() async {
+    try {
+      final result = await widget.controller.fetch('/categories');
+      categories = (result as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      formError = null;
+    } catch (_) {
+      formError =
+          'Campaign categories could not be loaded. Check your connection and try again.';
+    } finally {
+      if (mounted) setState(() => loadingTaxonomy = false);
+    }
+  }
+
   @override
   void dispose() {
     for (final c in [
@@ -749,6 +1035,9 @@ class _CampaignEditorState extends State<CampaignEditor> {
       product,
       audience,
       outcomes,
+      deliverableTitle,
+      deliverableDescription,
+      deliverableQuantity,
       min,
       max,
       slots,
@@ -759,6 +1048,28 @@ class _CampaignEditorState extends State<CampaignEditor> {
   }
 
   Future<void> save() async {
+    if (title.text.trim().length < 2 || short.text.trim().length < 20) {
+      setState(() => formError =
+          'Add a clear campaign title and a short description of at least 20 characters.');
+      return;
+    }
+    if (selectedCategories.isEmpty) {
+      setState(() => formError = 'Choose at least one campaign category.');
+      return;
+    }
+    if (selectedPlatforms.isEmpty) {
+      setState(() => formError = 'Choose at least one creator platform.');
+      return;
+    }
+    if (full.text.trim().length < 50) {
+      setState(() => formError =
+          'Tell creators more about the campaign in at least 50 characters.');
+      return;
+    }
+    if (deliverableTitle.text.trim().length < 2) {
+      setState(() => formError = 'Add at least one content deliverable.');
+      return;
+    }
     setState(() => busy = true);
     try {
       await widget.controller.send('POST', '/business/campaigns', {
@@ -766,8 +1077,25 @@ class _CampaignEditorState extends State<CampaignEditor> {
         'shortDescription': short.text.trim(),
         'fullDescription': full.text.trim(),
         'productOrServiceName': product.text.trim(),
+        'campaignObjective': objective,
         'targetAudience': audience.text.trim(),
         'expectedOutcomes': outcomes.text.trim(),
+        'categoryIds': selectedCategories.toList(),
+        'platforms': selectedPlatforms
+            .map((platform) => {'platform': platform, 'required': true})
+            .toList(),
+        'languages': const [
+          {'languageCode': 'en', 'required': true},
+        ],
+        'deliverables': [
+          {
+            'title': deliverableTitle.text.trim(),
+            'description': deliverableDescription.text.trim(),
+            'quantity': int.tryParse(deliverableQuantity.text) ?? 1,
+            'platform': selectedPlatforms.first,
+          },
+        ],
+        'usageRights': 'TO_BE_DISCUSSED',
         'budgetMinMinor': ((double.tryParse(min.text) ?? 0) * 100).round(),
         'budgetMaxMinor': ((double.tryParse(max.text) ?? 0) * 100).round(),
         'currencyCode': currency,
@@ -784,7 +1112,7 @@ class _CampaignEditorState extends State<CampaignEditor> {
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) showRiveraMessage(context, e.toString(), error: true);
+      if (mounted) setState(() => formError = e.toString());
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -796,64 +1124,190 @@ class _CampaignEditorState extends State<CampaignEditor> {
         body: RiveraPage(
           children: [
             const SectionHeading(
-              eyebrow: 'Start with clarity',
-              title: 'Shape a brief creators can believe in.',
+              eyebrow: 'CREATE A CAMPAIGN',
+              title: 'A clear brief, in three steps.',
               copy:
-                  'Save the foundation now, then add deliverables and requirements before publishing.',
+                  'Give creators enough context to make a confident proposal.',
             ),
-            const SizedBox(height: 22),
-            _field(title, 'Campaign title'),
-            const SizedBox(height: 12),
-            _field(short, 'Short description', lines: 2),
-            const SizedBox(height: 12),
-            _field(full, 'Full brief', lines: 6),
-            const SizedBox(height: 12),
-            _field(product, 'Product or service'),
-            const SizedBox(height: 12),
-            _field(audience, 'Target audience', lines: 3),
-            const SizedBox(height: 12),
-            _field(outcomes, 'Expected outcomes', lines: 3),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _field(min, 'Budget min', number: true)),
-                const SizedBox(width: 10),
-                Expanded(child: _field(max, 'Budget max', number: true)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField(
-                    initialValue: currency,
-                    decoration: const InputDecoration(labelText: 'Currency'),
-                    items: ['USD', 'KES', 'EUR', 'GBP', 'QAR']
-                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+            const SizedBox(height: 16),
+            _CampaignSection(
+              number: '1',
+              title: 'Campaign basics',
+              child: Column(
+                children: [
+                  _field(title, 'Campaign title'),
+                  const SizedBox(height: 10),
+                  _field(short, 'Short description', lines: 2),
+                  const SizedBox(height: 10),
+                  _field(product, 'Product or service'),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField(
+                    initialValue: objective,
+                    decoration: const InputDecoration(labelText: 'Objective'),
+                    items: const {
+                      'BRAND_AWARENESS': 'Brand awareness',
+                      'PRODUCT_LAUNCH': 'Product launch',
+                      'SALES': 'Sales',
+                      'CONTENT_CREATION': 'Content creation',
+                    }
+                        .entries
+                        .map((item) => DropdownMenuItem(
+                              value: item.key,
+                              child: Text(item.value),
+                            ))
                         .toList(),
-                    onChanged: (v) => setState(() => currency = v!),
+                    onChanged: (value) =>
+                        setState(() => objective = value ?? objective),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: _field(slots, 'Creator slots', number: true)),
-              ],
+                  const SizedBox(height: 13),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Campaign categories',
+                        style: Theme.of(context).textTheme.labelLarge),
+                  ),
+                  const SizedBox(height: 7),
+                  if (loadingTaxonomy)
+                    const LinearProgressIndicator()
+                  else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: categories.map((category) {
+                          final id = category['id'].toString();
+                          return FilterChip(
+                            label: Text(textOf(category, const ['name'])),
+                            selected: selectedCategories.contains(id),
+                            onSelected: (selected) => setState(() => selected
+                                ? selectedCategories.add(id)
+                                : selectedCategories.remove(id)),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField(
-              initialValue: location,
-              decoration: const InputDecoration(labelText: 'Location'),
-              items: [
-                'REMOTE',
-                'LOCAL',
-                'HYBRID',
-                'GLOBAL',
-              ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-              onChanged: (v) => setState(() => location = v!),
+            _CampaignSection(
+              number: '2',
+              title: 'Audience and content',
+              child: Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Where should the content appear?',
+                        style: Theme.of(context).textTheme.labelLarge),
+                  ),
+                  const SizedBox(height: 7),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 7,
+                      children: const [
+                        'TIKTOK',
+                        'INSTAGRAM',
+                        'YOUTUBE',
+                        'FACEBOOK'
+                      ]
+                          .map((platform) => FilterChip(
+                                label: Text(platform[0] +
+                                    platform.substring(1).toLowerCase()),
+                                selected: selectedPlatforms.contains(platform),
+                                onSelected: (selected) => setState(() =>
+                                    selected
+                                        ? selectedPlatforms.add(platform)
+                                        : selectedPlatforms.remove(platform)),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _field(audience, 'Target audience', lines: 3),
+                  const SizedBox(height: 10),
+                  _field(full, 'Full campaign brief', lines: 5),
+                  const SizedBox(height: 10),
+                  _field(outcomes, 'Expected outcomes', lines: 3),
+                  const SizedBox(height: 14),
+                  _field(deliverableTitle, 'Content deliverable'),
+                  const SizedBox(height: 10),
+                  _field(deliverableDescription, 'Content instructions',
+                      lines: 2),
+                  const SizedBox(height: 10),
+                  _field(deliverableQuantity, 'Quantity', number: true),
+                ],
+              ),
             ),
-            const SizedBox(height: 22),
-            FilledButton(
+            const SizedBox(height: 12),
+            _CampaignSection(
+              number: '3',
+              title: 'Budget and reach',
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _field(min, 'Minimum', number: true)),
+                      const SizedBox(width: 9),
+                      Expanded(child: _field(max, 'Maximum', number: true)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField(
+                          initialValue: currency,
+                          decoration:
+                              const InputDecoration(labelText: 'Currency'),
+                          items: ['USD', 'KES']
+                              .map((value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value),
+                                  ))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => currency = value ?? currency),
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                          child: _field(slots, 'Creator slots', number: true)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField(
+                    initialValue: location,
+                    decoration:
+                        const InputDecoration(labelText: 'Creator location'),
+                    items: const {
+                      'GLOBAL': 'Anywhere',
+                      'REMOTE': 'Remote',
+                    }
+                        .entries
+                        .map((item) => DropdownMenuItem(
+                              value: item.key,
+                              child: Text(item.value),
+                            ))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => location = value ?? location),
+                  ),
+                ],
+              ),
+            ),
+            if (formError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                formError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
               onPressed: busy ? null : save,
-              child: const Text('Create campaign draft'),
+              icon: const Icon(Icons.save_outlined),
+              label: Text(busy ? 'Saving…' : 'Save campaign draft'),
             ),
           ],
         ),
@@ -872,6 +1326,49 @@ class _CampaignEditorState extends State<CampaignEditor> {
         decoration: InputDecoration(
           labelText: label,
           alignLabelWithHint: lines > 1,
+        ),
+      );
+}
+
+class _CampaignSection extends StatelessWidget {
+  const _CampaignSection({
+    required this.number,
+    required this.title,
+    required this.child,
+  });
+  final String number, title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    child: Text(number,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w800)),
+                  ),
+                  const SizedBox(width: 9),
+                  Text(title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              child,
+            ],
+          ),
         ),
       );
 }
