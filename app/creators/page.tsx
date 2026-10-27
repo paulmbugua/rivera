@@ -119,7 +119,7 @@ export default async function CreatorsPage({
                 <div className="creator-card-photo">
                   {creator.profileImageUrl ? <Image unoptimized width={360} height={220} src={creator.profileImageUrl} alt={`${creator.displayName} creator profile`} /> : <span>{creator.displayName.slice(0, 1)}</span>}
                 </div>
-                <div>
+                <div className="creator-card-copy">
                   <p className="creator-location">{creator.city}, {creator.countryCode}</p>
                   <h2>{creator.displayName}{creator.verificationStatus === "VERIFIED" && <span title="Verified by Rivera"> ✓</span>}</h2>
                   <p>{creator.headline}</p>
