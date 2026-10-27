@@ -538,10 +538,13 @@ function ApplicationCard({
 
 export function CreatorApplicationDetail({ id }: { id: string }) {
   const money = useDisplayMoney();
+  const router = useRouter();
   const search = useSearchParams()!;
   const [app, setApp] = useState<Application | null>(null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [review, setReview] = useState<Review | null>(null),
+    [feeConfirmed, setFeeConfirmed] = useState(false);
   const load = (poll = false) =>
     api<Application>(
       `/creators/me/applications/${id}${poll ? "/payment-status" : ""}`,
@@ -577,6 +580,57 @@ export function CreatorApplicationDetail({ id }: { id: string }) {
       setBusy(false);
     }
   }
+  async function prepareSubmission() {
+    setBusy(true);
+    setError("");
+    try {
+      setReview(
+        await api<Review>(`/creators/me/applications/${id}/review`, {
+          method: "POST",
+        }),
+      );
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function submitDraftWithCredit() {
+    if (!feeConfirmed || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const submitted = await api<Application>(
+        `/creators/me/applications/${id}/use-credit`,
+        { method: "POST" },
+      );
+      setApp(submitted);
+      setReview(null);
+      router.replace(`/dashboard/creator/applications/${id}?submitted=credit`);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+  async function checkoutDraft() {
+    if (!feeConfirmed || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const value = await api<{ checkoutUrl?: string | null }>(
+        `/creators/me/applications/${id}/checkout`,
+        { method: "POST" },
+      );
+      if (value.checkoutUrl) window.location.assign(value.checkoutUrl);
+      else {
+        await load();
+        router.replace(`/dashboard/creator/applications/${id}?submitted=free`);
+      }
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
   if (!app)
     return (
       <main className="application-shell">
@@ -608,6 +662,7 @@ export function CreatorApplicationDetail({ id }: { id: string }) {
           </p>
         )}
       </header>
+      {error && <p role="alert" className="form-error">{error}</p>}
       <div className="application-detail-grid">
         <article className="application-panel">
           <h2>Your Proposal</h2>
@@ -646,6 +701,55 @@ export function CreatorApplicationDetail({ id }: { id: string }) {
             </button>
           )}
         </article>
+        {app.status === "DRAFT" && (
+          <article className="application-panel proposal-review draft-submit-panel">
+            <p className="eyebrow">FINAL SUBMISSION</p>
+            <h2>Finish sending your proposal</h2>
+            {!review ? (
+              <>
+                <p>This proposal is still private. Review the current Rivera Application Fee, then submit it for the Business to see.</p>
+                <button className="button primary" disabled={busy} onClick={() => void prepareSubmission()}>
+                  {busy ? "Preparing final review…" : "Review and submit proposal"}
+                </button>
+              </>
+            ) : (
+              <>
+                <dl>
+                  <dt>Rivera Application Fee</dt>
+                  <dd>{money(review.fee.amountMinor, review.fee.currencyCode)}</dd>
+                  <dt>Free credits available</dt>
+                  <dd>{review.freeApplicationCredits}</dd>
+                </dl>
+                <PaymentCurrencyNote quote={review.fee.settlement} />
+                <div className="fee-disclosure">
+                  <strong>Submitting makes this proposal visible to the Business.</strong>
+                  <p>Your campaign proposal price is charged only if the Business hires you. The Rivera Application Fee is separate.</p>
+                  <Link href="/terms#application-fees">Application Fee Policy</Link>
+                </div>
+                <label className="check-line">
+                  <input type="checkbox" checked={feeConfirmed} onChange={(event) => setFeeConfirmed(event.target.checked)} />
+                  I understand the proposal price and Rivera Application Fee are separate.
+                </label>
+                <div className="dashboard-actions">
+                  <button className="button secondary" disabled={busy} onClick={() => setReview(null)}>Back</button>
+                  {review.freeApplicationCredits > 0 ? (
+                    <button className="button primary" disabled={!feeConfirmed || busy} onClick={() => void submitDraftWithCredit()}>
+                      {busy ? "Submitting proposal…" : `Use 1 free credit and submit (${review.freeApplicationCredits} available)`}
+                    </button>
+                  ) : review.fee.amountMinor === 0 ? (
+                    <button className="button primary" disabled={!feeConfirmed || busy} onClick={() => void checkoutDraft()}>
+                      {busy ? "Submitting proposal…" : "Submit proposal"}
+                    </button>
+                  ) : (
+                    <button className="button primary" disabled={!feeConfirmed || busy} onClick={() => void checkoutDraft()}>
+                      {busy ? "Preparing secure payment…" : `Pay ${money(review.fee.amountMinor, review.fee.currencyCode)} and submit`}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </article>
+        )}
         {[
           "SUBMITTED",
           "VIEWED",
