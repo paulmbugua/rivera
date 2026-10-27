@@ -1,0 +1,5 @@
+Creator profiles are now easier to read over every cover image.
+
+- Added a high-contrast profile information panel.
+- Strengthened cover-image shading for bright photos.
+- Improved creator name, location and headline legibility.

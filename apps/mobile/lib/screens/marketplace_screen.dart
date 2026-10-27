@@ -534,34 +534,7 @@ class CreatorDetailScreen extends StatelessWidget {
         appBar: AppBar(title: const RiveraLogo()),
         body: RiveraPage(
           children: [
-            Center(
-              child: CircleAvatar(
-                radius: 52,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                backgroundImage: creator['profileImageUrl'] != null
-                    ? NetworkImage(creator['profileImageUrl'].toString())
-                    : null,
-                child: creator['profileImageUrl'] == null
-                    ? Icon(
-                        Icons.person_outline,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              textOf(creator, ['displayName']),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-            const SizedBox(height: 7),
-            Text(
-              textOf(creator, ['headline'], 'Creator on Rivera'),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
+            _CreatorProfileHero(creator: creator),
             const SizedBox(height: 24),
             Card(
               child: Padding(
@@ -598,6 +571,148 @@ class CreatorDetailScreen extends StatelessWidget {
               );
             }),
           ],
+        ),
+      );
+}
+
+class _CreatorProfileHero extends StatelessWidget {
+  const _CreatorProfileHero({required this.creator});
+  final Map<String, dynamic> creator;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = (creator['coverImageUrl'] ?? '').toString();
+    final avatar = (creator['profileImageUrl'] ?? '').toString();
+    final location = [creator['city'], creator['countryCode']]
+        .where((value) => value != null && value.toString().trim().isNotEmpty)
+        .join(', ');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: AspectRatio(
+        aspectRatio: .88,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (cover.isNotEmpty)
+              Image.network(
+                cover,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const _CreatorHeroFallback(),
+              )
+            else
+              const _CreatorHeroFallback(),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x16000000),
+                    Color(0x8A031813),
+                    Color(0xF0031813),
+                  ],
+                  stops: [0, .53, 1],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 14,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xEE0A2721),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0x4DFFFFFF)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x59000000),
+                      blurRadius: 22,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    CircleAvatar(
+                      radius: 29,
+                      backgroundColor: riveraCream,
+                      backgroundImage:
+                          avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                      child: avatar.isEmpty
+                          ? const Icon(Icons.person_outline, color: riveraInk)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (location.isNotEmpty)
+                            Text(
+                              location.toUpperCase(),
+                              style: const TextStyle(
+                                color: Color(0xFFD9F59D),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.25,
+                              ),
+                            ),
+                          const SizedBox(height: 3),
+                          Text(
+                            textOf(creator, ['displayName']),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Arial',
+                              fontSize: 24,
+                              height: 1.05,
+                              fontWeight: FontWeight.w800,
+                              shadows: [
+                                Shadow(color: Colors.black87, blurRadius: 4),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            textOf(creator, ['headline'], 'Creator on Rivera'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFE8F1ED),
+                              fontSize: 13,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreatorHeroFallback extends StatelessWidget {
+  const _CreatorHeroFallback();
+  @override
+  Widget build(BuildContext context) => const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF397464), Color(0xFF102E27)],
+          ),
         ),
       );
 }
