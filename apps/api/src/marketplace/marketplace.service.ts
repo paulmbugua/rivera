@@ -402,6 +402,85 @@ export class MarketplaceService {
     };
   }
 
+  private async selectableCreator(slug: string) {
+    const creator = await this.db.creatorProfile.findFirst({
+      where: {
+        slug,
+        publishedAt: { not: null },
+        profileVisibility: { in: ["PUBLIC", "UNLISTED"] },
+      },
+      include: creatorInclude,
+    });
+    if (!creator)
+      this.error(
+        HttpStatus.NOT_FOUND,
+        "CREATOR_PROFILE_NOT_FOUND",
+        "Creator profile not found.",
+      );
+    return creator;
+  }
+
+  async selectedCreatorStatus(userId: string, slug: string) {
+    const [business, creator] = await Promise.all([
+      this.ownerBusiness(userId),
+      this.selectableCreator(slug),
+    ]);
+    const selected = await this.db.savedCreator.findUnique({
+      where: {
+        businessId_creatorId: {
+          businessId: business.id,
+          creatorId: creator.id,
+        },
+      },
+    });
+    return { selected: Boolean(selected), selectedAt: selected?.createdAt ?? null };
+  }
+
+  async selectCreator(userId: string, slug: string) {
+    const [business, creator] = await Promise.all([
+      this.ownerBusiness(userId),
+      this.selectableCreator(slug),
+    ]);
+    const selected = await this.db.savedCreator.upsert({
+      where: {
+        businessId_creatorId: {
+          businessId: business.id,
+          creatorId: creator.id,
+        },
+      },
+      create: { businessId: business.id, creatorId: creator.id },
+      update: {},
+    });
+    return { selected: true, selectedAt: selected.createdAt };
+  }
+
+  async unselectCreator(userId: string, slug: string) {
+    const [business, creator] = await Promise.all([
+      this.ownerBusiness(userId),
+      this.selectableCreator(slug),
+    ]);
+    await this.db.savedCreator.deleteMany({
+      where: { businessId: business.id, creatorId: creator.id },
+    });
+    return { selected: false };
+  }
+
+  async selectedCreators(userId: string) {
+    const business = await this.ownerBusiness(userId);
+    const rows = await this.db.savedCreator.findMany({
+      where: { businessId: business.id },
+      include: { creator: { include: creatorInclude } },
+      orderBy: { createdAt: "desc" },
+    });
+    return {
+      items: rows.map((row) => ({
+        ...this.publicCreator(row.creator),
+        selectedAt: row.createdAt,
+      })),
+      total: rows.length,
+    };
+  }
+
   async socialList(userId: string) {
     return (await this.ownerCreator(userId)).socialAccounts;
   }

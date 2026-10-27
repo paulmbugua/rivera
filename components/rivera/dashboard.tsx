@@ -11,7 +11,7 @@ function navigationIcon(text:string){
   if(text.includes('Message')||text==='Support')return MessageSquare;
   if(text==='Settings')return Settings;
   if(text.includes('Profile')||text==='Creators'||text==='Businesses')return UserRound;
-  if(text==='Saved')return Bookmark;
+  if(text==='Saved'||text==='Selected Creators')return Bookmark;
   if(text.includes('Payment')||text.includes('Fee')||text==='Earnings'||text==='Payouts'||text==='Transfers'||text==='Refunds')return Wallet;
   if(text.includes('Application')||text==='Reports'||text==='Data Requests')return FileText;
   if(text==='Offers'||text==='Collaborations')return Handshake;
@@ -138,6 +138,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
             ["Messages", "/dashboard/business/messages"],
             ["Payments", "/dashboard/business/payments"],
             ["Create Campaign", "/dashboard/business/campaigns/new"],
+            ["Selected Creators", "/dashboard/business/creators"],
             ["Profile", "/dashboard/business/profile"],
             ["Find Creators", "/creators"],
             ["Settings", "/settings"],
@@ -198,7 +199,7 @@ function Inner({ role }: { role: "BUSINESS" | "CREATOR" | "ADMIN" }) {
   ]:role==='BUSINESS'?[
     {label:'My campaigns',hint:'Manage your opportunities',href:campaignsHref,icon:Megaphone},
     {label:'Messages',hint:'Keep partnerships moving',href:base+'/messages',icon:MessageSquare},
-    {label:'Find creators',hint:'Meet your next collaborator',href:'/creators',icon:Search},
+    {label:'Selected creators',hint:'Return to profiles you liked',href:base+'/creators',icon:Bookmark},
     {label:'Payments',hint:'Funding and payment history',href:base+'/payments',icon:Wallet},
   ]:[
     {label:'My applications',hint:'Follow your proposals',href:base+'/applications',icon:FileText},

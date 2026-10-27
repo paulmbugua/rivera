@@ -373,8 +373,8 @@ enum OperationalJobStatus {
 }
 
 model User {
-  id                            String                    @id @default(cuid())
-  email                         String                    @unique
+  id                            String                     @id @default(cuid())
+  email                         String                     @unique
   passwordHash                  String?
   firstName                     String
   lastName                      String
@@ -382,12 +382,12 @@ model User {
   countryCode                   String?
   city                          String?
   profileImageUrl               String?
-  status                        UserStatus                @default(PENDING_VERIFICATION)
+  status                        UserStatus                 @default(PENDING_VERIFICATION)
   emailVerifiedAt               DateTime?
   lastLoginAt                   DateTime?
   deletedAt                     DateTime?
-  createdAt                     DateTime                  @default(now())
-  updatedAt                     DateTime                  @updatedAt
+  createdAt                     DateTime                   @default(now())
+  updatedAt                     DateTime                   @updatedAt
   roles                         UserRoleAssignment[]
   sessions                      RefreshSession[]
   verificationTokens            EmailVerificationToken[]
@@ -395,19 +395,19 @@ model User {
   reactivationTokens            AccountReactivationToken[]
   business                      BusinessProfile?
   creator                       CreatorProfile?
-  verificationRequests          VerificationRequest[]     @relation("VerificationOwner")
-  verificationReviews           VerificationRequest[]     @relation("VerificationReviewer")
+  verificationRequests          VerificationRequest[]      @relation("VerificationOwner")
+  verificationReviews           VerificationRequest[]      @relation("VerificationReviewer")
   notifications                 Notification[]
   pushTokens                    PushDeviceToken[]
   conversationMemberships       ConversationParticipant[]
   messages                      Message[]
-  deliverableReviews            DeliverableSubmission[]   @relation("SubmissionReviewer")
-  reviewsGiven                  Review[]                  @relation("ReviewAuthor")
-  reviewsReceived               Review[]                  @relation("ReviewSubject")
+  deliverableReviews            DeliverableSubmission[]    @relation("SubmissionReviewer")
+  reviewsGiven                  Review[]                   @relation("ReviewAuthor")
+  reviewsReceived               Review[]                   @relation("ReviewSubject")
   reviewReports                 ReviewReport[]
-  paymentIssuesOpened           PaymentIssue[]            @relation("PaymentIssueOpener")
-  collaborationRefundsRequested CollaborationRefund[]     @relation("CollaborationRefundRequester")
-  collaborationRefundsApproved  CollaborationRefund[]     @relation("CollaborationRefundApprover")
+  paymentIssuesOpened           PaymentIssue[]             @relation("PaymentIssueOpener")
+  collaborationRefundsRequested CollaborationRefund[]      @relation("CollaborationRefundRequester")
+  collaborationRefundsApproved  CollaborationRefund[]      @relation("CollaborationRefundApprover")
   notificationPreferences       NotificationPreference[]
   safetyReports                 SafetyReport[]             @relation("SafetyReportReporter")
   safetyReportsReviewed         SafetyReport[]             @relation("SafetyReportReviewer")
@@ -547,6 +547,7 @@ model BusinessProfile {
   campaignParticipants     CampaignParticipant[]
   workItems                CampaignWorkItem[]
   collaborationPayments    CollaborationPayment[]
+  selectedCreators         SavedCreator[]
 
   @@index([country])
   @@index([industryId])
@@ -606,9 +607,22 @@ model CreatorProfile {
   payoutAccount            CreatorPayoutAccount?
   collaborationPayments    CollaborationPayment[]
   creatorTransfers         CreatorTransfer[]
+  selectedByBusinesses     SavedCreator[]
 
   @@index([country])
   @@index([profileVisibility, verificationStatus])
+}
+
+model SavedCreator {
+  businessId String
+  creatorId  String
+  createdAt  DateTime        @default(now())
+  business   BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  creator    CreatorProfile  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, creatorId])
+  @@index([creatorId])
+  @@index([businessId, createdAt])
 }
 
 model Category {
@@ -1049,34 +1063,34 @@ model CollaborationOffer {
 }
 
 model CampaignParticipant {
-  id                      String                    @id @default(cuid())
-  campaignId              String
-  campaign                Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
-  creatorId               String
-  creator                 CreatorProfile            @relation(fields: [creatorId], references: [id], onDelete: Restrict)
-  businessId              String
-  business                BusinessProfile           @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  applicationId           String                    @unique
-  application             CampaignApplication       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  offerId                 String                    @unique
-  offer                   CollaborationOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  status                  CampaignParticipantStatus @default(AWAITING_FUNDING)
-  agreedCompensationMinor Int
-  currencyCode            String                    @db.VarChar(3)
-  joinedAt                DateTime                  @default(now())
-  fundingDueAt            DateTime?
-  fundingReminderSentAt   DateTime?
+  id                       String                    @id @default(cuid())
+  campaignId               String
+  campaign                 Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  creatorId                String
+  creator                  CreatorProfile            @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  businessId               String
+  business                 BusinessProfile           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  applicationId            String                    @unique
+  application              CampaignApplication       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  offerId                  String                    @unique
+  offer                    CollaborationOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  status                   CampaignParticipantStatus @default(AWAITING_FUNDING)
+  agreedCompensationMinor  Int
+  currencyCode             String                    @db.VarChar(3)
+  joinedAt                 DateTime                  @default(now())
+  fundingDueAt             DateTime?
+  fundingReminderSentAt    DateTime?
   fundingOverdueNotifiedAt DateTime?
-  activatedAt             DateTime?
-  endedAt                 DateTime?
-  completedAt             DateTime?
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  workItems               CampaignWorkItem[]
-  submissions             DeliverableSubmission[]
-  reviews                 Review[]
-  collaborationPayment    CollaborationPayment?
-  paymentIssues           PaymentIssue[]
+  activatedAt              DateTime?
+  endedAt                  DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  workItems                CampaignWorkItem[]
+  submissions              DeliverableSubmission[]
+  reviews                  Review[]
+  collaborationPayment     CollaborationPayment?
+  paymentIssues            PaymentIssue[]
 
   @@unique([campaignId, creatorId])
   @@index([campaignId, status])
@@ -1449,24 +1463,24 @@ model ApplicationAuditLog {
 }
 
 model Notification {
-  id            String               @id @default(cuid())
-  userId        String
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  creatorId     String?
-  creator       CreatorProfile?      @relation("CreatorNotifications", fields: [creatorId], references: [id], onDelete: Cascade)
-  businessId    String?
-  business      BusinessProfile?     @relation("BusinessNotifications", fields: [businessId], references: [id], onDelete: Cascade)
-  applicationId String?
-  application   CampaignApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  type          String               @db.VarChar(80)
-  title         String               @db.VarChar(160)
-  body          String               @db.VarChar(500)
-  readAt        DateTime?
-  pushAttemptedAt DateTime?
-  pushDeliveredAt DateTime?
-  pushAttemptCount Int                @default(0)
-  pushLastError String?               @db.VarChar(500)
-  createdAt     DateTime             @default(now())
+  id               String               @id @default(cuid())
+  userId           String
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creatorId        String?
+  creator          CreatorProfile?      @relation("CreatorNotifications", fields: [creatorId], references: [id], onDelete: Cascade)
+  businessId       String?
+  business         BusinessProfile?     @relation("BusinessNotifications", fields: [businessId], references: [id], onDelete: Cascade)
+  applicationId    String?
+  application      CampaignApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type             String               @db.VarChar(80)
+  title            String               @db.VarChar(160)
+  body             String               @db.VarChar(500)
+  readAt           DateTime?
+  pushAttemptedAt  DateTime?
+  pushDeliveredAt  DateTime?
+  pushAttemptCount Int                  @default(0)
+  pushLastError    String?              @db.VarChar(500)
+  createdAt        DateTime             @default(now())
 
   @@index([userId, createdAt])
   @@index([applicationId])
@@ -1504,19 +1518,19 @@ model NotificationPreference {
 }
 
 model SafetyReport {
-  id                String             @id @default(cuid())
-  reporterId        String
-  reporter          User               @relation("SafetyReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  reviewedById      String?
-  reviewedBy        User?              @relation("SafetyReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  type              SafetyReportType
-  subjectId         String
-  reason            String             @db.VarChar(1000)
-  status            SafetyReportStatus @default(OPEN)
-  privateAdminNote  String?            @db.VarChar(2000)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  resolvedAt        DateTime?
+  id               String             @id @default(cuid())
+  reporterId       String
+  reporter         User               @relation("SafetyReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reviewedById     String?
+  reviewedBy       User?              @relation("SafetyReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  type             SafetyReportType
+  subjectId        String
+  reason           String             @db.VarChar(1000)
+  status           SafetyReportStatus @default(OPEN)
+  privateAdminNote String?            @db.VarChar(2000)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  resolvedAt       DateTime?
 
   @@unique([reporterId, type, subjectId])
   @@index([status, createdAt])
@@ -1541,15 +1555,15 @@ model AnalyticsEvent {
 }
 
 model DataLifecycleRequest {
-  id           String                     @id @default(cuid())
-  userId       String
-  user         User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  type         DataLifecycleRequestType
-  status       DataLifecycleRequestStatus @default(REQUESTED)
-  privateNote  String?                    @db.VarChar(2000)
-  requestedAt  DateTime                   @default(now())
-  completedAt  DateTime?
-  updatedAt    DateTime                   @updatedAt
+  id          String                     @id @default(cuid())
+  userId      String
+  user        User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type        DataLifecycleRequestType
+  status      DataLifecycleRequestStatus @default(REQUESTED)
+  privateNote String?                    @db.VarChar(2000)
+  requestedAt DateTime                   @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime                   @updatedAt
 
   @@index([userId, status])
   @@index([type, status, requestedAt])

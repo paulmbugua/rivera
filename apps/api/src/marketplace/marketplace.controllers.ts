@@ -46,6 +46,10 @@ export class BusinessController {
   @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Post('me/publish') publish(@CurrentUser() user: { id: string }) { return this.service.publishBusiness(user.id); }
   @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Post('me/unpublish') unpublish(@CurrentUser() user: { id: string }) { return this.service.unpublishBusiness(user.id); }
   @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Get('me/completion') completion(@CurrentUser() user: { id: string }) { return this.service.businessOwner(user.id).then(profile => ({ profileCompletion: profile.profileCompletion })); }
+  @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Get('me/selected-creators') selectedCreators(@CurrentUser() user: { id: string }) { return this.service.selectedCreators(user.id); }
+  @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Get('me/selected-creators/:slug/status') selectedCreatorStatus(@CurrentUser() user: { id: string }, @Param('slug') slug: string) { return this.service.selectedCreatorStatus(user.id, slug); }
+  @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Post('me/selected-creators/:slug') selectCreator(@CurrentUser() user: { id: string }, @Param('slug') slug: string) { return this.service.selectCreator(user.id, slug); }
+  @UseGuards(AuthGuard) @Roles('BUSINESS') @ApiCookieAuth('access-cookie') @Delete('me/selected-creators/:slug') unselectCreator(@CurrentUser() user: { id: string }, @Param('slug') slug: string) { return this.service.unselectCreator(user.id, slug); }
   @Get(':slug') @ApiOperation({ summary: 'Get a public or unlisted business profile' }) publicProfile(@Param('slug') slug: string) { return this.service.businessPublic(slug); }
 }
 
