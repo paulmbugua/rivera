@@ -28,7 +28,7 @@ export class WorkspaceService {
   }
   private async ensureWorkItems(participantId:string) {
     await this.db.$transaction(async tx => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${participantId}))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${participantId}))::text`;
       if (await tx.campaignWorkItem.count({where:{campaignParticipantId:participantId}})) return;
       const participant = await tx.campaignParticipant.findUniqueOrThrow({where:{id:participantId},include:{campaign:{include:{deliverables:true}},offer:true}});
       const source = participant.campaign.deliverables.length ? participant.campaign.deliverables : [{title:'Agreed deliverables',description:participant.offer.deliverablesSummary,contentTypeId:null,platform:null,quantity:1,dueDate:participant.offer.deliveryDeadline,sortOrder:0}];
@@ -65,7 +65,7 @@ export class WorkspaceService {
   }
   private async createSubmission(userId:string,item:any,message:string|undefined,assets:any[]) {
     const result=await this.db.$transaction(async tx=>{
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${item.id}))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${item.id}))::text`;
       const current=await tx.campaignWorkItem.findUniqueOrThrow({where:{id:item.id},include:{submissions:{orderBy:{version:'desc'},take:1},campaignParticipant:{include:{collaborationPayment:true}}}});
       if(current.campaignParticipant.status!=='ACTIVE'||current.campaignParticipant.collaborationPayment?.status!=='FUNDED') this.fail(HttpStatus.CONFLICT,'COLLABORATION_NOT_FUNDED','This collaboration must be funded before Campaign work can be submitted.');
       if(!['PENDING','IN_PROGRESS','REVISION_REQUESTED'].includes(current.status)) this.fail(HttpStatus.CONFLICT,'WORK_ITEM_NOT_SUBMITTABLE','This work item cannot accept a new version right now.');

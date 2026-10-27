@@ -668,7 +668,9 @@ export class CollaborationsService {
     }
     const participant = await this.db.$transaction(
       async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${current.campaignId}))`;
+        // PostgreSQL returns `void` for advisory locks. Cast it so Prisma can
+        // deserialize the result instead of throwing P2010 after taking the lock.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${current.campaignId}))::text`;
         const offer = await tx.collaborationOffer.findUniqueOrThrow({
           where: { id },
           include: {
