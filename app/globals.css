@@ -482,18 +482,19 @@ button:disabled,.button:disabled{opacity:.62}
 .select-creator-control{display:grid;gap:5px;text-align:center}.select-creator-control>a{color:#fff;font-size:11px;font-weight:800;text-decoration:underline;text-underline-offset:3px}.select-creator-control>small{max-width:190px;color:#ffd2cd;font-size:10px}
 
 .creator-directory{grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
-.creator-card{position:relative;isolation:isolate;min-width:0;min-height:300px;border-radius:16px!important;color:#fff;box-shadow:0 10px 28px rgba(2,18,14,.2)!important}
+.creator-card{position:relative;isolation:isolate;min-width:0;min-height:310px;border:1px solid rgba(122,178,151,.28)!important;border-radius:18px!important;color:#fff;box-shadow:0 20px 48px rgba(2,18,14,.22),0 4px 14px rgba(2,18,14,.16)!important;transition:transform .22s ease,box-shadow .22s ease}
+.creator-card:hover{transform:translateY(-4px);box-shadow:0 28px 58px rgba(2,18,14,.28),0 8px 20px rgba(2,18,14,.18)!important}
 .creator-card-photo{position:absolute;inset:0;height:100%!important;background:linear-gradient(135deg,var(--rivera-sage),color-mix(in srgb,var(--rivera-green) 54%,var(--rivera-paper)))}
-.creator-card-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,17,14,.03) 24%,rgba(3,17,14,.52) 62%,rgba(2,12,10,.94) 100%);pointer-events:none}
+.creator-card-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,17,14,0) 32%,rgba(3,17,14,.08) 44%,rgba(3,17,14,.64) 72%,rgba(2,12,10,.98) 100%);pointer-events:none}
 .creator-card-photo img{object-position:center 48%}
 .creator-card-photo span{color:var(--rivera-ink);font-size:48px}
-.creator-card>.creator-card-copy{position:absolute;z-index:2;left:9px;right:9px;bottom:9px;padding:12px!important;border:1px solid rgba(255,255,255,.28);border-radius:13px;background:rgba(4,24,19,.95);box-shadow:0 12px 28px rgba(0,0,0,.42);backdrop-filter:blur(10px)}
+.creator-card>.creator-card-copy{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:70px 15px 15px!important;border:0;border-radius:0 0 17px 17px;background:linear-gradient(180deg,rgba(3,20,16,0),rgba(3,20,16,.62) 35%,rgba(3,20,16,.92) 72%,rgba(2,14,11,.98));box-shadow:none}
 .creator-card .creator-location{margin:0;color:#d9f59d!important;font-size:9px;line-height:1.2}
-.creator-card h2{margin:4px 0 3px;color:#fff;font-size:18px;line-height:1.08;letter-spacing:-.03em;text-shadow:0 2px 5px rgba(0,0,0,.8)}
-.creator-card>.creator-card-copy>p{margin:4px 0;color:#e1ece8!important;font-size:11px;line-height:1.35}
+.creator-card h2{margin:4px 0 3px;color:#fff;font-size:18px;line-height:1.08;letter-spacing:-.03em;text-shadow:0 2px 12px rgba(0,0,0,.9)}
+.creator-card>.creator-card-copy>p{margin:4px 0;color:#edf6f2!important;font-size:11px;line-height:1.35;text-shadow:0 1px 7px rgba(0,0,0,.9)}
 .creator-card>.creator-card-copy>p strong{color:#fff}
-.creator-card .tag-row{gap:4px;margin:8px 0}.creator-card .tag-row span{padding:4px 6px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.12);color:#fff;font-size:9px}
-.creator-card a{display:inline-flex;margin-top:7px;color:#d9f59d;font-size:11px;font-weight:850;text-decoration:underline;text-underline-offset:3px}
+.creator-card .tag-row{gap:4px;margin:8px 0}.creator-card .tag-row span{padding:4px 7px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.14);color:#fff;font-size:9px;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.creator-card a{display:inline-flex;margin-top:7px;color:#d9f59d;font-size:11px;font-weight:850;text-decoration:none;border-bottom:1px solid currentColor;text-shadow:0 1px 8px rgba(0,0,0,.9)}
 
 .selected-creators-page{width:min(1040px,calc(100% - 40px));margin:0 auto;padding:42px 0 90px;color:var(--rivera-ink)}
 .selected-creators-page>header{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;margin-bottom:28px}.selected-creators-page>header h1{margin:8px 0;font-size:clamp(38px,5vw,58px);line-height:.95}.selected-creators-page>header p:last-child{margin-bottom:0;color:var(--rivera-muted)}
