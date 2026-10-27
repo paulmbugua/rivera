@@ -465,15 +465,15 @@ button:disabled,.button:disabled{opacity:.62}
 /* Creator discovery: compact, high-contrast cards and an actionable profile hero */
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .profile-hero{position:relative;min-height:350px;margin-bottom:30px;overflow:hidden;border-radius:24px;background:radial-gradient(circle at 18% 20%,#b9dc77,transparent 35%),linear-gradient(135deg,#234b40,#6d9c79);background-position:center;background-size:cover;box-shadow:var(--rivera-shadow);isolation:isolate}
-.profile-hero-scrim{position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(4,18,15,.12) 14%,rgba(4,18,15,.68) 56%,rgba(2,12,10,.97) 100%)}
+.profile-hero-scrim{position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(3,17,14,0) 34%,rgba(3,17,14,.12) 50%,rgba(3,17,14,.62) 76%,rgba(2,12,10,.96) 100%)}
 .profile-hero-content{position:absolute;inset:auto 26px 24px;display:grid;grid-template-columns:112px minmax(0,1fr) auto;align-items:end;gap:18px;color:#fff}
 .profile-hero .public-avatar{width:112px;height:112px;border:4px solid rgba(255,255,255,.92);background:#d9edac;color:#142620;box-shadow:0 14px 35px rgba(0,0,0,.26)}
-.profile-hero-copy{width:fit-content;max-width:680px;padding:14px 17px;border:1px solid rgba(255,255,255,.3);border-radius:16px;background:rgba(4,24,19,.94);box-shadow:0 14px 35px rgba(0,0,0,.45);backdrop-filter:blur(12px)}
+.profile-hero-copy{width:fit-content;max-width:680px;padding:8px 0;background:transparent;border:0;box-shadow:none}
 .profile-hero-copy .creator-location{margin:0 0 4px;color:#d7f29b!important;font-size:10px;letter-spacing:.17em}
-.profile-hero-copy h1{margin:0;color:#fff;font-size:clamp(29px,4vw,44px);line-height:1;letter-spacing:-.045em;text-wrap:balance;text-shadow:0 2px 6px rgba(0,0,0,.85)}
+.profile-hero-copy h1{margin:0;color:#fff;font-size:clamp(29px,4vw,44px);line-height:1;letter-spacing:-.045em;text-wrap:balance;text-shadow:0 3px 16px rgba(0,0,0,.95)}
 .profile-hero-copy h1 span{color:#d7f29b}
-.profile-hero-copy h2{margin:5px 0 0;color:rgba(255,255,255,.9);font:600 14px/1.35 Inter,ui-sans-serif,system-ui,sans-serif}
-.profile-hero-signals{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:8px;color:rgba(255,255,255,.82);font-size:11px;font-weight:700}
+.profile-hero-copy h2{margin:5px 0 0;color:rgba(255,255,255,.94);font:600 14px/1.35 Inter,ui-sans-serif,system-ui,sans-serif;text-shadow:0 2px 10px rgba(0,0,0,.9)}
+.profile-hero-signals{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:8px;color:rgba(255,255,255,.92);font-size:11px;font-weight:700;text-shadow:0 2px 9px rgba(0,0,0,.95)}
 .profile-hero-copy .tag-row{margin:9px 0 0}.profile-hero-copy .tag-row span{padding:4px 8px;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.16);font-size:10px}
 .profile-hero-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:180px}
 .profile-hero-actions>.button,.profile-select-button{min-height:42px;justify-content:center;border:1px solid rgba(255,255,255,.35)!important;background:rgba(255,255,255,.92)!important;color:#142620!important;font-size:12px;font-weight:850;backdrop-filter:blur(8px)}

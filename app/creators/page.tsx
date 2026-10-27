@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
+import { BrandHomeLink } from "@/components/rivera/brand-home-link";
 import { JsonLd } from "@/components/rivera/json-ld";
 import { publicApi } from "@/lib/api";
 import { absoluteUrl, SOCIAL_IMAGE } from "@/lib/seo";
@@ -82,7 +83,7 @@ export default async function CreatorsPage({
       }} />
 
       <header className="directory-header">
-        <Link href="/" className="brand"><span className="brand-mark">R.</span>rivera</Link>
+        <BrandHomeLink />
         <div>
           <p className="eyebrow">CREATOR DIRECTORY</p>
           <h1>Find the right voice.</h1>

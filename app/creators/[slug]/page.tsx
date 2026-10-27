@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BrandHomeLink } from "@/components/rivera/brand-home-link";
 import { SelectCreatorButton } from "@/components/rivera/select-creator-button";
 import { ShareProfile } from "@/components/rivera/share-profile";
 import { publicApi } from "@/lib/api";
@@ -40,7 +41,7 @@ export default async function CreatorPage({ params }: { params: Promise<{ slug: 
 
   return (
     <main className="public-profile">
-      <nav><Link href="/" className="brand"><span className="brand-mark">R.</span>rivera</Link><Link href="/creators">Find creators</Link></nav>
+      <nav><BrandHomeLink /><Link href="/creators">Find creators</Link></nav>
       <header className="profile-hero" style={profile.coverImageUrl ? { backgroundImage: `url(${profile.coverImageUrl})` } : undefined}>
         <div className="profile-hero-scrim" aria-hidden="true" />
         <div className="profile-hero-content">
