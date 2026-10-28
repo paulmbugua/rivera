@@ -6,7 +6,8 @@ test('product scale is loaded last and covers auth, finance, settings and mobile
   const root=source('app/layout.tsx'),css=source('app/product-scale.css');
   assert.ok(root.indexOf('./product-scale.css')>root.indexOf('./globals.css'));
   for(const item of ['--product-content: 1024px','--product-auth: 420px','.auth-shell .auth-frame','.application-shell','.settings-shell','max-width: 900px','max-width: 600px','max-width: 360px','font-size: 16px','focus-visible','prefers-reduced-motion'])assert.ok(css.includes(item),item);
-  assert.doesNotMatch(css,/\bzoom\s*:|transform:\s*scale|user-scalable/);
+  assert.match(css,/@media \(min-width: 901px\)\s*\{\s*html \{ zoom: \.9; \}/);
+  assert.doesNotMatch(css,/transform:\s*scale|user-scalable/);
 });
 test('Flutter uses shared responsive rails without capping accessibility text scaling',()=>{
   const rails=source('apps/mobile/lib/widgets/responsive.dart');

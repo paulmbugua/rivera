@@ -7,6 +7,13 @@
   --product-gap: 16px;
   --product-radius: 14px;
 }
+
+/* Match the compact 90% desktop presentation requested for Rivera without
+   changing the browser's user-controlled zoom setting. Keep touch layouts at
+   their native scale so mobile and tablet text and controls remain readable. */
+@media (min-width: 901px) {
+  html { zoom: .9; }
+}
 .auth-shell {
   min-height: 100dvh;
   display: grid;
