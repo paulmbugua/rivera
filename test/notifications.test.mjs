@@ -52,6 +52,7 @@ test("every new bell notification enters preference-aware idempotent email deliv
   assert.match(delivery, /dispatchPendingEmail/);
   assert.match(delivery, /emailEnabled/);
   assert.match(delivery, /claimed\.count !== 1/);
+  assert.match(delivery, /notification_email_provider_circuit_open/);
   assert.match(delivery, /sendNotificationEmail/);
   assert.match(mail, /View in Rivera/);
   assert.match(compose, /EMAIL_NOTIFICATIONS_ENABLED/);

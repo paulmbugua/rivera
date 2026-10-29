@@ -14,6 +14,7 @@ import { RegisterPushTokenDto } from "./push-notifications.dto";
 
 const retryDelayMs = 5 * 60_000;
 const recentWindowMs = 48 * 60 * 60_000;
+const providerCircuitDelayMs = 30 * 60_000;
 const invalidTokenCodes = new Set([
   "messaging/registration-token-not-registered",
   "messaging/invalid-registration-token",
@@ -77,6 +78,7 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private configured = false;
   private dispatching = false;
+  private emailPausedUntil = 0;
 
   constructor(
     private readonly db: PrismaService,
@@ -294,6 +296,7 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
     retryBefore: Date,
     recentAfter: Date,
   ) {
+    if (Date.now() < this.emailPausedUntil) return;
     const pending = await this.db.notification.findMany({
       where: {
         createdAt: { gte: recentAfter },
@@ -378,6 +381,7 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Email send failed";
+        const providerBlocked = /Unusual sending activity|temporarily blocked/i.test(message);
         await this.db.notification.update({
           where: { id: notification.id },
           data: { emailLastError: message.slice(0, 500) },
@@ -385,6 +389,13 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           JSON.stringify({ event: "notification_email_failed", notificationId: notification.id, category }),
         );
+        if (providerBlocked) {
+          this.emailPausedUntil = Date.now() + providerCircuitDelayMs;
+          this.logger.warn(
+            JSON.stringify({ event: "notification_email_provider_circuit_open", retryAfterMinutes: 30 }),
+          );
+          break;
+        }
       }
     }
   }
