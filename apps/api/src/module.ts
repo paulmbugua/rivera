@@ -142,6 +142,7 @@ const env = z.object({
     .default(48),
   ERROR_MONITORING_ENABLED: z.enum(["true", "false"]).default("false"),
   PUSH_NOTIFICATIONS_ENABLED: z.enum(["true", "false"]).default("true"),
+  EMAIL_NOTIFICATIONS_ENABLED: z.enum(["true", "false"]).default("true"),
   PUSH_DISPATCH_INTERVAL_MS: z.coerce.number().int().min(5000).default(15000),
 });
 function validate(config: Record<string, unknown>) {

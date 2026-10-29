@@ -1480,11 +1480,16 @@ model Notification {
   pushDeliveredAt  DateTime?
   pushAttemptCount Int                  @default(0)
   pushLastError    String?              @db.VarChar(500)
+  emailAttemptedAt DateTime?
+  emailDeliveredAt DateTime?
+  emailAttemptCount Int                 @default(0)
+  emailLastError   String?              @db.VarChar(500)
   createdAt        DateTime             @default(now())
 
   @@index([userId, createdAt])
   @@index([applicationId])
   @@index([pushAttemptedAt, createdAt])
+  @@index([emailAttemptedAt, createdAt])
 }
 
 model PushDeviceToken {

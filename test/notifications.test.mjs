@@ -40,3 +40,20 @@ test("server persists device tokens and dispatches durable notifications", async
   assert.match(push, /sendEachForMulticast/);
   assert.match(push, /channelId: "rivera_activity"/);
 });
+
+test("every new bell notification enters preference-aware idempotent email delivery", async () => {
+  const schema = await source("apps/api/prisma/schema.prisma");
+  const delivery = await source("apps/api/src/notifications/push-notifications.service.ts");
+  const mail = await source("apps/api/src/auth/mail.service.ts");
+  const migration = await source("apps/api/prisma/migrations/20261029_notification_email_delivery/migration.sql");
+  const compose = await source("docker-compose.yml");
+  assert.match(schema, /emailDeliveredAt\s+DateTime\?/);
+  assert.match(schema, /emailAttemptCount\s+Int\s+@default\(0\)/);
+  assert.match(delivery, /dispatchPendingEmail/);
+  assert.match(delivery, /emailEnabled/);
+  assert.match(delivery, /claimed\.count !== 1/);
+  assert.match(delivery, /sendNotificationEmail/);
+  assert.match(mail, /View in Rivera/);
+  assert.match(compose, /EMAIL_NOTIFICATIONS_ENABLED/);
+  assert.match(migration, /Do not send the historical bell backlog/);
+});

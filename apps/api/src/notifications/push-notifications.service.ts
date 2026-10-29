@@ -9,6 +9,7 @@ import { cert, getApps, initializeApp, ServiceAccount } from "firebase-admin/app
 import { BatchResponse, getMessaging } from "firebase-admin/messaging";
 import { readFileSync } from "node:fs";
 import { PrismaService } from "../common/prisma.service";
+import { MailService } from "../auth/mail.service";
 import { RegisterPushTokenDto } from "./push-notifications.dto";
 
 const retryDelayMs = 5 * 60_000;
@@ -19,7 +20,7 @@ const invalidTokenCodes = new Set([
   "messaging/invalid-argument",
 ]);
 
-function categoryFor(type: string): NotificationCategory {
+export function categoryFor(type: string): NotificationCategory {
   const value = type.toUpperCase();
   if (value.includes("MESSAGE") || value.includes("CONVERSATION")) return "MESSAGES";
   if (value.includes("OFFER")) return "OFFERS";
@@ -32,6 +33,44 @@ function categoryFor(type: string): NotificationCategory {
   return "ACCOUNT";
 }
 
+function routeFor(type: string, roles: string[]) {
+  const value = type.toUpperCase();
+  const admin = roles.includes("ADMIN");
+  const business = roles.includes("BUSINESS");
+  const role = business ? "business" : "creator";
+  if (value.startsWith("PAYOUT_") && admin) return "/admin/transfers";
+  if (value.startsWith("WISE_"))
+    return admin
+      ? "/admin/wise-payouts"
+      : business
+        ? "/dashboard/business/payments"
+        : "/dashboard/creator/payouts";
+  if (value.includes("MESSAGE")) return `/dashboard/${role}/messages`;
+  if (/PAYMENT|FUND|TRANSFER|PAYOUT|REFUND|EARNING|CREDIT/.test(value))
+    return admin
+      ? "/admin/collaboration-payments"
+      : business
+        ? "/dashboard/business/payments"
+        : "/dashboard/creator/earnings";
+  if (value.includes("OFFER"))
+    return business
+      ? "/dashboard/business/campaigns"
+      : "/dashboard/creator/offers";
+  if (/COLLAB|DELIVERABLE|REVISION|PARTICIPANT/.test(value))
+    return business
+      ? "/dashboard/business/campaigns"
+      : "/dashboard/creator/collaborations";
+  if (/APPLICATION|PROPOSAL|SHORTLIST/.test(value))
+    return business
+      ? "/dashboard/business/campaigns"
+      : "/dashboard/creator/applications";
+  if (value.includes("CAMPAIGN"))
+    return business
+      ? "/dashboard/business/campaigns"
+      : "/dashboard/creator/opportunities";
+  return admin ? "/admin" : `/dashboard/${role}`;
+}
+
 @Injectable()
 export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PushNotificationsService.name);
@@ -39,20 +78,23 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
   private configured = false;
   private dispatching = false;
 
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   onModuleInit() {
-    if (process.env.PUSH_NOTIFICATIONS_ENABLED === "false") {
-      this.logger.log("Push delivery is disabled by configuration");
-      return;
-    }
-    this.configured = this.initializeFirebase();
-    if (!this.configured) {
+    const pushEnabled = process.env.PUSH_NOTIFICATIONS_ENABLED !== "false";
+    const emailEnabled = process.env.EMAIL_NOTIFICATIONS_ENABLED !== "false";
+    this.configured = pushEnabled && this.initializeFirebase();
+    if (pushEnabled && !this.configured) {
       this.logger.warn(
         "Push delivery is unavailable until Firebase Admin credentials are configured",
       );
-      return;
     }
+    if (!pushEnabled) this.logger.log("Push delivery is disabled by configuration");
+    if (!emailEnabled) this.logger.log("Notification email delivery is disabled by configuration");
+    if (!this.configured && !emailEnabled) return;
     const interval = Math.max(
       5_000,
       Number(process.env.PUSH_DISPATCH_INTERVAL_MS ?? 15_000),
@@ -60,7 +102,9 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
     this.timer = setInterval(() => void this.dispatchPending(), interval);
     this.timer.unref();
     setTimeout(() => void this.dispatchPending(), 2_000).unref();
-    this.logger.log(`Firebase push delivery enabled (${interval}ms dispatcher)`);
+    this.logger.log(
+      `Notification delivery enabled (${interval}ms dispatcher; push=${this.configured}; email=${emailEnabled})`,
+    );
   }
 
   onModuleDestroy() {
@@ -126,13 +170,13 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async dispatchPending() {
-    if (!this.configured || this.dispatching) return;
+    if (this.dispatching) return;
     this.dispatching = true;
     try {
       const now = new Date();
       const retryBefore = new Date(now.getTime() - retryDelayMs);
       const recentAfter = new Date(now.getTime() - recentWindowMs);
-      const pending = await this.db.notification.findMany({
+      const pending = this.configured ? await this.db.notification.findMany({
         where: {
           createdAt: { gte: recentAfter },
           pushDeliveredAt: null,
@@ -156,7 +200,7 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
         },
         orderBy: { createdAt: "asc" },
         take: 100,
-      });
+      }) : [];
 
       for (const notification of pending) {
         const category = categoryFor(notification.type);
@@ -234,12 +278,114 @@ export class PushNotificationsService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Push ${notification.id} failed: ${message}`);
         }
       }
+      if (process.env.EMAIL_NOTIFICATIONS_ENABLED !== "false")
+        await this.dispatchPendingEmail(now, retryBefore, recentAfter);
     } catch (error) {
       this.logger.error(
         `Push dispatcher failed: ${error instanceof Error ? error.message : "unknown error"}`,
       );
     } finally {
       this.dispatching = false;
+    }
+  }
+
+  private async dispatchPendingEmail(
+    now: Date,
+    retryBefore: Date,
+    recentAfter: Date,
+  ) {
+    const pending = await this.db.notification.findMany({
+      where: {
+        createdAt: { gte: recentAfter },
+        emailDeliveredAt: null,
+        emailAttemptCount: { lt: 3 },
+        OR: [
+          { emailAttemptedAt: null },
+          { emailAttemptedAt: { lt: retryBefore } },
+        ],
+        user: {
+          emailVerifiedAt: { not: null },
+          status: "ACTIVE",
+        },
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+            roles: { select: { role: true } },
+            notificationPreferences: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
+
+    for (const notification of pending) {
+      const category = categoryFor(notification.type);
+      const preference = notification.user.notificationPreferences.find(
+        (item) => item.category === category,
+      );
+      const emailEnabled =
+        category === "ACCOUNT" ||
+        category === "PAYMENTS" ||
+        (preference?.emailEnabled ?? category !== "MARKETING");
+      if (!emailEnabled) {
+        await this.db.notification.update({
+          where: { id: notification.id },
+          data: {
+            emailAttemptedAt: now,
+            emailAttemptCount: 3,
+            emailLastError: "EMAIL_DISABLED_BY_USER",
+          },
+        });
+        continue;
+      }
+
+      // Claim atomically so multiple API replicas cannot email the same event.
+      const claimed = await this.db.notification.updateMany({
+        where: {
+          id: notification.id,
+          emailDeliveredAt: null,
+          OR: [
+            { emailAttemptedAt: null },
+            { emailAttemptedAt: { lt: retryBefore } },
+          ],
+        },
+        data: {
+          emailAttemptedAt: now,
+          emailAttemptCount: { increment: 1 },
+          emailLastError: null,
+        },
+      });
+      if (claimed.count !== 1) continue;
+
+      try {
+        const roles = notification.user.roles.map((item) => item.role);
+        const baseUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+        await this.mail.sendNotificationEmail(
+          notification.user.email,
+          notification.title,
+          notification.body,
+          `${baseUrl}${routeFor(notification.type, roles)}`,
+        );
+        await this.db.notification.update({
+          where: { id: notification.id },
+          data: { emailDeliveredAt: new Date(), emailLastError: null },
+        });
+        this.logger.log(
+          JSON.stringify({ event: "notification_email_delivered", notificationId: notification.id, category }),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Email send failed";
+        await this.db.notification.update({
+          where: { id: notification.id },
+          data: { emailLastError: message.slice(0, 500) },
+        });
+        this.logger.warn(
+          JSON.stringify({ event: "notification_email_failed", notificationId: notification.id, category }),
+        );
+      }
     }
   }
 

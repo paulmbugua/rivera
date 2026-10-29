@@ -192,4 +192,18 @@ export class MailService {
       html: template(subject, copy, undefined, undefined, true),
     });
   }
+
+  sendNotificationEmail(
+    email: string,
+    title: string,
+    copy: string,
+    actionUrl: string,
+  ) {
+    return this.provider.send({
+      to: email,
+      subject: `Rivera — ${title}`,
+      text: `${title}\n\n${copy}\n\nOpen Rivera: ${actionUrl}\n\nManage notification preferences: ${process.env.APP_URL ?? "http://localhost:3000"}/settings`,
+      html: template(title, copy, "View in Rivera", actionUrl, true),
+    });
+  }
 }
