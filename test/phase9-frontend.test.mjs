@@ -11,8 +11,8 @@ test("settings expose notification channels and critical locks", () => {
   assert.match(settings, /OperationalSettings/);
 });
 test("privacy requests explain retention and require deletion confirmation", () => {
-  assert.match(ops, /Financial and audit records/);
-  assert.match(ops, /window\.confirm/);
+  assert.match(ops, /financial,\s*fraud-prevention and audit records/i);
+  assert.match(ops, /dialog\.confirm/);
   assert.match(ops, /Request data export/);
 });
 test("admin navigation exposes reports support analytics and lifecycle requests", () => {

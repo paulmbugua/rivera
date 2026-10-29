@@ -11,6 +11,7 @@ import { useAuth } from "@/components/rivera/auth-provider";
 import { OperationalSettings } from "@/components/rivera/operations";
 import { ThemePreference } from "@/components/rivera/theme-preference";
 import { Eye, EyeOff } from "lucide-react";
+import { useRiveraDialog } from "@/components/rivera/rivera-dialog";
 
 const profileSchema = z.object({
   firstName: z.string().min(1),
@@ -38,6 +39,7 @@ const passwordSchema = z
   });
 
 export default function Settings() {
+  const dialog = useRiveraDialog();
   const { user, refresh, logout } = useAuth();
   const [profileMessage, setProfileMessage] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -240,12 +242,12 @@ export default function Settings() {
           <button
             className="deactivate"
             onClick={async () => {
-              if (
-                !window.confirm(
-                  "Deactivate your Rivera account? This will sign you out on every device.",
-                )
-              )
-                return;
+              if (!await dialog.confirm({
+                title: "Deactivate your account?",
+                description: "You will be signed out on every device and will not be able to log in until you reactivate your Rivera account.",
+                confirmLabel: "Deactivate account",
+                tone: "danger",
+              })) return;
               await api("/auth/deactivate", { method: "POST" }, false);
               await logout();
             }}

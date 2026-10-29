@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./product-scale.css";
+import "./rivera-dialog.css";
 import { AuthProvider } from "@/components/rivera/auth-provider";
 import { ThemeProvider } from "@/components/rivera/theme-provider";
+import { RiveraDialogProvider } from "@/components/rivera/rivera-dialog";
 import {
   absoluteUrl,
   serializeJsonLd,
@@ -115,7 +117,9 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <RiveraDialogProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </RiveraDialogProvider>
         </ThemeProvider>
       </body>
     </html>

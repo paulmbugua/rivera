@@ -16,6 +16,7 @@ import { useAuth } from "./auth-provider";
 import { BusinessApplicationActions } from "./collaborations";
 import { PaymentCurrencyNote, useDisplayCurrency, useDisplayMoney } from './payment-currency';
 import { convertMinor, SettlementQuote } from '@/lib/currency';
+import { useRiveraDialog } from "./rivera-dialog";
 
 const errorText = (error: unknown) =>
   error instanceof ApiError
@@ -537,6 +538,7 @@ function ApplicationCard({
 }
 
 export function CreatorApplicationDetail({ id }: { id: string }) {
+  const dialog = useRiveraDialog();
   const money = useDisplayMoney();
   const router = useRouter();
   const search = useSearchParams()!;
@@ -561,12 +563,12 @@ export function CreatorApplicationDetail({ id }: { id: string }) {
     return () => clearInterval(timer);
   }, [app?.status]);
   async function withdraw() {
-    if (
-      !confirm(
-        "Withdraw this proposal? The Rivera Application Fee or free credit will not automatically be returned.",
-      )
-    )
-      return;
+    if (!await dialog.confirm({
+      title: "Withdraw proposal?",
+      description: "This removes your proposal from consideration. The Rivera Application Fee or free credit will not automatically be returned.",
+      confirmLabel: "Withdraw proposal",
+      tone: "danger",
+    })) return;
     setBusy(true);
     try {
       setApp(

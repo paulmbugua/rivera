@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { useRiveraDialog } from "./rivera-dialog";
 const message = (error: unknown) =>
   error instanceof ApiError ? error.message : "Please try again.";
 export function AdminShell({
@@ -136,6 +137,7 @@ type AdminProfile = {
   user: { status: string };
 };
 export function VerificationQueue() {
+  const dialog = useRiveraDialog();
   const [items, setItems] = useState<Verification[]>([]);
   const [feedback, setFeedback] = useState("");
   const load = () =>
@@ -146,11 +148,20 @@ export function VerificationQueue() {
     void load();
   }, []);
   async function review(id: string, action: "approve" | "reject") {
-    const note = window.prompt("Optional internal review note") || undefined;
+    const note = await dialog.prompt({
+      title: `${action === "approve" ? "Approve" : "Reject"} verification`,
+      description: "Add a private note for Rivera administrators, or continue without one.",
+      label: "Internal review note (optional)",
+      confirmLabel: action === "approve" ? "Approve request" : "Reject request",
+      tone: action === "reject" ? "danger" : "default",
+      multiline: true,
+      maxLength: 500,
+    });
+    if (note === null) return;
     try {
       await api(`/admin/verifications/${id}/${action}`, {
         method: "POST",
-        body: JSON.stringify({ reviewNote: note }),
+        body: JSON.stringify({ reviewNote: note || undefined }),
       });
       setFeedback(`Request ${action}d.`);
       void load();

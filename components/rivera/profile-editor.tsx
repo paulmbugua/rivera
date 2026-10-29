@@ -8,6 +8,7 @@ import { api, ApiError } from "@/lib/api";
 import { Protected } from "./protected";
 import { countryOptions } from "@/lib/countries";
 import { businessProfilePayload, creatorProfilePayload } from "@/lib/profile-draft";
+import { useRiveraDialog } from "./rivera-dialog";
 
 type Taxonomy = { id: string; name: string; slug: string };
 type Social = {
@@ -199,6 +200,7 @@ export function CreatorProfileEditor() {
   );
 }
 function CreatorEditor() {
+  const dialog = useRiveraDialog();
   const [active,setActive]=useState(0),[dirty,setDirty]=useState(false);
   const dirtyRef=useRef(false),saveLock=useRef(false);
   const [profile, setProfile] = useState<Creator | null>(null);
@@ -349,10 +351,17 @@ function CreatorEditor() {
     }
   }
   async function editSocial(item: Social) {
-    const followers = window.prompt(
-      "Current follower count",
-      String(item.followers),
-    );
+    const followers = await dialog.prompt({
+      title: "Update follower count",
+      description: `Keep the audience size for ${item.platform.toLowerCase()} accurate and current.`,
+      label: "Current followers",
+      defaultValue: String(item.followers),
+      confirmLabel: "Save followers",
+      required: true,
+      inputMode: "numeric",
+      maxLength: 12,
+      validate: (value) => /^\d+$/.test(value) ? undefined : "Enter a whole number using digits only.",
+    });
     if (followers === null) return;
     try {
       await api(`/creators/me/social-accounts/${item.id}`, {
@@ -431,7 +440,16 @@ function CreatorEditor() {
     }
   }
   async function editPortfolio(item: Portfolio) {
-    const title = window.prompt("Portfolio title", item.title);
+    const title = await dialog.prompt({
+      title: "Edit portfolio title",
+      description: "Use a short, clear title that helps businesses understand this work.",
+      label: "Portfolio title",
+      defaultValue: item.title,
+      confirmLabel: "Save title",
+      required: true,
+      minLength: 2,
+      maxLength: 120,
+    });
     if (!title) return;
     await updatePortfolio(item, { title });
   }

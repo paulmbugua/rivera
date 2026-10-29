@@ -7,6 +7,7 @@ import { PaymentCurrencyNote, useDisplayMoney } from './payment-currency';
 import { SettlementQuote } from '@/lib/currency';
 import { WisePayoutSetup } from './wise-payouts';
 import { payoutDate } from '@/lib/payout-schedule';
+import { useRiveraDialog } from './rivera-dialog';
 
 type Payment = {
   nextPayoutAt?:string;
@@ -82,6 +83,7 @@ const errorText = (e: unknown) =>
   e instanceof ApiError ? e.message : "Something went wrong.";
 
 export function BusinessPayments() {
+  const dialog = useRiveraDialog();
   const money = useDisplayMoney();
   const [items, setItems] = useState<Payment[]>([]),
     [error, setError] = useState(""),
@@ -94,14 +96,15 @@ export function BusinessPayments() {
     void load();
   }, []);
   async function action(item: Payment, kind: "fund" | "release") {
-    if (
-      !window.confirm(
-        kind === "fund"
-          ? `Fund this collaboration for ${money(item.grossAmountMinor, item.currencyCode)}?`
-          : `Approve ${money(item.creatorNetMinor, item.currencyCode)} for ${item.nextPayoutAt?payoutDate(item.nextPayoutAt):'the following Monday payout batch'}? Funds remain reserved until payout checks pass. Wise still requires an admin to send.`,
-      )
-    )
-      return;
+    const approved = await dialog.confirm({
+      title: kind === "fund" ? "Fund collaboration?" : "Approve earnings release?",
+      description: kind === "fund"
+        ? `Continue to secure payment for ${money(item.grossAmountMinor, item.currencyCode)}.`
+        : `Approve ${money(item.creatorNetMinor, item.currencyCode)} for ${item.nextPayoutAt?payoutDate(item.nextPayoutAt):'the following Monday payout batch'}? Funds remain reserved until payout checks pass. Wise still requires an administrator to send them.`,
+      confirmLabel: kind === "fund" ? "Continue to payment" : "Approve release",
+      tone: kind === "fund" ? "default" : "success",
+    });
+    if (!approved) return;
     setBusy(item.campaignParticipantId);
     setError("");
     try {

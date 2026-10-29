@@ -5,6 +5,7 @@ import { api, ApiError, API_URL } from "@/lib/api";
 import { statusLabel } from "@/lib/applications";
 import { PaymentCurrencyNote, useDisplayCurrency, useDisplayMoney } from './payment-currency';
 import { convertMinor, SettlementQuote } from '@/lib/currency';
+import { useRiveraDialog } from './rivera-dialog';
 
 const errorText = (e: unknown) =>
   e instanceof ApiError ? e.message : "Something went wrong.";
@@ -535,6 +536,7 @@ function CollaborationView({
   item: Collaboration;
   role: "creator" | "business";
 }) {
+  const dialog = useRiveraDialog();
   const money = useDisplayMoney();
   const [contact, setContact] = useState<CollaborationContact>(), [workspace,setWorkspace]=useState<Collaboration>(item), [funding,setFunding]=useState<FundingQuote>(),
     [error, setError] = useState(""), [busy,setBusy]=useState(""), [message,setMessage]=useState<Record<string,string>>({}), [link,setLink]=useState<Record<string,string>>({}), [files,setFiles]=useState<Record<string,File|undefined>>({}), [rating,setRating]=useState(5), [comment,setComment]=useState("");
@@ -543,8 +545,9 @@ function CollaborationView({
   async function submit(workItemId:string){setBusy(workItemId);setError("");try{const file=files[workItemId];if(file){const data=new FormData();data.append("file",file);data.append("message",message[workItemId]??"");await api(`/creators/me/work-items/${workItemId}/submissions/file`,{method:"POST",body:data});}else{await api(`/creators/me/work-items/${workItemId}/submissions`,{method:"POST",body:JSON.stringify({message:message[workItemId]||undefined,links:link[workItemId]?.trim()?[{name:"Deliverable link",url:link[workItemId].trim()}]:[]})});}setMessage({...message,[workItemId]:""});setLink({...link,[workItemId]:""});await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
   async function act(path:string,body?:unknown){setBusy(path);setError("");try{await api(path,{method:"POST",body:body?JSON.stringify(body):undefined});await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
   async function review(){await act("/reviews",{participantId:item.id,rating,comment:comment||undefined});}
-  async function fund(){if(!funding||!window.confirm(`Fund this collaboration for ${money(funding.grossAmountMinor,funding.currencyCode)}?`))return;setBusy("fund");setError("");try{const result=await api<{checkoutUrl?:string}>(`/business/campaign-participants/${item.id}/payment`,{method:"POST"});if(result.checkoutUrl){window.location.assign(result.checkoutUrl);return;}await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
-  async function cancelUnfunded(){if(!window.confirm("Cancel this unfunded collaboration and release its reserved Campaign slot?"))return;await act(role==="business"?`/business/campaign-participants/${item.id}/cancel-unfunded`:`/creators/me/collaborations/${item.id}/cancel-unfunded`);}
+  async function fund(){if(!funding||!await dialog.confirm({title:"Fund collaboration?",description:`Continue to secure payment for ${money(funding.grossAmountMinor,funding.currencyCode)}.`,confirmLabel:"Continue to payment"}))return;setBusy("fund");setError("");try{const result=await api<{checkoutUrl?:string}>(`/business/campaign-participants/${item.id}/payment`,{method:"POST"});if(result.checkoutUrl){window.location.assign(result.checkoutUrl);return;}await load();}catch(e){setError(errorText(e));}finally{setBusy("");}}
+  async function cancelUnfunded(){if(!await dialog.confirm({title:"Cancel collaboration?",description:"This unfunded collaboration will be cancelled and its reserved campaign slot released.",confirmLabel:"Cancel collaboration",tone:"danger"}))return;await act(role==="business"?`/business/campaign-participants/${item.id}/cancel-unfunded`:`/creators/me/collaborations/${item.id}/cancel-unfunded`);}
+  async function requestRevision(submissionId:string){const note=await dialog.prompt({title:"Request a revision",description:"Explain clearly what the creator should change before submitting a new version.",label:"Revision instructions",placeholder:"Describe the specific changes needed…",confirmLabel:"Send revision request",required:true,minLength:10,maxLength:500,multiline:true});if(note!==null)await act(`/business/submissions/${submissionId}/request-revision`,{note});}
   return (
     <main className="application-shell">
       <header>
@@ -654,7 +657,7 @@ function CollaborationView({
           {workspace.workItems?.map(work=><article className="application-card" key={work.id} style={{display:"block"}}>
             <div><p className="eyebrow">{statusLabel(work.status)} · {work.required?"REQUIRED":"OPTIONAL"}</p><h3>{work.title}{work.quantity>1?` × ${work.quantity}`:""}</h3><p>{work.description}</p>{work.dueDate&&<p>Due {new Date(work.dueDate).toLocaleDateString()}</p>}</div>
             {work.submissions.map(sub=><div key={sub.id} className="privacy-note"><strong>Version {sub.version} · {statusLabel(sub.status)}</strong>{sub.message&&<p>{sub.message}</p>}{sub.revisionNote&&<p><strong>Revision note:</strong> {sub.revisionNote}</p>}<div className="dashboard-actions">{sub.assets.map(asset=>asset.type==="LINK"?<a className="button secondary" key={asset.id} href={asset.url} target="_blank" rel="noreferrer">Open {asset.name}</a>:<a className="button secondary" key={asset.id} href={`${API_URL}/submission-assets/${asset.id}/file`}>Download {asset.name}</a>)}</div>
-              {role==="business"&&sub===work.submissions[0]&&sub.status==="SUBMITTED"&&<div className="dashboard-actions"><button className="button primary" disabled={!!busy} onClick={()=>void act(`/business/submissions/${sub.id}/approve`)}>Approve</button><button className="button secondary" disabled={!!busy} onClick={()=>{const note=window.prompt("Describe the required revision (at least 10 characters)");if(note)void act(`/business/submissions/${sub.id}/request-revision`,{note});}}>Request revision</button></div>}
+              {role==="business"&&sub===work.submissions[0]&&sub.status==="SUBMITTED"&&<div className="dashboard-actions"><button className="button primary" disabled={!!busy} onClick={()=>void act(`/business/submissions/${sub.id}/approve`)}>Approve</button><button className="button secondary" disabled={!!busy} onClick={()=>void requestRevision(sub.id)}>Request revision</button></div>}
             </div>)}
             {role==="creator"&&workspace.canSubmitWork&&["PENDING","IN_PROGRESS","REVISION_REQUESTED"].includes(work.status)&&<div className="settings-grid"><label className="field">Submission note<textarea rows={3} value={message[work.id]??""} onChange={e=>setMessage({...message,[work.id]:e.target.value})}/></label><label className="field">HTTPS deliverable link<input type="url" placeholder="https://…" value={link[work.id]??""} onChange={e=>setLink({...link,[work.id]:e.target.value})}/></label><label className="field">Or private file (JPG, PNG, WEBP, PDF, MP4)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4" onChange={e=>setFiles({...files,[work.id]:e.target.files?.[0]})}/></label><button className="button primary" disabled={busy===work.id||(!link[work.id]?.trim()&&!files[work.id])} onClick={()=>void submit(work.id)}>Submit new version</button></div>}
           </article>)}

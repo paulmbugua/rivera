@@ -10,6 +10,7 @@ import {
   statusLabel,
 } from "@/lib/applications";
 import { AdminShell } from "./admin-phase3";
+import { useRiveraDialog } from "./rivera-dialog";
 const message = (e: unknown) =>
   e instanceof ApiError ? e.message : "Please try again.";
 type FeeRule = {
@@ -226,6 +227,7 @@ export function AdminPayments() {
   );
 }
 export function AdminPaymentDetail({ id }: { id: string }) {
+  const dialog = useRiveraDialog();
   const [payment, setPayment] = useState<
       | (Payment & {
           refunds: { id: string; status: string; reason: string }[];
@@ -243,7 +245,12 @@ export function AdminPaymentDetail({ id }: { id: string }) {
     void load();
   }, [id]);
   async function refund() {
-    if (!confirm("Issue a full refund through the configured payment provider?")) return;
+    if (!await dialog.confirm({
+      title: "Issue full refund?",
+      description: "Rivera will request a full refund through the configured payment provider. This financial action cannot be undone here.",
+      confirmLabel: "Issue refund",
+      tone: "danger",
+    })) return;
     setBusy(true);
     try {
       await api(`/admin/payments/${id}/refund`, {

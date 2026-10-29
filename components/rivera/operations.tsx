@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { statusLabel } from "@/lib/applications";
+import { useRiveraDialog } from "./rivera-dialog";
 
 type Preference = {
   category: string;
@@ -17,6 +18,7 @@ const errorText = (error: unknown) =>
     : "Unable to complete that request.";
 
 export function OperationalSettings() {
+  const dialog = useRiveraDialog();
   const [items, setItems] = useState<Preference[]>([]),
     [message, setMessage] = useState("");
   useEffect(() => {
@@ -46,13 +48,12 @@ export function OperationalSettings() {
     }
   }
   async function request(type: "EXPORT" | "DELETION") {
-    if (
-      type === "DELETION" &&
-      !window.confirm(
-        "Request account deletion review? Financial and audit records may need to be retained.",
-      )
-    )
-      return;
+    if (type === "DELETION" && !await dialog.confirm({
+      title: "Request account deletion?",
+      description: "Rivera will review your request. Financial, safety, and audit records may need to be retained where required.",
+      confirmLabel: "Request deletion",
+      tone: "danger",
+    })) return;
     try {
       await api("/settings/data-requests", {
         method: "POST",
